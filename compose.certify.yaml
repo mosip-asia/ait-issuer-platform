@@ -10,11 +10,11 @@
 # Network: certify-network (isolated)
 # Integration: External via CERTIFY_PUBLIC_BASE_URL (http://localhost:9091)
 # ==============================================================================
-name: ${COMPOSE_PROJECT_NAME:-local-vc}-certify
+name: ${COMPOSE_PROJECT_NAME}-certify
 
 networks:
   certify-network:
-    name: ${COMPOSE_PROJECT_NAME:-local-vc}-certify-net
+    name: ${COMPOSE_PROJECT_NAME}-certify-net
 
 services:
   database:
@@ -33,7 +33,7 @@ services:
     networks:
       - certify-network
 
-  certify:
+  service:
     image: injistack/inji-certify-with-plugins:0.14.0
     user: root
     extra_hosts:
@@ -70,9 +70,11 @@ services:
       template-sync:
         condition: service_completed_successfully
     networks:
-      - certify-network
+      certify-network:
+        aliases:
+          - certify
 
-  certify-nginx:
+  nginx:
     image: nginx:stable
     restart: unless-stopped
     ports:
@@ -81,9 +83,11 @@ services:
       - ./deploy/base/certify-nginx.conf:/etc/nginx/conf.d/default.conf
       - ./deploy/${INSTALLATION}/vp_request_config.json:/config/server/vp_request_config.json:ro
     depends_on:
-      - certify
+      - service
     networks:
-      - certify-network
+      certify-network:
+        aliases:
+          - certify-nginx
 
   template-sync:
     build:
@@ -106,4 +110,4 @@ services:
 
 volumes:
   issuer-db:
-    name: ${COMPOSE_PROJECT_NAME:-local-vc}_issuer-db_${INSTALLATION}
+    name: ${COMPOSE_PROJECT_NAME}_issuer-db_${INSTALLATION}

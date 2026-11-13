@@ -9,14 +9,14 @@
 # Network: verifier-network (isolated)
 # Integration: Reaches Certify/VDR via host.docker.internal / public URL
 # ==============================================================================
-name: ${COMPOSE_PROJECT_NAME:-local-vc}-verify
+name: ${COMPOSE_PROJECT_NAME}-verify
 
 networks:
   verifier-network:
-    name: ${COMPOSE_PROJECT_NAME:-local-vc}-verify-net
+    name: ${COMPOSE_PROJECT_NAME}-verify-net
 
 services:
-  verify-ui:
+  ui:
     build:
       context: .
       dockerfile: src/verifier/Dockerfile
@@ -39,11 +39,13 @@ services:
     volumes:
       - ./deploy/base/verify-config.json:/usr/share/nginx/html/assets/config.json:ro
     depends_on:
-      - verify-service
+      - service
     networks:
-      - verifier-network
+      verifier-network:
+        aliases:
+          - verify-ui
 
-  verify-service:
+  service:
     image: injistack/inji-verify-service:0.17.0
     user: root
     extra_hosts:
@@ -69,7 +71,9 @@ services:
       database:
         condition: service_healthy
     networks:
-      - verifier-network
+      verifier-network:
+        aliases:
+          - verify-service
 
   database:
     image: postgres:15
