@@ -111,7 +111,7 @@ jobs:
           cp .env.example .env
           docker compose config --quiet
           docker compose -f compose.yaml -f compose.verify.yaml config --quiet
-          docker compose -f compose.yaml -f compose.local.yaml config --quiet
+          docker compose -f compose.yaml -f compose.mock.yaml config --quiet
           rm -f .env
 
       - name: 🌐 Connect to NetBird VPN Mesh

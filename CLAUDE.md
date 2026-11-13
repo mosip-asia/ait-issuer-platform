@@ -32,7 +32,7 @@ An **Installation** (`deploy/<name>/`) is one issuing deployment's settings: `ai
   - `compose.verify.yaml`: Custom branded Verifier (`src/verifier` on port 8000), Inji Verify service (:9095), and PostgreSQL.
   - `compose.web-wallet.yaml`: Inji Web Wallet UI (port 4004).
   - `compose.trust.yaml`: Trust registry containing VDR context server (:9098) and static VCGA issuer metadata (:9099).
-  - `compose.local.yaml`: Local stand-in mock services with Keycloak (port 9080), mock adapter (:8082), demo app (:4100), and gateway (:8000).
+  - `compose.mock.yaml`: Stand-in mock services with Keycloak (port 9080), mock adapter (:8082), demo app (:4100), and gateway (:8000).
   - `compose.certify-build.yaml`: Compiler container for the SPI plugin JAR (`plugin-builder`).
 
 Deployment is manual: push, then run the `Deploy` workflow for a commit. A commit that changes an Installation's `certify_seed.sql` needs `wipe=true`, which also renews the signing key and `did:key`.

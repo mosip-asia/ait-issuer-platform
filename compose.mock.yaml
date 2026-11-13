@@ -1,20 +1,20 @@
 # ==============================================================================
-# Local Development & Stand-in Mock Services Overlay
+# Offline Development & Stand-in Mock Services Stack
 # ==============================================================================
-# Isolated Stack for Local Stand-in Dependencies:
+# Isolated Stack for Offline Testing & Stand-in Dependencies:
 # - Stand-in Keycloak OAuth Server & Nginx (port 9080)
-# - Stand-in SIS Mock Adapter (port 8000)
+# - Stand-in SIS Mock Adapter (port 8082)
 # - Approval Gateway (port 8000)
 # - Demo Portal (Registrar & Student UI) (port 4100)
 #
-# Network: local-network (isolated)
+# Network: mock-network (isolated)
 # Integration: Bridges to Certify/Wallet via host ports / host.docker.internal
 # ==============================================================================
-name: ${COMPOSE_PROJECT_NAME}-local
+name: ${COMPOSE_PROJECT_NAME}-mock
 
 networks:
-  local-network:
-    name: ${COMPOSE_PROJECT_NAME}-local-net
+  mock-network:
+    name: ${COMPOSE_PROJECT_NAME}-mock-net
 
 services:
   keycloak-server:
@@ -36,7 +36,7 @@ services:
     volumes:
       - ./deploy/${INSTALLATION}/keycloak-realm.json:/opt/keycloak/data/import/realm.json:ro
     networks:
-      - local-network
+      - mock-network
 
   keycloak:
     image: nginx:stable
@@ -50,7 +50,7 @@ services:
       - keycloak-server
     restart: unless-stopped
     networks:
-      - local-network
+      - mock-network
 
   demo-app:
     build:
@@ -74,7 +74,7 @@ services:
       - ./deploy:/demo/deploy
       - ./tests/fixtures:/demo/tests/fixtures:ro
     networks:
-      - local-network
+      - mock-network
 
   gateway:
     build:
@@ -88,7 +88,7 @@ services:
       - ./deploy/${INSTALLATION}/gateway.env
     restart: unless-stopped
     networks:
-      - local-network
+      - mock-network
 
   adapter:
     build:
@@ -102,4 +102,4 @@ services:
       - ./deploy/${INSTALLATION}/adapter:/data:ro
     restart: unless-stopped
     networks:
-      - local-network
+      - mock-network

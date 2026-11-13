@@ -35,8 +35,8 @@ run_release_checks() {
   elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.trust.yaml docker compose config --quiet; then
     log_err "Trust compose.trust.yaml configuration failed validation."
     rc=1
-  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.local.yaml docker compose config --quiet; then
-    log_err "Local mock compose.local.yaml configuration failed validation."
+  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.mock.yaml docker compose config --quiet; then
+    log_err "Mock compose.mock.yaml configuration failed validation."
     rc=1
   elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.certify-build.yaml docker compose config --quiet; then
     log_err "Certify build compose.certify-build.yaml configuration failed validation."

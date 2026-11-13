@@ -81,7 +81,7 @@ ait-transcript/
 ├── compose.verify.yaml                   # Generic Inji Verifier stack (UI, backend, session DB)
 ├── compose.web-wallet.yaml               # Inji Web Wallet UI
 ├── compose.trust.yaml                    # Trust Registry (Static VDR contexts & VCGA issuer metadata)
-├── compose.local.yaml                    # Local stand-in mock services (Keycloak, adapter, portal)
+├── compose.mock.yaml                     # Stand-in mock services (Keycloak, adapter, portal)
 ├── compose.certify-build.yaml            # Compiler container for Java SPI plugin
 ├── .env.example                          # Root developer environment configuration
 └── pyproject.toml / uv.lock              # Modern Python dependency management (uv)
@@ -328,7 +328,7 @@ Brings up the complete multi-service demonstration journey (Inji Web Wallet, Key
 
 #### To Run Full Local Stack:
 ```bash
-docker compose -f compose.certify.yaml -f compose.verify.yaml -f compose.web-wallet.yaml -f compose.local.yaml up -d
+docker compose -f compose.yaml -f compose.mock.yaml up -d
 ```
 
 ---
