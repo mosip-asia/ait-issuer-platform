@@ -68,7 +68,8 @@ def test_compose_verify_manifest() -> None:
     assert "ui:" in content
     assert "service:" in content
     assert "database:" in content
-    assert "4007:8000" in content
+    assert "VERIFY_PORT" in content
+    assert ":8000" in content
     assert "DEFAULT_TITLE" in content
     assert "DEFAULT_THEME" in content
 

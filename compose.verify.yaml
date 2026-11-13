@@ -22,7 +22,7 @@ services:
       dockerfile: src/verifier/Dockerfile
     image: ghcr.io/mosip-asia/verify-ui:local
     ports:
-      - "4007:8000"
+      - "${VERIFY_PORT:-8000}:8000"
     environment:
       - DEFAULT_TITLE=${VERIFIER_TITLE:-AIT Credential Verifier}
       - DEFAULT_THEME=ait_theme
@@ -51,7 +51,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "9095:8080"
+      - "${VERIFY_SERVICE_PORT:-9095}:8080"
     environment:
       - active_profile_env=default
       - DATABASE_HOST=database
