@@ -34,6 +34,7 @@ This repository houses the **Institutional Verifiable Credential Platform (Issue
 - [SIS Adapter handover](./project/issuer-v0.1/sis-adapter-handover.md): Field mapping and expectations for the real SIS Adapter.
 - [Transcript JSON-LD context](./concepts/transcript-context.md): Signing rules, `@json` course representations, and context hashing.
 - [Transcript credential](./concepts/transcript-credential.md): Schema structure, subject claims, and gotchas.
+- [How to add a Verifiable Credential](./guides/how-to-add-vc.md): Step-by-step developer tutorial for adding new credentials to Certify.
 - [VC revocation](./concepts/vc-revocation.md): Bitstring Status List v1.0, revocation batches, and status verification.
 - [Wallet developer URLs](./guides/wallet-developer-urls.md) & [Non-Inji OpenID4VCI wallets](./guides/other-openid4vci-wallets.md): Guidelines for external wallet integration.
 - [Schemas](./schemas/): Master JSON schemas and sample credential payloads.

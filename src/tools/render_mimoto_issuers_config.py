@@ -27,7 +27,7 @@ import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-CONFIG_DIR = REPO_ROOT / "deploy" / "base"
+CONFIG_DIR = REPO_ROOT / "deploy" / "local"
 MOBILE_ISSUERS_OUT = CONFIG_DIR / "mimoto-issuers-mobile.json"
 GATEWAY_SNIPPET_OUT = CONFIG_DIR / "public-gateway-mobile.conf"
 

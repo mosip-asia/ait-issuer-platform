@@ -46,7 +46,7 @@ REALM_PATH_ALLOWED = [
         r"\.md$",
         r"(^|/)test_[^/]*\.py$",
         r"Test\.java$",
-        r"^deploy/base/mimoto-issuers-mobile\.json$",
+        r"^deploy/(base|local)/mimoto-issuers-mobile\.json$",
         r"^vc-stack/config/mimoto-issuers-mobile\.json$",
         r"^deploy/hackathon/adapter/student_identity_data\.csv$",
     )

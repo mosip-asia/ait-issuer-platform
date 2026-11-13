@@ -28,6 +28,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BASE_DIR = REPO_ROOT / "deploy" / "base"
+LOCAL_DIR = REPO_ROOT / "deploy" / "local"
+MIMOTO_PROPS_DIR = LOCAL_DIR if (LOCAL_DIR / "mimoto-default.properties").is_file() else BASE_DIR
 INSTALLATION_DIR = REPO_ROOT / "deploy" / os.environ.get("INSTALLATION", "ait")
 
 INJI_WEB_ORIGIN = "http://localhost:4004"
@@ -75,7 +77,7 @@ def test_issuers_config_token_endpoint_uses_inji_web_proxy() -> None:
 
 
 def test_mimoto_cors_allows_inji_web_host_port() -> None:
-    props = (BASE_DIR / "mimoto-default.properties").read_text(encoding="utf-8")
+    props = (MIMOTO_PROPS_DIR / "mimoto-default.properties").read_text(encoding="utf-8")
     assert "mosip.security.origins=http://localhost:4004" in props, (
         "Mimoto CORS must allow Inji Web on :4004 (not inji's default :3004) or VC download returns 403 "
         "and Inji Web shows 'session is not valid or session is completed'."
@@ -83,7 +85,7 @@ def test_mimoto_cors_allows_inji_web_host_port() -> None:
 
 
 def test_mimoto_keycloak_external_is_browser_url() -> None:
-    props = (BASE_DIR / "mimoto-default.properties").read_text(encoding="utf-8")
+    props = (MIMOTO_PROPS_DIR / "mimoto-default.properties").read_text(encoding="utf-8")
     assert "keycloak.external.url=http://localhost:9080" in props
     assert "keycloak.internal.url=http://keycloak:8080" in props
 

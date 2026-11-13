@@ -17,6 +17,8 @@ src/portal/*.db
 venv/
 .nfs*
 .env
+.env.*
+!.env.example
 .pytest_cache/
 
 # local-only notes, not shared
