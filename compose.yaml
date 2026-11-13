@@ -1,18 +1,21 @@
 # ==============================================================================
-# AIT Verifiable Credential Issuer Platform
-# Root Compose Manifest
+# Inji Certify Issuer Engine Compose Manifest (Default Root Manifest)
 # ==============================================================================
-# Runs Inji Certify with the compiled SPI JAR mounted as a plugin,
-# backed by PostgreSQL database, Certify Nginx ingress, and VDR context server.
+# Isolated Stack:
+# - Inji Certify with compiled SPI JAR mounted as plugin
+# - PostgreSQL database (inji_certify)
+# - Ingress Nginx (port 9091)
+# - VDR Context Server (port 9098)
+# - GitOps Template-Sync
 #
-# Usage:
-#   cp .env.example .env
-#   docker compose up -d
-#
-# To compile the plugin without host Java/Maven:
-#   docker compose -f compose.build.yaml run --rm plugin-builder
+# Network: certify-network (isolated)
+# Integration: External via CERTIFY_PUBLIC_BASE_URL (http://localhost:9091)
 # ==============================================================================
 name: ${COMPOSE_PROJECT_NAME}
+
+networks:
+  certify-network:
+    name: ${COMPOSE_PROJECT_NAME}_certify-net
 
 services:
   database:
@@ -30,6 +33,8 @@ services:
       retries: 60
     ports:
       - "${POSTGRES_PORT}:5432"
+    networks:
+      - certify-network
 
   certify:
     image: injistack/inji-certify-with-plugins:0.14.0
@@ -69,6 +74,8 @@ services:
         condition: service_healthy
       template-sync:
         condition: service_completed_successfully
+    networks:
+      - certify-network
 
   certify-nginx:
     image: nginx:stable
@@ -80,6 +87,8 @@ services:
       - ./deploy/${INSTALLATION}/vp_request_config.json:/config/server/vp_request_config.json:ro
     depends_on:
       - certify
+    networks:
+      - certify-network
 
   vdr:
     image: nginx:stable
@@ -88,6 +97,8 @@ services:
       - "9098:80"
     volumes:
       - ./deploy/${INSTALLATION}/contexts:/usr/share/nginx/html/contexts:ro
+    networks:
+      - certify-network
 
   template-sync:
     build:
@@ -105,6 +116,8 @@ services:
       - POSTGRES_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    networks:
+      - certify-network
 
 volumes:
   issuer-db:

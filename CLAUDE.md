@@ -26,10 +26,11 @@ An **Installation** (`deploy/<name>/`) is one issuing deployment's settings: `ai
   - `.venv/bin/python tests/test_issue_and_verify.py`
   - `.venv/bin/python src/adapter/test_adapter.py`
   - `.venv/bin/python src/gateway/tests/test_evaluations.py`
-- Compose profiles:
-  - `compose.yaml`: Inji Certify, Certify Nginx, PostgreSQL database, VDR context server, template-sync.
-  - `compose.verify.yaml`: Custom branded Verifier (`src/verifier` on port 4007) and Inji Verify service (port 9095).
-  - `compose.local.yaml`: Local stand-in mock services with Inji Web Wallet (port 4004), Mimoto (port 9099), Keycloak (port 9080), demo app (port 4100), gateway, and adapter.
+- Compose manifests:
+  - `compose.certify.yaml` (`compose.yaml`): Core Inji Certify Issuer Engine, Certify Nginx (:9091), PostgreSQL (:5432), VDR (:9098), template-sync.
+  - `compose.verifier.yaml`: Custom branded Verifier (`src/verifier` on port 4007), Inji Verify service (:9095), and PostgreSQL.
+  - `compose.web-wallet.yaml`: Inji Web Wallet (port 4004), Mimoto (:9099), and PostgreSQL.
+  - `compose.local.yaml`: Local stand-in mock services with Keycloak (port 9080), mock adapter (:8082), demo app (:4100), and gateway (:8000).
 
 Deployment is manual: push, then run the `Deploy` workflow for a commit. A commit that changes an Installation's `certify_seed.sql` needs `wipe=true`, which also renews the signing key and `did:key`.
 

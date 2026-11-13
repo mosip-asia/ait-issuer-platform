@@ -1,13 +1,19 @@
 # ==============================================================================
-# Verifier Service Compose Manifest
+# Inji Verifier Stack Compose Manifest
 # ==============================================================================
-# Runs the custom AIT-branded Inji Verify UI on port 4007,
-# backed by upstream Inji Verify Service and PostgreSQL.
+# Isolated Stack:
+# - Custom AIT-branded Inji Verify UI (port 4007)
+# - Inji Verify Service backend (port 9095)
+# - PostgreSQL database (inji_verify) for OID4VP presentation job sessions
 #
-# Usage:
-#   docker compose -f compose.yaml -f compose.verify.yaml up -d
+# Network: verifier-network (isolated)
+# Integration: Reaches Certify/VDR via host.docker.internal / public URL
 # ==============================================================================
 name: ${COMPOSE_PROJECT_NAME}
+
+networks:
+  verifier-network:
+    name: ${COMPOSE_PROJECT_NAME}_verifier-net
 
 services:
   verify-ui:
@@ -34,6 +40,8 @@ services:
       - ./deploy/base/verify-config.json:/usr/share/nginx/html/assets/config.json:ro
     depends_on:
       - verify-service
+    networks:
+      - verifier-network
 
   verify-service:
     image: injistack/inji-verify-service:0.17.0
@@ -60,6 +68,8 @@ services:
     depends_on:
       verify-database:
         condition: service_healthy
+    networks:
+      - verifier-network
 
   verify-database:
     image: postgres:15
@@ -73,3 +83,5 @@ services:
       interval: 2s
       timeout: 3s
       retries: 60
+    networks:
+      - verifier-network

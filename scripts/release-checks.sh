@@ -20,14 +20,17 @@ run_release_checks() {
   fi
   # Pin ':' as the separator: Docker Compose on Windows splits COMPOSE_FILE on ';' by default,
   # while .env.example and the Linux hosts use the ':' form.
-  if ! COMPOSE_PATH_SEPARATOR=: docker compose config --quiet; then
-    log_err "Base compose.yaml configuration failed validation."
+  if ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.certify.yaml docker compose config --quiet; then
+    log_err "Certify compose.certify.yaml configuration failed validation."
     rc=1
-  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.yaml:compose.verify.yaml docker compose config --quiet; then
-    log_err "Verifier overlay compose configuration failed validation."
+  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.verifier.yaml docker compose config --quiet; then
+    log_err "Verifier compose.verifier.yaml configuration failed validation."
     rc=1
-  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.yaml:compose.local.yaml docker compose config --quiet; then
-    log_err "Local overlay compose configuration failed validation."
+  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.web-wallet.yaml docker compose config --quiet; then
+    log_err "Web wallet compose.web-wallet.yaml configuration failed validation."
+    rc=1
+  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.local.yaml docker compose config --quiet; then
+    log_err "Local mock compose.local.yaml configuration failed validation."
     rc=1
   fi
   if [[ "$temp_env" == true ]]; then

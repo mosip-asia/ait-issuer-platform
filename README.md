@@ -76,9 +76,10 @@ ait-transcript/
 │   ├── Dockerfile.certify                # Bakes src/issuer SPI plugin into Inji Certify
 │   └── Dockerfile.template-sync          # Packages certify_template_sync (uv + Alpine)
 │
-├── compose.yaml                          # Core Issuer Platform compose (Certify, DB, Nginx, VDR)
-├── compose.verify.yaml                   # Verifier stack compose (custom Verifier + Verify service)
-├── compose.local.yaml                    # Local stand-in mock overlay (Inji Web wallet, Keycloak, adapter, portal)
+├── compose.certify.yaml (compose.yaml)   # Core Inji Certify Issuer Engine
+├── compose.verifier.yaml                 # Generic Inji Verifier stack
+├── compose.web-wallet.yaml               # Inji Web Wallet & Mimoto stack
+├── compose.local.yaml                    # Local stand-in mock services (Keycloak, adapter, portal)
 ├── .env.example                          # Root developer environment configuration
 └── pyproject.toml / uv.lock              # Modern Python dependency management (uv)
 ```
@@ -322,9 +323,9 @@ Brings up the complete multi-service demonstration journey (Inji Web Wallet, Key
 ./scripts/deploy.sh hackathon --wipe    # Switch to Hackathon profile
 ```
 
-#### To Run Full Local Stack (Mock Wallet & Verifier):
+#### To Run Full Local Stack:
 ```bash
-docker compose -f compose.yaml -f compose.verify.yaml -f compose.local.yaml up -d
+docker compose -f compose.certify.yaml -f compose.verifier.yaml -f compose.web-wallet.yaml -f compose.local.yaml up -d
 ```
 
 ---

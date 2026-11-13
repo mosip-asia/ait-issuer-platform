@@ -1,87 +1,22 @@
 # ==============================================================================
 # Local Development & Stand-in Mock Services Overlay
 # ==============================================================================
-# Includes:
-# - Stand-in Keycloak OAuth Server & Nginx on :9080
-# - Stand-in SIS Mock Adapter on :8000
-# - Local Mimoto OAuth/VC mediator (local trust) on :9099
-# - Inji Web Wallet on :4004
-# - Approval Gateway on :8000
-# - Demo Portal (Registrar & Student UI) on :4100
+# Isolated Stack for Local Stand-in Dependencies:
+# - Stand-in Keycloak OAuth Server & Nginx (port 9080)
+# - Stand-in SIS Mock Adapter (port 8000)
+# - Approval Gateway (port 8000)
+# - Demo Portal (Registrar & Student UI) (port 4100)
 #
-# Usage:
-#   docker compose -f compose.yaml -f compose.local.yaml up -d
+# Network: local-network (isolated)
+# Integration: Bridges to Certify/Wallet via host ports / host.docker.internal
 # ==============================================================================
 name: ${COMPOSE_PROJECT_NAME}
 
+networks:
+  local-network:
+    name: ${COMPOSE_PROJECT_NAME}_local-net
+
 services:
-  demo-database:
-    image: postgres:15
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-    volumes:
-      - ./deploy/local/mimoto_init.sql:/docker-entrypoint-initdb.d/mimoto_init.sql
-    healthcheck:
-      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "inji_mimoto"]
-      interval: 2s
-      timeout: 3s
-      retries: 60
-
-  mimoto-service:
-    image: injistack/mimoto:0.21.0
-    user: root
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    ports:
-      - "9099:8099"
-    environment:
-      - container_user=mosip
-      - active_profile_env=default
-      - SPRING_CONFIG_NAME=mimoto
-      - SPRING_CONFIG_LOCATION=/home/mosip/
-      - SPRING_CLOUD_BOOTSTRAP_LOCATION=/home/mosip/mimoto-bootstrap.properties
-      - oidc_p12_password=xy4gh6swa2i
-      - WALLET_BINDING_PARTNER_API_KEY=dummywalletbindingpartnerapikey
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://demo-database:5432/inji_mimoto
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - GOOGLE_OAUTH_CLIENT_ID=clientId
-      - GOOGLE_OAUTH_CLIENT_SECRET=clientSecret
-      - SPRING_CLOUD_LOADBALANCER_ENABLED=false
-      - SPRING_CLOUD_DISCOVERY_ENABLED=false
-      - KEYCLOAK_EXTERNAL_URL=${KEYCLOAK_PUBLIC_BASE_URL:-http://localhost:9080}
-      - MOSIP_INJI_WEB_URL=${INJI_WEB_URL:-http://localhost:4004}
-      - MOSIP_SECURITY_ORIGINS=${INJI_WEB_URL:-http://localhost:4004}
-    volumes:
-      - ./deploy/local/mimoto-default.properties:/home/mosip/mimoto-default.properties
-      - ./deploy/local/mimoto-bootstrap.properties:/home/mosip/mimoto-bootstrap.properties
-      - ./deploy/${INSTALLATION}/mimoto-issuers-config.json:/home/mosip/mimoto-issuers-config.json
-      - ./deploy/local/mimoto-trusted-verifiers.json:/home/mosip/mimoto-trusted-verifiers.json
-    depends_on:
-      demo-database:
-        condition: service_healthy
-      certify-nginx:
-        condition: service_started
-    restart: unless-stopped
-
-  inji-web:
-    image: injistack/inji-web:0.16.0
-    ports:
-      - "4004:3004"
-    environment:
-      - DEFAULT_LANG=en
-      - MIMOTO_URL=${INJI_WEB_URL:-http://localhost:4004}/v1/mimoto
-    volumes:
-      - ./deploy/local/mimoto-default.properties:/home/mosip/mimoto-default.properties
-      - ./deploy/${INSTALLATION}/mimoto-issuers-config.json:/home/mosip/mimoto-issuers-config.json
-      - ./deploy/local/mimoto-trusted-verifiers.json:/home/mosip/mimoto-trusted-verifiers.json
-      - ./deploy/base/credential-template.html:/home/mosip/credential-template.html
-      - ./deploy/local/AITUniversity-ait-transcript-template.html:/home/mosip/AITUniversity-ait-transcript-template.html
-      - ./deploy/base/nginx.conf:/etc/nginx/conf.d/default.conf
-    depends_on:
-      - mimoto-service
-
   keycloak-server:
     image: quay.io/keycloak/keycloak:24.0
     command:
@@ -100,6 +35,8 @@ services:
       - KEYCLOAK_ADMIN_PASSWORD=admin
     volumes:
       - ./deploy/${INSTALLATION}/keycloak-realm.json:/opt/keycloak/data/import/realm.json:ro
+    networks:
+      - local-network
 
   keycloak:
     image: nginx:stable
@@ -112,18 +49,22 @@ services:
     depends_on:
       - keycloak-server
     restart: unless-stopped
+    networks:
+      - local-network
 
   demo-app:
     build:
       context: .
       dockerfile: src/portal/Dockerfile
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "4100:4100"
     environment:
       - AIT_DEMO_DB=/demo/.demo-state/demo_requests.db
       - INJI_WEB_URL=${INJI_WEB_URL:-http://localhost:4004}
       - INJI_VERIFY_URL=${INJI_VERIFY_URL:-http://localhost:4007}
-      - CERTIFY_PUBLIC_BASE_URL=${CERTIFY_PUBLIC_BASE_URL:-http://certify-nginx}
+      - CERTIFY_PUBLIC_BASE_URL=${CERTIFY_PUBLIC_BASE_URL:-http://host.docker.internal:9091}
       - INSTALLATION=${INSTALLATION}
     env_file:
       - ./deploy/${INSTALLATION}/authorization-server.env
@@ -132,23 +73,33 @@ services:
       - ./scripts:/demo/scripts
       - ./deploy:/demo/deploy
       - ./tests/fixtures:/demo/tests/fixtures:ro
-    depends_on:
-      - certify-nginx
+    networks:
+      - local-network
 
   gateway:
     build:
       context: .
       dockerfile: src/gateway/Dockerfile
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8000:8000"
     env_file:
       - ./deploy/${INSTALLATION}/gateway.env
     restart: unless-stopped
+    networks:
+      - local-network
 
   adapter:
     build:
       context: .
       dockerfile: mock/adapter/Dockerfile
+    ports:
+      - "8082:8000"
     environment:
       - ADAPTER_CSV=/data/student_identity_data.csv
     volumes:
       - ./deploy/${INSTALLATION}/adapter:/data:ro
     restart: unless-stopped
+    networks:
+      - local-network
