@@ -3,10 +3,9 @@
 # ==============================================================================
 # Orchestrates the modular platform components:
 # 1. Inji Certify Engine     (compose.certify.yaml)
-# 2. VDR Context Server      (compose.vdr.yaml)
-# 3. Inji Verifier Stack     (compose.verify.yaml)
-# 4. Inji Web Wallet UI      (compose.web-wallet.yaml)
-# 5. VCGA / Mimoto Mediator  (compose.vcga.yaml)
+# 2. Inji Verifier Stack     (compose.verify.yaml)
+# 3. Inji Web Wallet UI      (compose.web-wallet.yaml)
+# 4. Trust Registry (VDR/VCGA)(compose.trust.yaml)
 #
 # For local development with stand-in mock dependencies (Keycloak & Mock SIS):
 #   docker compose -f compose.yaml -f compose.local.yaml up -d
@@ -15,7 +14,6 @@ name: ${COMPOSE_PROJECT_NAME}
 
 include:
   - compose.certify.yaml
-  - compose.vdr.yaml
   - compose.verify.yaml
   - compose.web-wallet.yaml
-  - compose.vcga.yaml
+  - compose.trust.yaml

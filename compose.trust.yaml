@@ -1,0 +1,38 @@
+# ==============================================================================
+# Trust Registry Stack Compose Manifest (VDR & VCGA)
+# ==============================================================================
+# Isolated Stack:
+# - VDR: Static Nginx serving W3C JSON-LD contexts (port 9098)
+# - VCGA: Static Nginx serving issuer registry and trusted verifiers metadata (port 9099)
+#
+# Network: trust-network (isolated)
+# Integration: Reached by Certify/Wallets/Verifiers via public URLs / host ports
+# ==============================================================================
+name: ${COMPOSE_PROJECT_NAME}-trust
+
+networks:
+  trust-network:
+    name: ${COMPOSE_PROJECT_NAME}-trust-net
+
+services:
+  vdr:
+    image: nginx:stable
+    restart: unless-stopped
+    ports:
+      - "${VDR_PORT:-9098}:80"
+    volumes:
+      - ./deploy/${INSTALLATION}/contexts:/usr/share/nginx/html/contexts:ro
+    networks:
+      - trust-network
+
+  vcga:
+    image: nginx:stable
+    restart: unless-stopped
+    ports:
+      - "${VCGA_PORT:-9099}:80"
+    volumes:
+      - ./deploy/base/vcga-nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./deploy/${INSTALLATION}:/usr/share/nginx/html/installation:ro
+      - ./deploy/local:/usr/share/nginx/html/local:ro
+    networks:
+      - trust-network

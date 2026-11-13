@@ -76,12 +76,11 @@ ait-transcript/
 │   ├── Dockerfile.certify                # Bakes src/issuer SPI plugin into Inji Certify
 │   └── Dockerfile.template-sync          # Packages certify_template_sync (uv + Alpine)
 │
-├── compose.yaml                          # Root orchestrator (includes certify, vdr, verifier, web-wallet, vcga)
+├── compose.yaml                          # Root orchestrator (includes certify, verify, web-wallet, trust)
 ├── compose.certify.yaml                  # Core Inji Certify Issuer Engine (internal DB & ingress Nginx)
-├── compose.vdr.yaml                      # Static W3C JSON-LD Context Server (VDR)
 ├── compose.verify.yaml                   # Generic Inji Verifier stack (UI, backend, session DB)
 ├── compose.web-wallet.yaml               # Inji Web Wallet UI
-├── compose.vcga.yaml                     # Stand-in VCGA / Mimoto mediator & database
+├── compose.trust.yaml                    # Trust Registry (Static VDR contexts & VCGA issuer metadata)
 ├── compose.local.yaml                    # Local stand-in mock services (Keycloak, adapter, portal)
 ├── compose.certify-build.yaml            # Compiler container for Java SPI plugin
 ├── .env.example                          # Root developer environment configuration
