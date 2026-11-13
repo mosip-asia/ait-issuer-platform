@@ -52,7 +52,7 @@ services:
       - "9095:8080"
     environment:
       - active_profile_env=default
-      - DATABASE_HOST=verify-database
+      - DATABASE_HOST=database
       - DATABASE_PORT=5432
       - DATABASE_NAME=inji_verify
       - DATABASE_SCHEMA=verify
@@ -66,12 +66,12 @@ services:
       - INJI_VERIFY_REDIRECT_URI=${INJI_VERIFY_REDIRECT_URI:-http://localhost:4007}
       - INJI_VERIFY_CLAIMS_WITH_META_DATA=_sd,_sd_alg,iss,cnf,sub,aud,exp,nbf,iat,cti
     depends_on:
-      verify-database:
+      database:
         condition: service_healthy
     networks:
       - verifier-network
 
-  verify-database:
+  database:
     image: postgres:15
     environment:
       - POSTGRES_USER=postgres

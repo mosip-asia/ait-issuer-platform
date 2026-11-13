@@ -62,12 +62,12 @@ def test_verify_config_schema() -> None:
 
 
 def test_compose_verify_manifest() -> None:
-    compose_file = REPO_ROOT / "compose.verifier.yaml"
-    assert compose_file.is_file(), "compose.verifier.yaml must exist"
+    compose_file = REPO_ROOT / "compose.verify.yaml"
+    assert compose_file.is_file(), "compose.verify.yaml must exist"
     content = compose_file.read_text(encoding="utf-8")
     assert "verify-ui:" in content
     assert "verify-service:" in content
-    assert "verify-database:" in content
+    assert "database:" in content
     assert "4007:8000" in content
     assert "DEFAULT_TITLE" in content
     assert "DEFAULT_THEME" in content

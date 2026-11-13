@@ -4,7 +4,7 @@
 # Orchestrates the modular platform components:
 # 1. Inji Certify Engine     (compose.certify.yaml)
 # 2. VDR Context Server      (compose.vdr.yaml)
-# 3. Inji Verifier Stack     (compose.verifier.yaml)
+# 3. Inji Verifier Stack     (compose.verify.yaml)
 # 4. Inji Web Wallet UI      (compose.web-wallet.yaml)
 # 5. VCGA / Mimoto Mediator  (compose.vcga.yaml)
 #
@@ -16,6 +16,6 @@ name: ${COMPOSE_PROJECT_NAME:-local-vc}
 include:
   - compose.certify.yaml
   - compose.vdr.yaml
-  - compose.verifier.yaml
+  - compose.verify.yaml
   - compose.web-wallet.yaml
   - compose.vcga.yaml

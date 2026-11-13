@@ -30,7 +30,7 @@ An **Installation** (`deploy/<name>/`) is one issuing deployment's settings: `ai
   - `compose.yaml`: Root orchestrator including certify, vdr, verifier, web-wallet, and vcga.
   - `compose.certify.yaml`: Core Inji Certify Issuer Engine, Certify Nginx (:9091), internal PostgreSQL, template-sync.
   - `compose.vdr.yaml`: Verifiable Data Registry context server (:9098).
-  - `compose.verifier.yaml`: Custom branded Verifier (`src/verifier` on port 4007), Inji Verify service (:9095), and PostgreSQL.
+  - `compose.verify.yaml`: Custom branded Verifier (`src/verifier` on port 4007), Inji Verify service (:9095), and PostgreSQL.
   - `compose.web-wallet.yaml`: Inji Web Wallet UI (port 4004).
   - `compose.vcga.yaml`: Stand-in VCGA / Mimoto mediator (:9099) and PostgreSQL.
   - `compose.local.yaml`: Local stand-in mock services with Keycloak (port 9080), mock adapter (:8082), demo app (:4100), and gateway (:8000).

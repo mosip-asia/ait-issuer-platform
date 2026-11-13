@@ -79,7 +79,7 @@ ait-transcript/
 ├── compose.yaml                          # Root orchestrator (includes certify, vdr, verifier, web-wallet, vcga)
 ├── compose.certify.yaml                  # Core Inji Certify Issuer Engine (internal DB & ingress Nginx)
 ├── compose.vdr.yaml                      # Static W3C JSON-LD Context Server (VDR)
-├── compose.verifier.yaml                 # Generic Inji Verifier stack (UI, backend, session DB)
+├── compose.verify.yaml                   # Generic Inji Verifier stack (UI, backend, session DB)
 ├── compose.web-wallet.yaml               # Inji Web Wallet UI
 ├── compose.vcga.yaml                     # Stand-in VCGA / Mimoto mediator & database
 ├── compose.local.yaml                    # Local stand-in mock services (Keycloak, adapter, portal)
@@ -329,7 +329,7 @@ Brings up the complete multi-service demonstration journey (Inji Web Wallet, Key
 
 #### To Run Full Local Stack:
 ```bash
-docker compose -f compose.certify.yaml -f compose.verifier.yaml -f compose.web-wallet.yaml -f compose.local.yaml up -d
+docker compose -f compose.certify.yaml -f compose.verify.yaml -f compose.web-wallet.yaml -f compose.local.yaml up -d
 ```
 
 ---

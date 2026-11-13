@@ -29,8 +29,8 @@ run_release_checks() {
   elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.vdr.yaml docker compose config --quiet; then
     log_err "VDR compose.vdr.yaml configuration failed validation."
     rc=1
-  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.verifier.yaml docker compose config --quiet; then
-    log_err "Verifier compose.verifier.yaml configuration failed validation."
+  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.verify.yaml docker compose config --quiet; then
+    log_err "Verifier compose.verify.yaml configuration failed validation."
     rc=1
   elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.web-wallet.yaml docker compose config --quiet; then
     log_err "Web wallet compose.web-wallet.yaml configuration failed validation."
