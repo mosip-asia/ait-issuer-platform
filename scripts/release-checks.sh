@@ -20,7 +20,10 @@ run_release_checks() {
   fi
   # Pin ':' as the separator: Docker Compose on Windows splits COMPOSE_FILE on ';' by default,
   # while .env.example and the Linux hosts use the ':' form.
-  if ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.certify.yaml docker compose config --quiet; then
+  if ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.yaml docker compose config --quiet; then
+    log_err "Root compose.yaml configuration failed validation."
+    rc=1
+  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.certify.yaml docker compose config --quiet; then
     log_err "Certify compose.certify.yaml configuration failed validation."
     rc=1
   elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.verifier.yaml docker compose config --quiet; then

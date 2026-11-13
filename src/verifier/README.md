@@ -19,7 +19,7 @@ Instead of writing a verifier from scratch, it extends the official upstream `in
 
 Start the verifier stack:
 ```bash
-docker compose -f compose.yaml -f compose.verify.yaml up -d --build
+docker compose -f compose.verifier.yaml up -d --build
 ```
 Access the custom verifier at [http://localhost:4007](http://localhost:4007).
 
