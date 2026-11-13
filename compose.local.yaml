@@ -1,15 +1,16 @@
 # ==============================================================================
-# Full End-to-End Demo Stack Compose Manifest
+# Local Development & Stand-in Mock Services Overlay
 # ==============================================================================
 # Includes:
-# - Inji Web Wallet Mock (injistack/inji-web) on :4004
-# - Mimoto OAuth/VC mediator on :9099
-# - Keycloak Server & Nginx on :9080
+# - Stand-in Keycloak OAuth Server & Nginx on :9080
+# - Stand-in SIS Mock Adapter on :8000
+# - Local Mimoto OAuth/VC mediator (local trust) on :9099
+# - Inji Web Wallet on :4004
+# - Approval Gateway on :8000
 # - Demo Portal (Registrar & Student UI) on :4100
-# - Approval Gateway & Mock Adapter on :8000
 #
 # Usage:
-#   docker compose -f compose.yaml -f compose.demo.yaml up -d
+#   docker compose -f compose.yaml -f compose.local.yaml up -d
 # ==============================================================================
 name: ${COMPOSE_PROJECT_NAME}
 

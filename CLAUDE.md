@@ -29,7 +29,7 @@ An **Installation** (`deploy/<name>/`) is one issuing deployment's settings: `ai
 - Compose profiles:
   - `compose.yaml`: Inji Certify, Certify Nginx, PostgreSQL database, VDR context server, template-sync.
   - `compose.verify.yaml`: Custom branded Verifier (`src/verifier` on port 4007) and Inji Verify service (port 9095).
-  - `compose.demo.yaml`: End-to-end demo with Inji Web Wallet mock (port 4004), Mimoto (port 9099), Keycloak (port 9080), demo app (port 4100), gateway, and adapter.
+  - `compose.local.yaml`: Local stand-in mock services with Inji Web Wallet (port 4004), Mimoto (port 9099), Keycloak (port 9080), demo app (port 4100), gateway, and adapter.
 
 Deployment is manual: push, then run the `Deploy` workflow for a commit. A commit that changes an Installation's `certify_seed.sql` needs `wipe=true`, which also renews the signing key and `did:key`.
 

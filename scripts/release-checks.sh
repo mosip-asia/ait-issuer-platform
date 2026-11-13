@@ -26,8 +26,8 @@ run_release_checks() {
   elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.yaml:compose.verify.yaml docker compose config --quiet; then
     log_err "Verifier overlay compose configuration failed validation."
     rc=1
-  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.yaml:compose.demo.yaml docker compose config --quiet; then
-    log_err "Demo overlay compose configuration failed validation."
+  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.yaml:compose.local.yaml docker compose config --quiet; then
+    log_err "Local overlay compose configuration failed validation."
     rc=1
   fi
   if [[ "$temp_env" == true ]]; then

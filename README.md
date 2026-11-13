@@ -78,8 +78,7 @@ ait-transcript/
 │
 ├── compose.yaml                          # Core Issuer Platform compose (Certify, DB, Nginx, VDR)
 ├── compose.verify.yaml                   # Verifier stack compose (custom Verifier + Verify service)
-├── compose.demo.yaml                     # Full demo stack compose (Inji Web mock wallet, demo app, Keycloak)
-├── compose.dev.yaml                      # Loop 3: Hot JAR mount dev overlay (~3s reload)
+├── compose.local.yaml                    # Local stand-in mock overlay (Inji Web wallet, Keycloak, adapter, portal)
 ├── .env.example                          # Root developer environment configuration
 └── pyproject.toml / uv.lock              # Modern Python dependency management (uv)
 ```
@@ -323,9 +322,9 @@ Brings up the complete multi-service demonstration journey (Inji Web Wallet, Key
 ./scripts/deploy.sh hackathon --wipe    # Switch to Hackathon profile
 ```
 
-#### To Run Full Demo Stack (Mock Wallet & Verifier):
+#### To Run Full Local Stack (Mock Wallet & Verifier):
 ```bash
-docker compose -f compose.yaml -f compose.verify.yaml -f compose.demo.yaml up -d
+docker compose -f compose.yaml -f compose.verify.yaml -f compose.local.yaml up -d
 ```
 
 ---
