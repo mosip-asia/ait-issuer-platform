@@ -26,14 +26,23 @@ run_release_checks() {
   elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.certify.yaml docker compose config --quiet; then
     log_err "Certify compose.certify.yaml configuration failed validation."
     rc=1
+  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.vdr.yaml docker compose config --quiet; then
+    log_err "VDR compose.vdr.yaml configuration failed validation."
+    rc=1
   elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.verifier.yaml docker compose config --quiet; then
     log_err "Verifier compose.verifier.yaml configuration failed validation."
     rc=1
   elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.web-wallet.yaml docker compose config --quiet; then
     log_err "Web wallet compose.web-wallet.yaml configuration failed validation."
     rc=1
+  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.vcga.yaml docker compose config --quiet; then
+    log_err "VCGA compose.vcga.yaml configuration failed validation."
+    rc=1
   elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.local.yaml docker compose config --quiet; then
     log_err "Local mock compose.local.yaml configuration failed validation."
+    rc=1
+  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.certify-build.yaml docker compose config --quiet; then
+    log_err "Certify build compose.certify-build.yaml configuration failed validation."
     rc=1
   fi
   if [[ "$temp_env" == true ]]; then

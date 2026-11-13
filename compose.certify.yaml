@@ -2,10 +2,9 @@
 # Inji Certify Issuer Engine Compose Manifest
 # ==============================================================================
 # Isolated Stack:
-# - Inji Certify with compiled SPI JAR mounted as plugin
-# - PostgreSQL database (inji_certify)
+# - Inji Certify with compiled SPI JAR mounted as plugin (internal port 8090)
+# - PostgreSQL database (inji_certify, internal port 5432)
 # - Ingress Nginx (port 9091)
-# - VDR Context Server (port 9098)
 # - GitOps Template-Sync
 #
 # Network: certify-network (isolated)
@@ -31,8 +30,6 @@ services:
       interval: 2s
       timeout: 3s
       retries: 60
-    ports:
-      - "${POSTGRES_PORT}:5432"
     networks:
       - certify-network
 
@@ -41,8 +38,6 @@ services:
     user: root
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    ports:
-      - "9090:8090"
     environment:
       - active_profile_env=default, installation
       - AUTH_SERVER_ISSUER=${AUTH_SERVER_ISSUER}
@@ -87,16 +82,6 @@ services:
       - ./deploy/${INSTALLATION}/vp_request_config.json:/config/server/vp_request_config.json:ro
     depends_on:
       - certify
-    networks:
-      - certify-network
-
-  vdr:
-    image: nginx:stable
-    restart: unless-stopped
-    ports:
-      - "9098:80"
-    volumes:
-      - ./deploy/${INSTALLATION}/contexts:/usr/share/nginx/html/contexts:ro
     networks:
       - certify-network
 

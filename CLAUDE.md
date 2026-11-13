@@ -27,10 +27,14 @@ An **Installation** (`deploy/<name>/`) is one issuing deployment's settings: `ai
   - `.venv/bin/python src/adapter/test_adapter.py`
   - `.venv/bin/python src/gateway/tests/test_evaluations.py`
 - Compose manifests:
-  - `compose.certify.yaml` (`compose.yaml`): Core Inji Certify Issuer Engine, Certify Nginx (:9091), PostgreSQL (:5432), VDR (:9098), template-sync.
+  - `compose.yaml`: Root orchestrator including certify, vdr, verifier, web-wallet, and vcga.
+  - `compose.certify.yaml`: Core Inji Certify Issuer Engine, Certify Nginx (:9091), internal PostgreSQL, template-sync.
+  - `compose.vdr.yaml`: Verifiable Data Registry context server (:9098).
   - `compose.verifier.yaml`: Custom branded Verifier (`src/verifier` on port 4007), Inji Verify service (:9095), and PostgreSQL.
-  - `compose.web-wallet.yaml`: Inji Web Wallet (port 4004), Mimoto (:9099), and PostgreSQL.
+  - `compose.web-wallet.yaml`: Inji Web Wallet UI (port 4004).
+  - `compose.vcga.yaml`: Stand-in VCGA / Mimoto mediator (:9099) and PostgreSQL.
   - `compose.local.yaml`: Local stand-in mock services with Keycloak (port 9080), mock adapter (:8082), demo app (:4100), and gateway (:8000).
+  - `compose.certify-build.yaml`: Compiler container for the SPI plugin JAR (`plugin-builder`).
 
 Deployment is manual: push, then run the `Deploy` workflow for a commit. A commit that changes an Installation's `certify_seed.sql` needs `wipe=true`, which also renews the signing key and `did:key`.
 

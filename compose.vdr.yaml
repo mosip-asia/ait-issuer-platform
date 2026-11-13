@@ -1,0 +1,25 @@
+# ==============================================================================
+# Verifiable Data Registry (VDR) Context Server Compose Manifest
+# ==============================================================================
+# Isolated Stack:
+# - Static Nginx context server serving W3C JSON-LD contexts (port 9098)
+#
+# Network: vdr-network (isolated)
+# Integration: Reached by Certify/Wallets/Verifiers via public URL (port 9098)
+# ==============================================================================
+name: ${COMPOSE_PROJECT_NAME}
+
+networks:
+  vdr-network:
+    name: ${COMPOSE_PROJECT_NAME}_vdr-net
+
+services:
+  vdr:
+    image: nginx:stable
+    restart: unless-stopped
+    ports:
+      - "9098:80"
+    volumes:
+      - ./deploy/${INSTALLATION}/contexts:/usr/share/nginx/html/contexts:ro
+    networks:
+      - vdr-network

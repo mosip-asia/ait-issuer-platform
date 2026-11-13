@@ -65,7 +65,7 @@ CERTIFY_URL="http://127.0.0.1:${CERTIFY_PORT}"
 PLUGIN_JAR="src/issuer/target/issuer-data-provider-plugin.jar"
 if [ ! -f "$PLUGIN_JAR" ]; then
   log_info "Building Inji Certify DataProviderPlugin JAR via compiler container..."
-  docker compose -f compose.build.yaml run --rm plugin-builder
+  docker compose -f compose.certify-build.yaml run --rm plugin-builder
 fi
 
 # 3. Tear down existing stack

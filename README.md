@@ -76,10 +76,14 @@ ait-transcript/
 │   ├── Dockerfile.certify                # Bakes src/issuer SPI plugin into Inji Certify
 │   └── Dockerfile.template-sync          # Packages certify_template_sync (uv + Alpine)
 │
-├── compose.certify.yaml (compose.yaml)   # Core Inji Certify Issuer Engine
-├── compose.verifier.yaml                 # Generic Inji Verifier stack
-├── compose.web-wallet.yaml               # Inji Web Wallet & Mimoto stack
+├── compose.yaml                          # Root orchestrator (includes certify, vdr, verifier, web-wallet, vcga)
+├── compose.certify.yaml                  # Core Inji Certify Issuer Engine (internal DB & ingress Nginx)
+├── compose.vdr.yaml                      # Static W3C JSON-LD Context Server (VDR)
+├── compose.verifier.yaml                 # Generic Inji Verifier stack (UI, backend, session DB)
+├── compose.web-wallet.yaml               # Inji Web Wallet UI
+├── compose.vcga.yaml                     # Stand-in VCGA / Mimoto mediator & database
 ├── compose.local.yaml                    # Local stand-in mock services (Keycloak, adapter, portal)
+├── compose.certify-build.yaml            # Compiler container for Java SPI plugin
 ├── .env.example                          # Root developer environment configuration
 └── pyproject.toml / uv.lock              # Modern Python dependency management (uv)
 ```
@@ -281,7 +285,7 @@ Spins up the core Verifiable Credential Platform (`certify`, `certify-nginx`, `d
 cp .env.example .env
 
 # 2. Build the SPI plugin via the compiler container (no host Maven/Java needed)
-docker compose -f compose.build.yaml run --rm plugin-builder
+docker compose -f compose.certify-build.yaml run --rm plugin-builder
 
 # 3. Start the platform
 docker compose up -d
@@ -291,7 +295,7 @@ docker compose up -d
 - **Compiler Container Build & Reload (~2s):**
   Recompile the JAR into `src/issuer/target/` and reload Certify without rebuilding the image:
   ```bash
-  docker compose -f compose.build.yaml run --rm plugin-builder && docker compose restart certify
+  docker compose -f compose.certify-build.yaml run --rm plugin-builder && docker compose restart certify
   ```
 - **In-Memory Unit Tests (~3s):**
   ```bash
