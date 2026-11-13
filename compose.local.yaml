@@ -24,9 +24,9 @@ services:
         "start-dev",
         "--import-realm",
         "--hostname-strict=true",
-        "--hostname-url=${KEYCLOAK_DOCKER_AUTH_SERVER:-http://keycloak:8080}",
+        "--hostname-url=${KEYCLOAK_DOCKER_AUTH_SERVER}",
         "--hostname-port=9080",
-        "--hostname-admin-url=${KEYCLOAK_PUBLIC_BASE_URL:-http://localhost:9080}",
+        "--hostname-admin-url=${KEYCLOAK_PUBLIC_BASE_URL}",
         "--proxy=edge",
         "--proxy-headers=xforwarded",
       ]
@@ -43,7 +43,7 @@ services:
     ports:
       - "9080:8080"
     environment:
-      - KEYCLOAK_PUBLIC_BASE_URL=${KEYCLOAK_PUBLIC_BASE_URL:-http://localhost:9080}
+      - KEYCLOAK_PUBLIC_BASE_URL=${KEYCLOAK_PUBLIC_BASE_URL}
     volumes:
       - ./deploy/local/keycloak-nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
     depends_on:
@@ -62,9 +62,9 @@ services:
       - "4100:4100"
     environment:
       - AIT_DEMO_DB=/demo/.demo-state/demo_requests.db
-      - INJI_WEB_URL=${INJI_WEB_URL:-http://localhost:4004}
-      - INJI_VERIFY_URL=${INJI_VERIFY_URL:-http://localhost:4007}
-      - CERTIFY_PUBLIC_BASE_URL=${CERTIFY_PUBLIC_BASE_URL:-http://host.docker.internal:9091}
+      - INJI_WEB_URL=${INJI_WEB_URL}
+      - INJI_VERIFY_URL=${INJI_VERIFY_URL}
+      - CERTIFY_PUBLIC_BASE_URL=${CERTIFY_PUBLIC_BASE_URL}
       - INSTALLATION=${INSTALLATION}
     env_file:
       - ./deploy/${INSTALLATION}/authorization-server.env
