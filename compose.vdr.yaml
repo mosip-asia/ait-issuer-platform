@@ -7,11 +7,11 @@
 # Network: vdr-network (isolated)
 # Integration: Reached by Certify/Wallets/Verifiers via public URL (port 9098)
 # ==============================================================================
-name: ${COMPOSE_PROJECT_NAME}
+name: ${COMPOSE_PROJECT_NAME:-local-vc}-vdr
 
 networks:
   vdr-network:
-    name: ${COMPOSE_PROJECT_NAME}_vdr-net
+    name: ${COMPOSE_PROJECT_NAME:-local-vc}-vdr-net
 
 services:
   vdr:

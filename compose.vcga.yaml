@@ -8,11 +8,11 @@
 # Network: vcga-network (isolated)
 # Integration: Publicly available at http://localhost:9099
 # ==============================================================================
-name: ${COMPOSE_PROJECT_NAME}
+name: ${COMPOSE_PROJECT_NAME:-local-vc}-vcga
 
 networks:
   vcga-network:
-    name: ${COMPOSE_PROJECT_NAME}_vcga-net
+    name: ${COMPOSE_PROJECT_NAME:-local-vc}-vcga-net
 
 services:
   vcga-database:

@@ -7,11 +7,11 @@
 # Network: wallet-network (isolated)
 # Integration: Proxies /v1/mimoto to VCGA via host.docker.internal / public URL
 # ==============================================================================
-name: ${COMPOSE_PROJECT_NAME}
+name: ${COMPOSE_PROJECT_NAME:-local-vc}-web-wallet
 
 networks:
   wallet-network:
-    name: ${COMPOSE_PROJECT_NAME}_wallet-net
+    name: ${COMPOSE_PROJECT_NAME:-local-vc}-wallet-net
 
 services:
   inji-web:

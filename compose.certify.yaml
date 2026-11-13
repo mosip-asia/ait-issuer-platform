@@ -10,11 +10,11 @@
 # Network: certify-network (isolated)
 # Integration: External via CERTIFY_PUBLIC_BASE_URL (http://localhost:9091)
 # ==============================================================================
-name: ${COMPOSE_PROJECT_NAME}
+name: ${COMPOSE_PROJECT_NAME:-local-vc}-certify
 
 networks:
   certify-network:
-    name: ${COMPOSE_PROJECT_NAME}_certify-net
+    name: ${COMPOSE_PROJECT_NAME:-local-vc}-certify-net
 
 services:
   database:
@@ -106,4 +106,4 @@ services:
 
 volumes:
   issuer-db:
-    name: ${COMPOSE_PROJECT_NAME}_issuer-db_${INSTALLATION}
+    name: ${COMPOSE_PROJECT_NAME:-local-vc}_issuer-db_${INSTALLATION}

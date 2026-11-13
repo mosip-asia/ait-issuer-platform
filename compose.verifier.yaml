@@ -9,11 +9,11 @@
 # Network: verifier-network (isolated)
 # Integration: Reaches Certify/VDR via host.docker.internal / public URL
 # ==============================================================================
-name: ${COMPOSE_PROJECT_NAME}
+name: ${COMPOSE_PROJECT_NAME:-local-vc}-verify
 
 networks:
   verifier-network:
-    name: ${COMPOSE_PROJECT_NAME}_verifier-net
+    name: ${COMPOSE_PROJECT_NAME:-local-vc}-verify-net
 
 services:
   verify-ui:

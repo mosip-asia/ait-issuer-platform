@@ -8,7 +8,7 @@
 # Usage:
 #   docker compose -f compose.certify-build.yaml run --rm plugin-builder
 # ==============================================================================
-name: ait-issuer-build
+name: ${COMPOSE_PROJECT_NAME:-local-vc}-build
 
 services:
   plugin-builder:

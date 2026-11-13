@@ -11,7 +11,7 @@
 # For local development with stand-in mock dependencies (Keycloak & Mock SIS):
 #   docker compose -f compose.yaml -f compose.local.yaml up -d
 # ==============================================================================
-name: ${COMPOSE_PROJECT_NAME}
+name: ${COMPOSE_PROJECT_NAME:-local-vc}
 
 include:
   - compose.certify.yaml

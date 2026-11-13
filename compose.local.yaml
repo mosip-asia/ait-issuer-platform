@@ -10,11 +10,11 @@
 # Network: local-network (isolated)
 # Integration: Bridges to Certify/Wallet via host ports / host.docker.internal
 # ==============================================================================
-name: ${COMPOSE_PROJECT_NAME}
+name: ${COMPOSE_PROJECT_NAME:-local-vc}-local
 
 networks:
   local-network:
-    name: ${COMPOSE_PROJECT_NAME}_local-net
+    name: ${COMPOSE_PROJECT_NAME:-local-vc}-local-net
 
 services:
   keycloak-server:
