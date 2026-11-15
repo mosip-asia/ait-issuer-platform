@@ -45,7 +45,16 @@ def test_mimoto_file_ignores_mobile_settings() -> None:
     assert with_mobile == web_only
     issuer = json.loads(with_mobile)["issuers"][0]
     assert issuer["redirect_uri"] == "https://wallet.demo.example/redirect"
-    assert issuer["credential_issuer_host"] == "http://host.docker.internal:9091"
+    assert issuer["credential_issuer_host"] == "https://issuer.dpi.ait.ac.th"
+
+
+def test_local_issuer_host_is_domain_based() -> None:
+    out = r.render(AIT)[MIMOTO_OUT]
+    issuer = json.loads(out)["issuers"][0]
+    assert issuer["credential_issuer_host"] == "http://issuer.localhost"
+    assert issuer["wellknown_endpoint"] == "http://issuer.localhost/.well-known/openid-credential-issuer"
+    assert "9091" not in out
+    assert "host.docker.internal" not in out
 
 
 def test_public_mobile_list_is_phone_reachable() -> None:

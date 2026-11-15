@@ -72,10 +72,13 @@ def render(env: dict[str, str]) -> dict[Path, str]:
     default_vdr = "https://vdr.dpi.ait.ac.th" if inji_web_url.startswith("https://") else "http://vdr.localhost"
     vdr_base = env.get("VDR_BASE_URL", default_vdr).rstrip("/")
     vcga_base = env.get("VCGA_BASE_URL", "https://vcga.dpi.ait.ac.th" if inji_web_url.startswith("https://") else "http://vcga.localhost").rstrip("/")
+    default_issuer = "https://issuer.dpi.ait.ac.th" if inji_web_url.startswith("https://") else "http://issuer.localhost"
+    issuer_base = env.get("ISSUER_BASE_URL", default_issuer).rstrip("/")
     values = {
         "INJI_WEB_URL": inji_web_url,
         "VDR_BASE_URL": vdr_base,
         "VCGA_BASE_URL": vcga_base,
+        "ISSUER_BASE_URL": issuer_base,
         "CDN_BASE_URL": vdr_base,
         **authorization_server(env["INSTALLATION"], env),
     }
