@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 deploy/*/mimoto-issuers-config.json
 deploy/*/vcga/mimoto-issuers-config.json
+deploy/*/vcga/issuers.json
 .certs/
 src/issuer/target/
 target/

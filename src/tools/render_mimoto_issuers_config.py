@@ -28,7 +28,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 CONFIG_DIR = REPO_ROOT / "deploy" / "base"
-MOBILE_ISSUERS_OUT = CONFIG_DIR / "vcga" / "mimoto-issuers-mobile.json"
+MOBILE_ISSUERS_OUT = CONFIG_DIR / "vcga" / "issuers-mobile.json"
 GATEWAY_SNIPPET_OUT = CONFIG_DIR / "public-gateway-mobile.conf"
 
 # The app registers this scheme, the Keycloak realm allows it, and the app's own code falls back to it.
@@ -60,18 +60,22 @@ def render(env: dict[str, str]) -> dict[Path, str]:
     """Return {output path: content} for the given environment."""
     installation_dir = REPO_ROOT / "deploy" / env["INSTALLATION"]
     vcga_dir = installation_dir / "vcga"
-    template = vcga_dir / "mimoto-issuers-config.json.template"
+    template = vcga_dir / "issuers.json.template"
+    if not template.is_file():
+        template = vcga_dir / "mimoto-issuers-config.json.template"
     if not template.is_file():
         template = installation_dir / "mimoto-issuers-config.json.template"
         target_out = installation_dir / "mimoto-issuers-config.json"
     else:
-        target_out = vcga_dir / "mimoto-issuers-config.json"
+        target_out = vcga_dir / "issuers.json"
     inji_web_url = env.get("INJI_WEB_URL", "http://wallet.localhost")
     default_vdr = "https://vdr.dpi.ait.ac.th" if inji_web_url.startswith("https://") else "http://vdr.localhost"
     vdr_base = env.get("VDR_BASE_URL", default_vdr).rstrip("/")
+    vcga_base = env.get("VCGA_BASE_URL", "https://vcga.dpi.ait.ac.th" if inji_web_url.startswith("https://") else "http://vcga.localhost").rstrip("/")
     values = {
         "INJI_WEB_URL": inji_web_url,
         "VDR_BASE_URL": vdr_base,
+        "VCGA_BASE_URL": vcga_base,
         "CDN_BASE_URL": vdr_base,
         **authorization_server(env["INSTALLATION"], env),
     }
