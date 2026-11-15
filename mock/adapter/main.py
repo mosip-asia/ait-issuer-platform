@@ -41,6 +41,20 @@ def record(sub: str) -> dict:
     return {k: v for k, v in find_row(sub).items() if k not in NOT_IN_RECORD}
 
 
+@app.get("/student/{sub}/student-id")
+def student_id(sub: str) -> dict:
+    row = find_row(sub)
+    return {
+        "studentId": row.get("registrationNo", ""),
+        "fullName": row.get("fullName", ""),
+        "faculty": row.get("faculty", ""),
+        "academicProgram": row.get("academicProgram", ""),
+        "studentStatus": "Active",
+        "issueDate": row.get("issueDate", ""),
+        "expiryDate": row.get("dateGraduation", ""),
+    }
+
+
 @app.get("/student/{sub}/eligibility")
 def eligibility(sub: str) -> dict:
     row = find_row(sub)

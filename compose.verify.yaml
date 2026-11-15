@@ -44,12 +44,21 @@ services:
       verifier-network:
         aliases:
           - verify-ui
+          - verifier.dpi.ait.ac.th
+          - verifer.dpi.ait.ac.th
 
   service:
     image: injistack/inji-verify-service:0.17.0
     user: root
     extra_hosts:
       - "host.docker.internal:host-gateway"
+      - "vdr.dpi.ait.ac.th:host-gateway"
+      - "cdn.dpi.ait.ac.th:host-gateway"
+      - "vcga.dpi.ait.ac.th:host-gateway"
+      - "issuer.dpi.ait.ac.th:host-gateway"
+      - "verifier.dpi.ait.ac.th:host-gateway"
+      - "verifer.dpi.ait.ac.th:host-gateway"
+      - "wallet.dpi.ait.ac.th:host-gateway"
     ports:
       - "${VERIFY_SERVICE_PORT}:8080"
     environment:

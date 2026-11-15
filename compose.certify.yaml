@@ -38,6 +38,13 @@ services:
     user: root
     extra_hosts:
       - "host.docker.internal:host-gateway"
+      - "vdr.dpi.ait.ac.th:host-gateway"
+      - "cdn.dpi.ait.ac.th:host-gateway"
+      - "vcga.dpi.ait.ac.th:host-gateway"
+      - "issuer.dpi.ait.ac.th:host-gateway"
+      - "verifier.dpi.ait.ac.th:host-gateway"
+      - "verifer.dpi.ait.ac.th:host-gateway"
+      - "wallet.dpi.ait.ac.th:host-gateway"
     environment:
       - active_profile_env=default, installation
       - AUTH_SERVER_ISSUER=${AUTH_SERVER_ISSUER}
@@ -88,6 +95,8 @@ services:
       certify-network:
         aliases:
           - certify-nginx
+          - issuer.dpi.ait.ac.th
+          - issuer
 
   template-sync:
     build:
@@ -106,6 +115,8 @@ services:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=inji_certify
+      - VDR_BASE_URL=${VDR_BASE_URL}
+      - CDN_BASE_URL=${CDN_BASE_URL}
     networks:
       - certify-network
 

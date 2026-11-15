@@ -410,9 +410,19 @@ When running the Full Demo Stack:
 
 The demonstration environment is continuously deployed to a Google Compute Engine VM (`ait-vc-transcript-demo`) behind Caddy (TLS) and NetBird Zero-Trust Mesh.
 
-### Public Web Ingress (TLS / Caddy)
+### Production Domain Architecture (*.dpi.ait.ac.th)
 
-These public endpoints are internet-facing for student holders and external verifiers:
+Permanent institutional endpoints for cryptographic schema resolution, issuance, and verification:
+- **Issuer Engine:** `https://issuer.dpi.ait.ac.th`
+- **Credential Verifier:** `https://verifier.dpi.ait.ac.th` (or `https://verifer.dpi.ait.ac.th`)
+- **Inji Web Wallet:** `https://wallet.dpi.ait.ac.th`
+- **VDR (Schemas & Contexts):** `https://vdr.dpi.ait.ac.th`
+- **VCGA (Issuers Catalog):** `https://vcga.dpi.ait.ac.th`
+- **CDN (Brand Assets & Logos):** `https://cdn.dpi.ait.ac.th`
+
+### Staging Demo Web Ingress (TLS / Caddy)
+
+These public endpoints are internet-facing on the demo VM for student holders and external verifiers:
 
 - **Student Portal:** `https://transcript-demo.ait-vc.dpi.ait.ac.th/student/login`
 - **Registrar Portal:** `https://transcript-demo.ait-vc.dpi.ait.ac.th/registrar/login`

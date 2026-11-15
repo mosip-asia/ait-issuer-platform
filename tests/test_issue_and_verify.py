@@ -219,6 +219,29 @@ def test_verify_step_fails_when_the_credential_itself_does_not_verify() -> None:
     assert problems and "SUCCESS" in problems[0], problems
 
 
+def test_student_id_credential_verification_and_tampered_copies() -> None:
+    student_id_vc = {
+        "type": ["VerifiableCredential", "AitStudentIdCredential"],
+        "credentialSubject": {
+            "id": "did:jwk:abc",
+            "studentId": "st125001",
+            "fullName": "Nara Wattanakul",
+            "faculty": "School of Engineering and Technology",
+            "academicProgram": "M.Eng Computer Science",
+            "studentStatus": "Active",
+            "issueDate": "2026-09-17",
+            "expiryDate": "2027-09-17",
+        },
+        "proof": {"type": "Ed25519Signature2020", "proofValue": "z..."},
+    }
+    client, seen = mock_client(lambda r: httpx.Response(200, json=SUCCESS))
+    assert iv.verify(client, student_id_vc) == "SUCCESS"
+    tampered = iv.tampered_copies(student_id_vc, ["fullName", "studentId"])
+    assert list(tampered) == ["id", "fullName", "studentId"]
+    assert tampered["fullName"]["credentialSubject"]["fullName"] != "Nara Wattanakul"
+    assert tampered["studentId"]["credentialSubject"]["studentId"] != "st125001"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in list(globals().items()) if k.startswith("test_")]
     for t in tests:

@@ -79,10 +79,24 @@ def load_credential_configs(creds_dir):
         print(f"[-] Error: Credentials directory not found: {creds_dir}", file=sys.stderr)
         sys.exit(1)
 
+    vdr_base = os.getenv("VDR_BASE_URL") or f"http://localhost:{os.getenv('VDR_PORT', '9098')}"
+    cdn_base = os.getenv("CDN_BASE_URL") or f"http://localhost:{os.getenv('CDN_PORT', '9097')}"
+    certify_did = os.getenv("CERTIFY_DID")
+
+    substitutions = {
+        "VDR_BASE_URL": vdr_base.rstrip("/"),
+        "CDN_BASE_URL": cdn_base.rstrip("/"),
+    }
+    if certify_did:
+        substitutions["CERTIFY_DID"] = certify_did
+
     for p in sorted(creds_dir.glob("*.json")):
         with open(p, "r", encoding="utf-8") as f:
+            content = f.read()
+            for var_name, var_val in substitutions.items():
+                content = content.replace(f"${{{var_name}}}", var_val)
             try:
-                data = json.load(f)
+                data = json.loads(content)
                 configs.append((p.name, data))
             except json.JSONDecodeError as e:
                 print(f"[-] Error parsing {p}: {e}", file=sys.stderr)
