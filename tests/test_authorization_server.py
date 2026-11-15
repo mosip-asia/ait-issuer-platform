@@ -43,6 +43,7 @@ REALM_PATH_ALLOWED = [
     re.compile(p)
     for p in (
         r"^deploy/[^/]+/authorization-server\.env$",
+        r"^deploy/[^/]+/vcga/issuers\.json$",
         r"\.md$",
         r"(^|/)test_[^/]*\.py$",
         r"Test\.java$",

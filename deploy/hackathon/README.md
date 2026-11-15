@@ -11,8 +11,7 @@ How the infra team deploys this directory (the service set, every variable and m
 | `certify_seed.sql` | Postgres, first start only | The `credential_config` rows for `developer-passport` and `achievement-certificate`, mounted after `deploy/base/certify_init.sql` |
 | `keycloak-realm.json` | Keycloak (`--import-realm`) | Realm `hackathon`: one user per roster `id`, the `wallet-demo` client, the test-only `smoke` client, the `developer_passport_vc_ldp` and `achievement_certificate_vc_ldp` scopes with Certify's audience |
 | `gateway.env` | The Gateway (`gateway/`), through Compose's `env_file` | Its settings, listed below |
-| `vcga/issuers.json.template` | `src/tools/render_mimoto_issuers_config.py` | Trusted issuer registry template, with `${INJI_WEB_URL}` left to fill |
-| `vcga/issuers.json` | VCGA, Inji Web | Rendered from the template. Git-ignored |
+| `vcga/issuers.json` | VCGA, Inji Web | Authoritative trusted issuer registry for wallet discovery |
 | `adapter/student_identity_data.csv` | The mock adapter (`adapter/`, mounted read-only at `/data`) | The roster, committed and edited by hand: one row per participant, keyed by `id` (the Keycloak username). The adapter reads it on every request, no restart of anything |
 | `smoke.json` | `scripts/smoke-test.sh`, `tests/` | The installation's test fixtures, below |
 

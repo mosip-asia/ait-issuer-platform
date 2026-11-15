@@ -436,7 +436,7 @@ docker compose -f compose.certify.yaml exec -T database \
 **Role**: The Verifiable Credentials Global Architecture (VCGA) catalog tells wallets which issuers exist, what credentials they issue, and how to reach their OAuth and OpenID4VCI endpoints. In this stack, it is statically served at `http://vcga.localhost` via Traefik edge ingress.
 
 ### 3.1 What to Configure
-In [`deploy/ait/vcga/issuers.json.template`](../../deploy/ait/vcga/issuers.json.template) (rendered to `issuers.json`), ensure your issuer points to Certify's discovery endpoint:
+In [`deploy/ait/vcga/issuers.json`](../../deploy/ait/vcga/issuers.json), ensure your issuer points to Certify's discovery endpoint:
 
 ```json
 {

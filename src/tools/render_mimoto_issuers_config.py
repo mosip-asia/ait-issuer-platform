@@ -1,4 +1,4 @@
-"""Render deploy/$INSTALLATION/mimoto-issuers-config.json from its .template.
+"""Parameterize deploy/$INSTALLATION/vcga/issuers.json for target environment.
 
 What changes with deployment is where the wallet (Inji Web) is publicly
 reachable — redirect_uri / token_endpoint both point back at it (see
@@ -60,14 +60,11 @@ def render(env: dict[str, str]) -> dict[Path, str]:
     """Return {output path: content} for the given environment."""
     installation_dir = REPO_ROOT / "deploy" / env["INSTALLATION"]
     vcga_dir = installation_dir / "vcga"
-    template = vcga_dir / "issuers.json.template"
-    if not template.is_file():
-        template = vcga_dir / "mimoto-issuers-config.json.template"
-    if not template.is_file():
-        template = installation_dir / "mimoto-issuers-config.json.template"
-        target_out = installation_dir / "mimoto-issuers-config.json"
-    else:
-        target_out = vcga_dir / "issuers.json"
+    issuers_path = vcga_dir / "issuers.json"
+    if not issuers_path.is_file():
+        issuers_path = installation_dir / "mimoto-issuers-config.json"
+    target_out = issuers_path
+
     inji_web_url = env.get("INJI_WEB_URL", "http://wallet.localhost")
     default_vdr = "https://vdr.dpi.ait.ac.th" if inji_web_url.startswith("https://") else "http://vdr.localhost"
     vdr_base = env.get("VDR_BASE_URL", default_vdr).rstrip("/")
@@ -82,9 +79,23 @@ def render(env: dict[str, str]) -> dict[Path, str]:
         "CDN_BASE_URL": vdr_base,
         **authorization_server(env["INSTALLATION"], env),
     }
-    rendered = template.read_text(encoding="utf-8")
-    for key, value in values.items():
-        rendered = rendered.replace("${" + key + "}", value)
+
+    raw_data = json.loads(issuers_path.read_text(encoding="utf-8"))
+    for item in raw_data.get("issuers", []):
+        issuer_id = item.get("issuer_id", "")
+        item["client_id"] = values["AUTH_SERVER_WALLET_CLIENT_ID"]
+        item["redirect_uri"] = f"{inji_web_url}/redirect"
+        item["token_endpoint"] = f"{inji_web_url}/v1/mimoto/get-token/{issuer_id}"
+        item["authorization_audience"] = values["AUTH_SERVER_TOKEN_ENDPOINT"]
+        item["proxy_token_endpoint"] = values["AUTH_SERVER_TOKEN_ENDPOINT"]
+        item["credential_issuer_host"] = issuer_base
+        item["wellknown_endpoint"] = f"{issuer_base}/.well-known/openid-credential-issuer"
+        for d in item.get("display", []):
+            if "logo" in d and isinstance(d["logo"], dict) and "url" in d["logo"]:
+                logo_name = d["logo"]["url"].rsplit("/", 1)[-1]
+                d["logo"]["url"] = f"{vdr_base}/assets/{logo_name}"
+
+    rendered = json.dumps(raw_data, indent=2) + "\n"
     snippet_template = installation_dir / "public-gateway-mobile.conf.template"
     if not snippet_template.is_file():
         return {target_out: rendered}

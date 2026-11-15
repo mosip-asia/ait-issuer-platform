@@ -11,9 +11,8 @@ How the infra team deploys this directory (the service set, every variable and m
 | `certify_seed.sql` | Postgres, first start only | The `credential_config` row for `ait-transcript`, mounted after `deploy/base/certify_init.sql` |
 | `keycloak-realm.json` | Keycloak (`--import-realm`) | Realm `inji`: one user per CSV `id`, the `wallet-demo` client, the test-only `smoke` client, the `ait_transcript_vc_ldp` scope |
 | `gateway.env` | The Gateway (`gateway/`), through Compose's `env_file` | Its settings, listed below |
-| `vcga/issuers.json.template` | `src/tools/render_mimoto_issuers_config.py` | Trusted issuer registry template, with `${INJI_WEB_URL}` left to fill |
+| `vcga/issuers.json` | VCGA, Inji Web | Authoritative trusted issuer registry for wallet discovery |
 | `public-gateway-mobile.conf.template` | `src/tools/render_mimoto_issuers_config.py` | The `api.` gateway's phone-only nginx locations. Its presence makes the script also render `deploy/base/vcga/issuers-mobile.json` and `public-gateway-mobile.conf` (mounted by Compose); an installation without it renders only Mimoto's list |
-| `vcga/issuers.json` | VCGA, Inji Web | Rendered from the template. Git-ignored |
 | `adapter/student_identity_data.csv` | The mock adapter (`src/adapter/`, mounted read-only at `/data`) | Mock transcript records. After the claim columns come `holds` (a JSON list), `conferralStatus` and `balance`, the eligibility attributes. To change a student's eligibility edit the file (or regenerate via `src/tools/generate_csv.py`): the adapter reads it on every request, no restart of anything |
 | `smoke.json` | `scripts/smoke-test.sh`, `tests/` | The installation's test fixtures, below |
 

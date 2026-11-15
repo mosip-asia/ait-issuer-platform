@@ -354,7 +354,7 @@ docker compose -f compose.certify.yaml exec -T database \
 **Role**: Verifiable Credentials Global Architecture (VCGA) serves `issuers.json` at `http://vcga.localhost/issuers`. Wallets query this catalog to discover issuers and their OpenID4VCI endpoints.
 
 ### 3.1 What to Configure
-In `deploy/<installation>/vcga/issuers.json.template` (rendered to `issuers.json`), ensure your issuer is listed and enabled:
+In `deploy/<installation>/vcga/issuers.json`, ensure your issuer is listed and enabled:
 ```json
 {
   "issuers": [
