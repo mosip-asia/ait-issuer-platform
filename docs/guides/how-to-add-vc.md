@@ -76,18 +76,28 @@ Credentials typically require two visual presentations:
    - Uses `#macro(claimValue $claimName)` and `#claimValue("fieldName")` to bind claims.
    - Embeds `$qrCodeImage` for instant scan-to-verify functionality.
 
-### 0.4 Offline Design Preview (Without Docker)
-Use the built-in offline preview tool in `src/vc-lab` to render and test your Velocity HTML template with sample persona data instantly:
+### 0.4 Visual Credential Studio & Offline Preview (VC Lab)
+
+Use **VC Lab Studio** (`src/vc-lab/`) to design, render, and inspect your credential before deployment:
+
+#### Method A: Interactive Web Studio Dashboard
+When the platform stack is running, open the live VC Lab studio:
+- **Dashboard URL:** [http://lab.localhost](http://lab.localhost)
+- Explore active JSON-LD schemas (`contexts/`) and Inji display configurations (`credentials/`).
+- Render live template previews with sample student personas and generate dynamic QR codes.
+
+#### Method B: Standalone CLI Preview (Zero External Dependencies)
+You can also preview and test Velocity HTML templates completely offline without starting Docker:
 
 ```bash
 # Preview academic transcript template with sample student persona:
-python3 src/vc-lab/preview_template.py \
+uv run vc-lab-preview \
   --template deploy/ait/AITUniversity-ait-transcript-template.html \
   --student st120001 \
   --out .demo-state/preview.html
 
 # Preview a card template with custom inline claims:
-python3 src/vc-lab/preview_template.py \
+uv run vc-lab-preview \
   --template deploy/base/credential-template.html \
   --claims '{"studentId":"st120001","fullName":"Nara Wattanakul","faculty":"SET"}' \
   --out .demo-state/preview.html
@@ -102,45 +112,46 @@ Open `.demo-state/preview.html` directly in any web browser to inspect typograph
 Once the schema, template, and visual assets are designed, deploy them across the **five core components** in natural dependency order:
 
 ```
-┌─────────────────────────────────┐
-│ 1. VDR & CDN (Trust :9098/97)   │  ◄── 1. Define schema & visual assets first
-│    contexts/<vc> & assets/<logo>│
-└──────────────┬──────────────────┘
-               │ resolves schema
-               ▼
-┌─────────────────────────────────┐
-│ 2. Inji Certify (Issuer :9091)  │  ◄── 2. Configure credential blueprint & keys
-│    credentials/<vc>.json        │
-└──────────────┬──────────────────┘
-               │ published to
-               ▼
-┌─────────────────────────────────┐
-│ 3. VCGA (Catalog :9099)         │  ◄── 3. Register issuer in wallet catalog
-│    mimoto-issuers-config.json   │
-└──────────────┬──────────────────┘
-               │ discovers issuer
-               ▼
-┌─────────────────────────────────┐              ┌──────────────────────────────┐
-│ 4. Wallet (Inji Web :4004)      │   presents   │ 5. Inji Verify (Verify :8000)│
-│    claims & stores credential   ├─────────────►│    validates signature/schema│
-└─────────────────────────────────┘              └──────────────────────────────┘
+┌──────────────────────────────────────────────┐
+│ 1. VDR & CDN (vdr.localhost / cdn.localhost) │  ◄── 1. Define schema & visual assets first
+│    contexts/<vc> & assets/<logo>             │
+└──────────────────────┬───────────────────────┘
+                       │ resolves schema
+                       ▼
+┌──────────────────────────────────────────────┐
+│ 2. Inji Certify (issuer.localhost)           │  ◄── 2. Configure credential blueprint & keys
+│    credentials/<vc>.json                     │
+└──────────────────────┬───────────────────────┘
+                       │ published to
+                       ▼
+┌──────────────────────────────────────────────┐
+│ 3. VCGA (vcga.localhost)                     │  ◄── 3. Register issuer in wallet catalog
+│    mimoto-issuers-config.json                │
+└──────────────────────┬───────────────────────┘
+                       │ discovers issuer
+                       ▼
+┌──────────────────────────────────────────────┐              ┌──────────────────────────────┐
+│ 4. Wallet (wallet.localhost)                 │   presents   │ 5. Inji Verify               │
+│    claims & stores credential                ├─────────────►│    (verifier.localhost)      │
+│                                              │              │    validates signature/schema│
+└──────────────────────────────────────────────┘              └──────────────────────────────┘
 ```
 
 | Component | Responsibility | Configuration Artifact | Validation Command |
 |---|---|---|---|
-| **1. VDR & CDN** | JSON-LD schema & static brand assets | `deploy/<inst>/contexts/<vc>/v1.json` | `curl :9098/contexts/<vc>/v1.json` |
-| **2. Certify** | Issuer engine, signing keys, status lists | `deploy/<inst>/credentials/<vc>.json` | `curl :9091/.well-known/openid-credential-issuer` |
-| **3. VCGA** | Mimoto issuer catalog for wallet discovery | `deploy/<inst>/mimoto-issuers-config.json` | `curl :9099/mimoto-issuers-config.json` |
-| **4. Wallet** | Digital wallet (Inji Web / Mobile) | Card display properties & template | `curl :4004/v1/mimoto/issuers/.../configuration` |
-| **5. Verify** | Signature & schema verification | `deploy/base/verify-config.json` | `curl :8000/v1/verify/v2/vc-verification` |
+| **1. VDR & CDN** | JSON-LD schema & static brand assets | `deploy/<inst>/contexts/<vc>/v1.json` | `curl -s http://vdr.localhost/contexts/<vc>/v1.json` |
+| **2. Certify** | Issuer engine, signing keys, status lists | `deploy/<inst>/credentials/<vc>.json` | `curl -s http://issuer.localhost/.well-known/openid-credential-issuer` |
+| **3. VCGA** | Mimoto issuer catalog for wallet discovery | `deploy/<inst>/mimoto-issuers-config.json` | `curl -s http://vcga.localhost/mimoto-issuers-config.json` |
+| **4. Wallet** | Digital wallet (Inji Web / Mobile) | Card display properties & template | `curl -s http://wallet.localhost/v1/mimoto/issuers/.../configuration` |
+| **5. Verify** | Signature & schema verification | `deploy/base/verify-config.json` | `curl -s -X POST http://verifier.localhost/v1/verify/v2/vc-verification` |
 
 ---
 
 ## 1. Configure VDR (Schemas) & CDN (Assets)
 
 **Role**: Before an issuer can sign a credential or a verifier can inspect it, the cryptographic schema and visual branding must exist at permanent, resolvable URIs.
-- **VDR (Port 9098)**: Static Nginx serving W3C JSON-LD `@context` schemas from `deploy/${INSTALLATION}/contexts/`.
-- **CDN (Port 9097)**: Static Nginx serving brand logos and card artwork from `deploy/${INSTALLATION}/assets/`.
+- **VDR (`http://vdr.localhost`)**: Serves W3C JSON-LD `@context` schemas from `deploy/${INSTALLATION}/contexts/`.
+- **CDN (`http://cdn.localhost`)**: Serves brand logos and card artwork from `deploy/${INSTALLATION}/assets/`.
 
 ### 1.1 What to Configure
 
@@ -330,8 +341,12 @@ Create `deploy/<installation>/credentials/<credential-id>-mdoc.json`:
 ---
 
 ### 2.3 Synchronize to PostgreSQL
-Apply the credential JSON to Certify's database:
+Apply the credential JSON to Certify's database without wiping keys or ledger records:
 ```bash
+# Using modern Python CLI:
+uv run certify-template-sync --apply
+
+# Or via Docker Compose:
 docker compose -f compose.certify.yaml run --rm template-sync
 ```
 
@@ -357,7 +372,7 @@ docker compose -f compose.certify.yaml exec -T database \
 
 ## 3. Configure VCGA (Issuers Catalog)
 
-**Role**: Verifiable Credentials Global Architecture (VCGA) serves `mimoto-issuers-config.json` on port `9099`. Wallets query this catalog to discover issuers and their OpenID4VCI endpoints.
+**Role**: Verifiable Credentials Global Architecture (VCGA) serves `mimoto-issuers-config.json` at `http://vcga.localhost`. Wallets query this catalog to discover issuers and their OpenID4VCI endpoints.
 
 ### 3.1 What to Configure
 In `deploy/<installation>/mimoto-issuers-config.json`, ensure your issuer is listed and enabled:

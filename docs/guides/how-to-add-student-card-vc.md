@@ -1,6 +1,6 @@
 ---
-title: "How to Add a Verifiable Credential: 5-Component Architectural Guide"
-description: "Step-by-step architectural guide explaining how to configure and validate each of the 5 core components (VDR/CDN, Certify, VCGA, Wallet, Verify) in natural dependency order to add a new Verifiable Credential like the Student ID Card."
+title: "How to Add a Student ID Card Verifiable Credential"
+description: "Step-by-step developer and architectural guide explaining how to design, model, and deploy the AIT Student ID Card (AitStudentIdCredential) across Phase 0 (VC Lab Studio modeling & preview) and Phase 1 (5 Core Runtime Components under pure domain ingress)."
 tags:
   - guide
   - certify
@@ -11,42 +11,140 @@ tags:
   - student-card
 ---
 
-# How to Add a Verifiable Credential: 5-Component Architectural Guide
+# How to Add a Student ID Card Verifiable Credential
 
-To add a new Verifiable Credential (such as the **AIT Student ID Card**, `AitStudentIdCredential`), you configure **five core components** in natural dependency order:
+This walkthrough provides a concrete, end-to-end implementation guide for adding the **AIT Student ID Card** (`AitStudentIdCredential`) to the Inji platform.
+
+The process follows two distinct phases:
+1. **Phase 0: Student ID Card Modeling & Design (VC Lab)**: Define the claims dictionary, select the cryptographic formats (dual W3C JSON-LD and ISO 18013-5 mDoc), design the card styling, and preview templates offline.
+2. **Phase 1: Deployment & Runtime Configuration across the 5 Components**: Deploy schema to VDR/CDN, register the credential blueprint in Certify, publish in the VCGA catalog, enable wallet discovery, and configure verification rules in Verify.
+
+---
+
+## Phase 0: Student ID Card Modeling & Design (VC Lab)
+
+Before deploying configuration files into runtime containers, we design and model the Student ID Card using **VC Lab Studio** (`src/vc-lab/`).
 
 ```
-┌─────────────────────────────────┐
-│ 1. VDR & CDN (Trust :9098/97)   │  ◄── 1. Define schema & visual assets first
-│    contexts/<vc> & assets/<logo>│
-└──────────────┬──────────────────┘
-               │ resolves schema
-               ▼
-┌─────────────────────────────────┐
-│ 2. Inji Certify (Issuer :9091)  │  ◄── 2. Configure credential blueprint & keys
-│    credentials/<vc>.json        │
-└──────────────┬──────────────────┘
-               │ published to
-               ▼
-┌─────────────────────────────────┐
-│ 3. VCGA (Catalog :9099)         │  ◄── 3. Register issuer in wallet catalog
-│    mimoto-issuers-config.json   │
-└──────────────┬──────────────────┘
-               │ discovers issuer
-               ▼
-┌─────────────────────────────────┐              ┌──────────────────────────────┐
-│ 4. Wallet (Inji Web :4004)      │   presents   │ 5. Inji Verify (Verify :8000)│
-│    claims & stores credential   ├─────────────►│    validates signature/schema│
-└─────────────────────────────────┘              └──────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    PHASE 0: STUDENT ID CREDENTIAL DESIGN                    │
+└─────────────────────────────────────┬───────────────────────────────────────┘
+                                      │
+         ┌────────────────────────────┼────────────────────────────┐
+         ▼                            ▼                            ▼
+┌──────────────────┐         ┌──────────────────┐         ┌──────────────────┐
+│ 1. Claims        │         │ 2. Visual Layout │         │ 3. Cryptography  │
+│    Dictionary    │         │ & Card Branding  │         │ & Dual Formats   │
+│ - studentId      │         │ - Primary:       │         │ - W3C JSON-LD    │
+│ - fullName       │         │   AIT Blue       │         │   (ldp_vc)       │
+│ - faculty        │         │   (#005696)      │         │   Ed25519        │
+│ - academicProgram│         │ - Text: White    │         │ - ISO 18013-5    │
+│ - studentStatus  │         │ - Logo:          │         │   (mso_mdoc)     │
+│ - expiryDate     │         │   AIT_globe.png  │         │   ES256          │
+└────────┬─────────┘         └────────┬─────────┘         └────────┬─────────┘
+         │                            │                            │
+         └────────────────────────────┼────────────────────────────┘
+                                      │
+                                      ▼ Generates 5 Concrete Artifacts
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 1. JSON-LD Schema            ──► deploy/ait/contexts/student-id/v1.json     │
+│ 2. Brand Artwork             ──► deploy/ait/assets/AIT_globe.png            │
+│ 3. Certify Blueprints        ──► deploy/ait/credentials/ait-student-id.json │
+│                              ──► deploy/ait/credentials/ait-student-id-mdoc.json
+│ 4. Velocity Printable Card   ──► deploy/base/credential-template.html       │
+│ 5. Verification Rules        ──► deploy/base/verify-config.json             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 0.1 Define the Student ID Claims Dictionary
+The Student ID card asserts 7 core attributes:
+- `studentId` (*string, required*): The unique student matriculation identifier (e.g. `st120001`).
+- `fullName` (*string, required*): The legal name of the student (e.g. `Nara Wattanakul`).
+- `faculty` (*string, optional*): The academic school or faculty (e.g. `School of Engineering and Technology`).
+- `academicProgram` (*string, optional*): The study program or major (e.g. `Computer Science`).
+- `studentStatus` (*string, required*): Current enrollment status (e.g. `ACTIVE`, `GRADUATED`).
+- `issueDate` (*ISO 8601 date, required*): The matriculation or card issuance date (`YYYY-MM-DD`).
+- `expiryDate` (*ISO 8601 date, required*): Expiration date after which the physical/digital card lapses (`YYYY-MM-DD`).
+
+### 0.2 Cryptographic Standards & Dual-Format Support
+Unlike academic transcripts which are primarily inspected in desktop PDF viewers or cloud verification portals, student ID cards have dual usage patterns:
+1. **W3C JSON-LD (`ldp_vc`) with Ed25519 (`Ed25519Signature2020`)**: Designed for browser-based digital wallets (Inji Web) and QR-code scans.
+2. **ISO/IEC 18013-5 Mobile Document (`mso_mdoc`) with ES256 (ECDSA P-256)**: Designed for Apple Wallet, Google Wallet, and high-throughput offline turnstiles (NFC/BLE) at campus gates and libraries.
+
+### 0.3 Visual Card Presentation & Velocity Template
+- **Card Thumbnail**: Configured with AIT corporate brand colors: Background `#005696`, text `#FFFFFF`, and logo `https://cdn.dpi.ait.ac.th/assets/AIT_globe.png`.
+- **Display Order**: `studentId`, `fullName`, `faculty`, `academicProgram`, `studentStatus`, `expiryDate`.
+- **Printable Card Template**: Uses Apache Velocity macros (`#claimValue("studentId")`) and embeds `$qrCodeImage` for instant scan verification.
+
+### 0.4 Visual Credential Studio & Offline Preview (VC Lab)
+
+Test and preview the Student ID card visual presentation before touching databases or containers:
+
+#### Method A: Interactive Web Studio Dashboard
+When the stack is running, open the live VC Lab studio:
+- **Studio Dashboard:** [http://lab.localhost](http://lab.localhost)
+- Browse the `student-id` schema context and inspect card presentation attributes.
+- Render dynamic QR codes and simulate mobile card layouts with sample student data.
+
+#### Method B: Standalone CLI Preview (Zero External Dependencies)
+Preview and test the card Velocity template completely offline:
+
+```bash
+uv run vc-lab-preview \
+  --template deploy/base/credential-template.html \
+  --claims '{
+    "studentId": "st120001",
+    "fullName": "Nara Wattanakul",
+    "faculty": "School of Engineering and Technology",
+    "academicProgram": "Computer Science",
+    "studentStatus": "ACTIVE",
+    "issueDate": "2024-08-01",
+    "expiryDate": "2026-07-31"
+  }' \
+  --out .demo-state/student-id-preview.html
+```
+
+Open `.demo-state/student-id-preview.html` in your web browser to verify typography, colors, and layout symmetry.
+
+---
+
+## Phase 1: Deploy to the 5 Core Components (Runtime Configuration)
+
+Once designed, deploy the Student ID Card across the **five core runtime components** in natural dependency order:
+
+```
+┌──────────────────────────────────────────────┐
+│ 1. VDR & CDN (vdr.localhost / cdn.localhost) │  ◄── 1. Define schema & visual assets first
+│    contexts/<vc> & assets/<logo>             │
+└──────────────────────┬───────────────────────┘
+                       │ resolves schema
+                       ▼
+┌──────────────────────────────────────────────┐
+│ 2. Inji Certify (issuer.localhost)           │  ◄── 2. Configure credential blueprint & keys
+│    credentials/<vc>.json                     │
+└──────────────────────┬───────────────────────┘
+                       │ published to
+                       ▼
+┌──────────────────────────────────────────────┐
+│ 3. VCGA (vcga.localhost)                     │  ◄── 3. Register issuer in wallet catalog
+│    mimoto-issuers-config.json                │
+└──────────────────────┬───────────────────────┘
+                       │ discovers issuer
+                       ▼
+┌──────────────────────────────────────────────┐              ┌──────────────────────────────┐
+│ 4. Wallet (wallet.localhost)                 │   presents   │ 5. Inji Verify               │
+│    claims & stores credential                ├─────────────►│    (verifier.localhost)      │
+│                                              │              │    validates signature/schema│
+└──────────────────────────────────────────────┘              └──────────────────────────────┘
 ```
 
 | Component | Responsibility | Configuration Artifact | Validation Command |
 |---|---|---|---|
-| **1. VDR & CDN** | JSON-LD schema & static brand assets | `deploy/<inst>/contexts/<vc>/v1.json` | `curl :9098/contexts/<vc>/v1.json` |
-| **2. Certify** | Issuer engine, signing keys, status lists | `deploy/<inst>/credentials/<vc>.json` | `curl :9091/.well-known/openid-credential-issuer` |
-| **3. VCGA** | Issuer catalog for wallet discovery | `deploy/<inst>/mimoto-issuers-config.json` | `curl :9099/mimoto-issuers-config.json` |
-| **4. Wallet** | Digital wallet (Inji Web / Mobile) | Card display properties & template | `curl :4004/v1/mimoto/issuers/.../configuration` |
-| **5. Verify** | Verification engine & presentation | `deploy/base/verify-config.json` | `curl :8000/v1/verify/v2/vc-verification` |
+| **1. VDR & CDN** | JSON-LD schema & static brand assets | `deploy/<inst>/contexts/<vc>/v1.json` | `curl -s http://vdr.localhost/contexts/<vc>/v1.json` |
+| **2. Certify** | Issuer engine, signing keys, status lists | `deploy/<inst>/credentials/<vc>.json` | `curl -s http://issuer.localhost/.well-known/openid-credential-issuer` |
+| **3. VCGA** | Mimoto issuer catalog for wallet discovery | `deploy/<inst>/mimoto-issuers-config.json` | `curl -s http://vcga.localhost/mimoto-issuers-config.json` |
+| **4. Wallet** | Digital wallet (Inji Web / Mobile) | Card display properties & template | `curl -s http://wallet.localhost/v1/mimoto/issuers/.../configuration` |
+| **5. Verify** | Signature & schema verification | `deploy/base/verify-config.json` | `curl -s -X POST http://verifier.localhost/v1/verify/v2/vc-verification` |
 
 Each component has a clear purpose, a specific configuration file, and an **explicit validation command** to confirm it is working before moving to the next.
 
@@ -55,8 +153,8 @@ Each component has a clear purpose, a specific configuration file, and an **expl
 ## Component 1: Configure VDR (Schemas) & CDN (Assets)
 
 **Role**: Before an issuer can sign a credential or a verifier can inspect it, the cryptographic schema and visual branding must exist at permanent, resolvable URIs.
-- **VDR (Port 9098)**: Static Nginx serving W3C JSON-LD `@context` schemas from `deploy/${INSTALLATION}/contexts/`.
-- **CDN (Port 9097)**: Static Nginx serving brand logos and card artwork from `deploy/${INSTALLATION}/assets/`.
+- **VDR (`http://vdr.localhost`)**: Serves W3C JSON-LD `@context` schemas from `deploy/${INSTALLATION}/contexts/`.
+- **CDN (`http://cdn.localhost`)**: Serves brand logos and card artwork from `deploy/${INSTALLATION}/assets/`.
 
 ### 1.1 What to Configure
 
@@ -313,8 +411,12 @@ Create [`deploy/ait/credentials/ait-student-id-mdoc.json`](../../deploy/ait/cred
 ---
 
 ### 2.3 Sync to Certify Database
-Inji Certify reads configurations from PostgreSQL. Apply your files using `template-sync`:
+Inji Certify reads configurations from PostgreSQL. Apply your files using `template-sync` without wiping keys or ledger records:
 ```bash
+# Using modern Python CLI:
+uv run certify-template-sync --apply
+
+# Or via Docker Compose:
 docker compose -f compose.certify.yaml run --rm template-sync
 ```
 
@@ -356,7 +458,7 @@ docker compose -f compose.certify.yaml exec -T database \
 
 ## Component 3: Configure VCGA (Issuers Catalog)
 
-**Role**: The Verifiable Credentials Global Architecture (VCGA) catalog tells wallets which issuers exist, what credentials they issue, and how to reach their OAuth and OpenID4VCI endpoints. In this stack, it is statically served by Nginx on port `9099`.
+**Role**: The Verifiable Credentials Global Architecture (VCGA) catalog tells wallets which issuers exist, what credentials they issue, and how to reach their OAuth and OpenID4VCI endpoints. In this stack, it is statically served at `http://vcga.localhost` via Traefik edge ingress.
 
 ### 3.1 What to Configure
 In [`deploy/ait/mimoto-issuers-config.json`](../../deploy/ait/mimoto-issuers-config.json), ensure your issuer points to Certify's discovery endpoint:
