@@ -14,8 +14,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 import template_engine as engine  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-TRANSCRIPT_TMPL = REPO_ROOT / "deploy" / "ait" / "AITUniversity-ait-transcript-template.html"
-BASE_TMPL = REPO_ROOT / "deploy" / "base" / "credential-template.html"
+TRANSCRIPT_TMPL = REPO_ROOT / "deploy" / "ait" / "vdr" / "templates" / "AITUniversity-ait-transcript-template.html"
+BASE_TMPL = REPO_ROOT / "deploy" / "base" / "vdr" / "templates" / "credential-template.html"
 
 
 def test_generate_mock_qr_png_base64() -> None:

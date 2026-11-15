@@ -36,10 +36,10 @@ app = FastAPI(
 
 # Configuration from environment or defaults
 CREDENTIALS_DIR = Path(os.environ.get("CREDENTIALS_DIR", REPO_ROOT / "deploy" / "ait" / "credentials"))
-CONTEXTS_DIR = Path(os.environ.get("CONTEXTS_DIR", REPO_ROOT / "deploy" / "ait" / "contexts"))
-ASSETS_DIR = Path(os.environ.get("ASSETS_DIR", REPO_ROOT / "deploy" / "ait" / "assets"))
-TEMPLATES_DIR = Path(os.environ.get("TEMPLATES_DIR", REPO_ROOT / "deploy" / "ait"))
-BASE_TEMPLATES_DIR = Path(os.environ.get("BASE_TEMPLATES_DIR", REPO_ROOT / "deploy" / "base"))
+CONTEXTS_DIR = Path(os.environ.get("CONTEXTS_DIR", REPO_ROOT / "deploy" / "ait" / "vdr" / "contexts"))
+ASSETS_DIR = Path(os.environ.get("ASSETS_DIR", REPO_ROOT / "deploy" / "ait" / "vdr" / "assets"))
+TEMPLATES_DIR = Path(os.environ.get("TEMPLATES_DIR", REPO_ROOT / "deploy" / "ait" / "vdr" / "templates"))
+BASE_TEMPLATES_DIR = Path(os.environ.get("BASE_TEMPLATES_DIR", REPO_ROOT / "deploy" / "base" / "vdr" / "templates"))
 STUDENTS_FILE = Path(os.environ.get("STUDENTS_FILE", REPO_ROOT / "tests" / "fixtures" / "students.json"))
 INSTALLATION = os.environ.get("INSTALLATION", "ait")
 VDR_BASE_URL = (os.environ.get("VDR_BASE_URL") or "http://vdr.localhost").rstrip("/")

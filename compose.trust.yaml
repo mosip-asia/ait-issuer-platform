@@ -1,13 +1,12 @@
 # ==============================================================================
-# Trust Registry Stack Compose Manifest (VDR, VCGA & CDN)
+# Trust Registry Stack Compose Manifest (VDR & VCGA)
 # ==============================================================================
 # Isolated Stack:
-# - VDR: Static Nginx serving W3C JSON-LD contexts (port 9098)
-# - VCGA: Static Nginx serving issuer registry and trusted verifiers metadata (port 9099)
-# - CDN: Static Nginx serving branding logos and visual assets (port 9097)
+# - VDR: Static Nginx CDN serving W3C JSON-LD contexts, templates, and brand assets
+# - VCGA: Static Nginx serving issuer registry and trusted verifiers metadata
 #
 # Network: trust-network (isolated)
-# Integration: Reached by Certify/Wallets/Verifiers via public URLs / host ports
+# Integration: Reached by Certify/Wallets/Verifiers via domain ingress / host-gateway
 # ==============================================================================
 name: ${COMPOSE_PROJECT_NAME}-trust
 
@@ -20,17 +19,25 @@ services:
     image: nginx:stable
     restart: unless-stopped
     volumes:
-      - ./deploy/${INSTALLATION}/contexts:/usr/share/nginx/html/contexts:ro
+      - ./deploy/base/vdr-nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./deploy/${INSTALLATION}/vdr/contexts:/usr/share/nginx/html/contexts:ro
+      - ./deploy/${INSTALLATION}/vdr/templates:/usr/share/nginx/html/templates:ro
+      - ./deploy/${INSTALLATION}/vdr/assets:/usr/share/nginx/html/assets:ro
+      - ./deploy/base/vdr/assets:/usr/share/nginx/html/base-assets:ro
+      - ./deploy/base/vdr/templates:/usr/share/nginx/html/base-templates:ro
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.vdr.rule=Host(`vdr.localhost`) || Host(`vdr.lan`) || Host(`vdr.dpi.ait.ac.th`) || Host(`vdr.ait.ac.th`)"
+      - "traefik.http.routers.vdr.rule=Host(`vdr.localhost`) || Host(`cdn.localhost`) || Host(`vdr.lan`) || Host(`cdn.lan`) || Host(`vdr.dpi.ait.ac.th`) || Host(`cdn.dpi.ait.ac.th`) || Host(`vdr.ait.ac.th`) || Host(`cdn.ait.ac.th`)"
       - "traefik.http.services.vdr.loadbalancer.server.port=80"
     networks:
       trust-network:
         aliases:
           - vdr.dpi.ait.ac.th
+          - cdn.dpi.ait.ac.th
           - vdr.ait.ac.th
+          - cdn.ait.ac.th
           - vdr
+          - cdn
 
   vcga:
     image: nginx:stable
@@ -49,21 +56,3 @@ services:
           - vcga.dpi.ait.ac.th
           - vcga.ait.ac.th
           - vcga
-
-  cdn:
-    image: nginx:stable
-    restart: unless-stopped
-    volumes:
-      - ./deploy/base/cdn-nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./deploy/${INSTALLATION}/assets:/usr/share/nginx/html/assets:ro
-      - ./deploy/base/assets:/usr/share/nginx/html/base-assets:ro
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.cdn.rule=Host(`cdn.localhost`) || Host(`cdn.lan`) || Host(`cdn.dpi.ait.ac.th`) || Host(`cdn.ait.ac.th`)"
-      - "traefik.http.services.cdn.loadbalancer.server.port=80"
-    networks:
-      trust-network:
-        aliases:
-          - cdn.dpi.ait.ac.th
-          - cdn.ait.ac.th
-          - cdn

@@ -47,11 +47,11 @@ Before deploying configuration files into runtime containers, we design and mode
                                       │
                                       ▼ Generates 5 Concrete Artifacts
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ 1. JSON-LD Schema            ──► deploy/ait/contexts/student-id/v1.json     │
-│ 2. Brand Artwork             ──► deploy/ait/assets/AIT_globe.png            │
+│ 1. JSON-LD Schema            ──► deploy/ait/vdr/contexts/student-id/v1.json │
+│ 2. Brand Artwork             ──► deploy/ait/vdr/assets/AIT_globe.png        │
 │ 3. Certify Blueprints        ──► deploy/ait/credentials/ait-student-id.json │
 │                              ──► deploy/ait/credentials/ait-student-id-mdoc.json
-│ 4. Velocity Printable Card   ──► deploy/base/credential-template.html       │
+│ 4. Velocity Printable Card   ──► deploy/base/vdr/templates/credential-template.html │
 │ 5. Verification Rules        ──► deploy/base/verify-config.json             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -119,7 +119,7 @@ Once designed, deploy the Student ID Card across the **five core runtime compone
 
 | Component | Responsibility | Configuration Artifact | Validation Command |
 |---|---|---|---|
-| **1. VDR & CDN** | JSON-LD schema & static brand assets | `deploy/<inst>/contexts/<vc>/v1.json` | `curl -s http://vdr.localhost/contexts/<vc>/v1.json` |
+| **1. VDR** | JSON-LD schema, templates & brand assets | `deploy/<inst>/vdr/contexts/<vc>/v1.json` | `curl -s http://vdr.localhost/contexts/<vc>/v1.json` |
 | **2. Certify** | Issuer engine, signing keys, status lists | `deploy/<inst>/credentials/<vc>.json` | `curl -s http://issuer.localhost/.well-known/openid-credential-issuer` |
 | **3. VCGA** | Mimoto issuer catalog for wallet discovery | `deploy/<inst>/mimoto-issuers-config.json` | `curl -s http://vcga.localhost/mimoto-issuers-config.json` |
 | **4. Wallet** | Digital wallet (Inji Web / Mobile) | Card display properties & template | `curl -s http://wallet.localhost/v1/mimoto/issuers/.../configuration` |
@@ -129,15 +129,14 @@ Each component has a clear purpose, a specific configuration file, and an **expl
 
 ---
 
-## Component 1: Configure VDR (Schemas) & CDN (Assets)
+## Component 1: Configure VDR (Schemas, Templates & Assets)
 
-**Role**: Before an issuer can sign a credential or a verifier can inspect it, the cryptographic schema and visual branding must exist at permanent, resolvable URIs.
-- **VDR (`http://vdr.localhost`)**: Serves W3C JSON-LD `@context` schemas from `deploy/${INSTALLATION}/contexts/`.
-- **CDN (`http://cdn.localhost`)**: Serves brand logos and card artwork from `deploy/${INSTALLATION}/assets/`.
+**Role**: Before an issuer can sign a credential or a verifier can inspect it, the cryptographic schema, rendering templates, and visual branding must exist at permanent, resolvable URIs.
+- **VDR (`http://vdr.localhost`)**: Serves W3C JSON-LD `@context` schemas, templates, and brand artwork from `deploy/${INSTALLATION}/vdr/`.
 
 ### 1.1 What to Configure
 
-1. **Context Schema**: Create the JSON-LD `@context` file at [`deploy/ait/contexts/student-id/v1.json`](../../deploy/ait/contexts/student-id/v1.json):
+1. **Context Schema**: Create the JSON-LD `@context` file at [`deploy/ait/vdr/contexts/student-id/v1.json`](../../deploy/ait/vdr/contexts/student-id/v1.json):
 
 ```json
 {
@@ -157,7 +156,7 @@ Each component has a clear purpose, a specific configuration file, and an **expl
 }
 ```
 
-2. **Brand Assets**: Place the credential logo at [`deploy/ait/assets/AIT_globe.png`](../../deploy/ait/assets/AIT_globe.png).
+2. **Brand Assets**: Place the credential logo at [`deploy/ait/vdr/assets/AIT_globe.png`](../../deploy/ait/vdr/assets/AIT_globe.png).
 
 3. **Single Source of Truth with Configurable Origin**:
 Credential JSON blueprints in `deploy/ait/credentials/*.json` use clean local domain URLs (`http://vdr.localhost` and `http://cdn.localhost`) so local development works 100% offline without external dependencies or `/etc/hosts` modifications:

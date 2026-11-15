@@ -19,9 +19,9 @@ ENV PYTHONPATH="/app/src/vc-lab:/app/src:/app/mock/adapter" \
     PORT=4200 \
     HOST=0.0.0.0 \
     CREDENTIALS_DIR=/app/credentials \
-    CONTEXTS_DIR=/app/contexts \
-    ASSETS_DIR=/app/assets \
-    TEMPLATES_DIR=/app/templates \
+    CONTEXTS_DIR=/app/vdr/contexts \
+    ASSETS_DIR=/app/vdr/assets \
+    TEMPLATES_DIR=/app/vdr/templates \
     BASE_TEMPLATES_DIR=/app/base_templates \
     STUDENTS_FILE=/app/tests/fixtures/students.json
 

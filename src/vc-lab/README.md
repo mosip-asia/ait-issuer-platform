@@ -32,7 +32,7 @@ VC Lab empowers credential designers and operators across three primary workflow
 ┌──────────────────┐         ┌──────────────────┐         ┌──────────────────┐
 │ Export Target:   │         │ Export Target:   │         │ Export Target:   │
 │ deploy/<tenant>/ │         │ deploy/<tenant>/ │         │ deploy/base/     │
-│ contexts/<vc>/   │         │ *-template.html  │         │ verify-config    │
+│ vdr/contexts/    │         │ vdr/templates/   │         │ verify-config    │
 │ credentials/<vc> │         │                  │         │ .json            │
 └──────────────────┘         └──────────────────┘         └──────────────────┘
 ```
@@ -42,7 +42,7 @@ VC Lab empowers credential designers and operators across three primary workflow
 - **Inji Certify Blueprints**: Exports credential configurations (`deploy/<tenant>/credentials/<vc>.json`) with matching `scope`, `credential_format` (`ldp_vc` or `mso_mdoc`), signing algorithms (`Ed25519Signature2020` or `ES256`), and velocity template mappings (`vc_template`).
 
 ### 2. Define / Render / Export HTML Template (Version-Controlled)
-- **Printable Certificate & Transcript Layouts**: Creates Apache Velocity templates (e.g. `deploy/<tenant>/<Issuer>-<vc>-template.html`) styled for A4 portrait printing with precise margins, typography, and borders.
+- **Printable Certificate & Transcript Layouts**: Creates Apache Velocity templates (e.g. `deploy/<tenant>/vdr/templates/<Issuer>-<vc>-template.html`) styled for A4 portrait printing with precise margins, typography, and borders.
 - **Offline Template Preview Engine**: Evaluates `#macro(claimValue $claimName)`, `#if ... #else ... #end`, and `$rowProperties` to generate instant preview HTML files from mock student personas (`tests/fixtures/students.json`) without running Docker or backend services.
 
 ### 3. Define / Render / Export Visual Presentation & Button Renders
