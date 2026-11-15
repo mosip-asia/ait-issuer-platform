@@ -62,6 +62,8 @@ services:
       - container_user=mosip
       - download_hsm_client=false
       - enable_certify_artifactory=false
+      - KEYSTORE_TYPE=${KEYSTORE_TYPE:-PKCS12}
+      - KEYSTORE_PASS=${KEYSTORE_PASS:-local}
       - MOSIP_CERTIFY_GATEWAY_ENABLED=${MOSIP_CERTIFY_GATEWAY_ENABLED}
       - MOSIP_CERTIFY_GATEWAY_URL=${MOSIP_CERTIFY_GATEWAY_URL}
       - mosip_certify_domain_url=${CERTIFY_PUBLIC_BASE_URL}
