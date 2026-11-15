@@ -38,7 +38,7 @@ def mock_client(handler) -> tuple[httpx.Client, list[httpx.Request]]:
 def test_token_request_is_a_password_grant_on_the_smoke_client() -> None:
     client, seen = mock_client(lambda r: httpx.Response(200, json={"access_token": "t", "c_nonce": "n"}))
     endpoint = "https://as.example/realms/x/protocol/openid-connect/token"
-    token = iv.request_token(client, endpoint, "ait-2026-0001", "inji", "ait_transcript_vc_ldp")
+    token = iv.request_token(client, endpoint, "st120001", "password1234", "ait_transcript_vc_ldp")
     assert token == {"access_token": "t", "c_nonce": "n"}
     (req,) = seen
     assert req.method == "POST"
@@ -46,8 +46,8 @@ def test_token_request_is_a_password_grant_on_the_smoke_client() -> None:
     assert parse_qs(req.content.decode()) == {
         "grant_type": ["password"],
         "client_id": ["smoke"],
-        "username": ["ait-2026-0001"],
-        "password": ["inji"],
+        "username": ["st120001"],
+        "password": ["password1234"],
         "scope": ["ait_transcript_vc_ldp"],
     }
 

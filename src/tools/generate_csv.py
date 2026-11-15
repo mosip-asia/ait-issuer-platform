@@ -92,7 +92,7 @@ def build_rows(students: list[dict]) -> list[dict]:
 def write_csv(rows: list[dict], out_path: Path = OUT_CSV) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS)
+        writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 

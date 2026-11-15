@@ -17,40 +17,32 @@ networks:
     name: ${COMPOSE_PROJECT_NAME}-mock-net
 
 services:
-  keycloak-server:
-    image: quay.io/keycloak/keycloak:24.0
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1
     command:
       [
         "start-dev",
         "--import-realm",
-        "--hostname-strict=true",
-        "--hostname-url=${KEYCLOAK_DOCKER_AUTH_SERVER}",
-        "--hostname-port=9080",
-        "--hostname-admin-url=${KEYCLOAK_PUBLIC_BASE_URL}",
-        "--proxy=edge",
-        "--proxy-headers=xforwarded",
+        "--health-enabled=true",
+        "--metrics-enabled=true",
       ]
     environment:
       - KEYCLOAK_ADMIN=admin
       - KEYCLOAK_ADMIN_PASSWORD=admin
-    volumes:
-      - ./deploy/${INSTALLATION}/keycloak-realm.json:/opt/keycloak/data/import/realm.json:ro
-    networks:
-      - mock-network
-
-  keycloak:
-    image: nginx:stable
+      - KC_HOSTNAME_STRICT=false
+      - KC_PROXY_HEADERS=xforwarded
+      - KC_HTTP_ENABLED=true
+      - KC_HTTP_PORT=8080
     ports:
-      - "9080:8080"
-    environment:
-      - KEYCLOAK_PUBLIC_BASE_URL=${KEYCLOAK_PUBLIC_BASE_URL}
+      - "${KEYCLOAK_PORT:-8080}:8080"
     volumes:
-      - ./deploy/local/keycloak-nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
-    depends_on:
-      - keycloak-server
+      - ./deploy/${INSTALLATION}/mock/keycloak-realm.json:/opt/keycloak/data/import/realm.json:ro
     restart: unless-stopped
     networks:
-      - mock-network
+      mock-network:
+        aliases:
+          - keycloak
+          - keycloak-server
 
   demo-app:
     profiles:

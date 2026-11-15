@@ -24,7 +24,7 @@ BLUE="\033[0;34m"
 NC="\033[0m"
 
 CERTIFY_URL="${1:-${CERTIFY_PUBLIC_BASE_URL:-http://localhost:9091}}"
-STUDENT_ID="${2:-st123456}"
+STUDENT_ID="${2:-st120001}"
 CONFIG_ID="${3:-ait-transcript}"
 OUTPUT_FILE="${SMOKE_OUTPUT:-}"
 

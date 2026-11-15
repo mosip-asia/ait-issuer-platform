@@ -395,13 +395,13 @@ When running the Full Demo Stack:
 | **Credential Verifier** | [http://localhost:4007](http://localhost:4007) | Custom branded verifier with camera QR scanner & drag-and-drop validation |
 | **Inji Certify** | [http://localhost:9091](http://localhost:9091) | OpenID4VCI credential issuer & metadata |
 | **Inji Certify Swagger UI** | [http://localhost:9091/v1/certify/swagger-ui/index.html](http://localhost:9091/v1/certify/swagger-ui/index.html) | Interactive API exploration & Swagger testing |
-| **Keycloak Admin** | [http://localhost:9080/admin/](http://localhost:9080/admin/) | Identity provider (`admin` / `admin`) |
+| **Keycloak Admin** | [http://localhost:8080/admin/](http://localhost:8080/admin/) | Identity provider (`admin` / `admin`) |
 
 ### Stakeholder Walkthrough:
-1. Open **Student Portal** ([http://localhost:4100/student/login](http://localhost:4100/student/login)) $\rightarrow$ Select `Nara Wattanakul` (`ait-2026-0001`) $\rightarrow$ Click **Request my transcript VC**.
+1. Open **Student Portal** ([http://localhost:4100/student/login](http://localhost:4100/student/login)) $\rightarrow$ Select `Nara Wattanakul` (`st120001`) $\rightarrow$ Click **Request my transcript VC**.
 2. Open **Registrar Portal** ([http://localhost:4100/registrar/login](http://localhost:4100/registrar/login)) $\rightarrow$ Sign in as Academic Registrar $\rightarrow$ Click **Approve**.
 3. Return to Student Portal $\rightarrow$ Click **Claim your credential** $\rightarrow$ Redirects to **Inji Web**.
-4. In Inji Web, sign in (`ait-2026-0001` / `inji`), select **AIT University**, and download the **AIT Transcript**.
+4. In Inji Web, sign in (`st120001` / `password1234`), select **AIT University**, and download the **AIT Transcript**.
 5. Open **Credential Verifier** ([http://localhost:4007](http://localhost:4007)) $\rightarrow$ Upload the downloaded credential JSON or scan QR code $\rightarrow$ Verdict reports **Authentic Credential Verified**.
 
 ---

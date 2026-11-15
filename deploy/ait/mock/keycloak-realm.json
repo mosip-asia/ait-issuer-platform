@@ -1,0 +1,710 @@
+{
+  "id": "ait",
+  "realm": "ait",
+  "displayName": "Asian Institute of Technology (AIT)",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": false,
+  "duplicateEmailsAllowed": true,
+  "accessTokenLifespan": 900,
+  "browserFlow": "browser-no-sso",
+  "authenticationFlows": [
+    {
+      "alias": "browser-no-sso",
+      "description": "Browser flow minus the Cookie/SSO step, so each per-degree Keycloak identity always re-prompts instead of silently reusing a session.",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-cookie",
+          "requirement": "DISABLED",
+          "priority": 10,
+          "userSetupAllowed": false,
+          "autheticatorFlow": false
+        },
+        {
+          "authenticator": "auth-username-password-form",
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "userSetupAllowed": false,
+          "autheticatorFlow": false
+        }
+      ]
+    }
+  ],
+  "clientScopes": [
+    {
+      "name": "ait_transcript_vc_ldp",
+      "description": "OpenID4VCI scope for the AIT Transcript credential",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      }
+    },
+    {
+      "name": "ait",
+      "description": "AIT campus LDAP attributes: sub (username/student ID), uid_number and gid_number",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "ait-uid-number",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "uidNumber",
+            "claim.name": "uid_number",
+            "jsonType.label": "long",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "ait-gid-number",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "gidNumber",
+            "claim.name": "gid_number",
+            "jsonType.label": "long",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "ait-transcript-local",
+      "name": "AIT transcript, developer laptop (local Inji stack)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-jwt",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": true,
+      "redirectUris": [
+        "http://localhost:4004/redirect",
+        "io.mosip.residentapp.inji://oauthredirect",
+        "*"
+      ],
+      "webOrigins": [
+        "+"
+      ],
+      "attributes": {
+        "jwt.credential.certificate": "MIIDdTCCAl2gAwIBAgIIaC48z0eMMk0wDQYJKoZIhvcNAQEMBQAwaTELMAkGA1UEBhMCVVMxDjAMBgNVBAgTBWxvY2FsMQ4wDAYDVQQHEwVsb2NhbDEOMAwGA1UEChMFbG9jYWwxDTALBgNVBAsTBGluamkxGzAZBgNVBAMTEndhbGxldC1kZW1vLWNsaWVudDAeFw0yNjEwMjIxMTU5MDJaFw0zNjEwMTkxMTU5MDJaMGkxCzAJBgNVBAYTAlVTMQ4wDAYDVQQIEwVsb2NhbDEOMAwGA1UEBxMFbG9jYWwxDjAMBgNVBAoTBWxvY2FsMQ0wCwYDVQQLEwRpbmppMRswGQYDVQQDExJ3YWxsZXQtZGVtby1jbGllbnQwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDsiePzJCTFGfcEaEEk968dxFIZQZQMJJnCR7MjXVpKQVwgBi5vdms3A8bkjkt2zFiCsrLqvS/qrxFlSdGHrGYr2EnyyQwEcgtJMLzJcrR2YgH2/eW6AUVxIG35NWwuK7HujXHbgpP781vjiWSoh/ruWNC6HGoEOkq3lTXfU2VJIaLzgO5vbiFNoadrv+zAlUFCRF0EVCkB2Ow7llOS9yjIAI4SsDLn9PO2qPrTlvZAr1lwi55zgnKcIscJPQlV1tXjinAwhVSnluYMXbKbTopeZkyOfGHYrmuQZjsQ0+Jn9kYslwGrw8TsGWWklwbnpWxf0yTFvhQf07aZCZXcybihAgMBAAGjITAfMB0GA1UdDgQWBBRy4XZVtjhVpLdve5zy4OnZNMuxeTANBgkqhkiG9w0BAQwFAAOCAQEAkn+mrRqNO1azgjJkk1xWW9RCkcl3t/GFP1v13qF20uRV3fFelR+xQc5qmlVBxmrQvcRekZEmuon0pxmctMfOTFg5qM28yoNaooYcV2unW8t4iRmzz2ko+orw/nE12eWQPRMulYBkzCUA9mPFKvQtOstDSOC4OgOOjAg3ROXrXLwV/6BX9ktIHhzzJGIDANWQfxT/bnToWiLpnAiCvOzN7ATfqfVv/LBDtJICgYplmVsVdga3Snh9uwVXw0YQJXRnvwQ3pq5GIf3e1sLxtpdxlZj7uLzaIcQT/QZtD4XwvDbYdZZGUAkoF9BYOJvM41RFNtVIY7kwblSPMvYx6T6CPw==",
+        "token.endpoint.auth.signing.alg": "RS256",
+        "use.jwks.url": "false",
+        "use.refresh.tokens": "true",
+        "post.logout.redirect.uris": "+"
+      },
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email",
+        "ait"
+      ],
+      "optionalClientScopes": [
+        "offline_access",
+        "microprofile-jwt",
+        "ait_transcript_vc_ldp"
+      ],
+      "protocolMappers": [
+        {
+          "name": "sub-from-username",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "username",
+            "claim.name": "sub",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience-self",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "ait-transcript-local",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "client_id-hardcoded",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "client_id",
+            "claim.value": "ait-transcript-local",
+            "jsonType.label": "String",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "false"
+          }
+        },
+        {
+          "name": "c_nonce-hardcoded",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "c_nonce",
+            "claim.value": "local-cnonce",
+            "jsonType.label": "String",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true",
+            "access.tokenResponse.claim": "true",
+            "userinfo.token.claim": "false"
+          }
+        },
+        {
+          "name": "c_nonce_expires_in-hardcoded",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "c_nonce_expires_in",
+            "claim.value": "86400",
+            "jsonType.label": "long",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true",
+            "access.tokenResponse.claim": "true",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "wallet-demo",
+      "name": "Mimoto Wallet Demo Client (compatibility)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-jwt",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": true,
+      "redirectUris": [
+        "http://localhost:4004/redirect",
+        "io.mosip.residentapp.inji://oauthredirect",
+        "*"
+      ],
+      "webOrigins": [
+        "+"
+      ],
+      "attributes": {
+        "jwt.credential.certificate": "MIIDdTCCAl2gAwIBAgIIaC48z0eMMk0wDQYJKoZIhvcNAQEMBQAwaTELMAkGA1UEBhMCVVMxDjAMBgNVBAgTBWxvY2FsMQ4wDAYDVQQHEwVsb2NhbDEOMAwGA1UEChMFbG9jYWwxDTALBgNVBAsTBGluamkxGzAZBgNVBAMTEndhbGxldC1kZW1vLWNsaWVudDAeFw0yNjEwMjIxMTU5MDJaFw0zNjEwMTkxMTU5MDJaMGkxCzAJBgNVBAYTAlVTMQ4wDAYDVQQIEwVsb2NhbDEOMAwGA1UEBxMFbG9jYWwxDjAMBgNVBAoTBWxvY2FsMQ0wCwYDVQQLEwRpbmppMRswGQYDVQQDExJ3YWxsZXQtZGVtby1jbGllbnQwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDsiePzJCTFGfcEaEEk968dxFIZQZQMJJnCR7MjXVpKQVwgBi5vdms3A8bkjkt2zFiCsrLqvS/qrxFlSdGHrGYr2EnyyQwEcgtJMLzJcrR2YgH2/eW6AUVxIG35NWwuK7HujXHbgpP781vjiWSoh/ruWNC6HGoEOkq3lTXfU2VJIaLzgO5vbiFNoadrv+zAlUFCRF0EVCkB2Ow7llOS9yjIAI4SsDLn9PO2qPrTlvZAr1lwi55zgnKcIscJPQlV1tXjinAwhVSnluYMXbKbTopeZkyOfGHYrmuQZjsQ0+Jn9kYslwGrw8TsGWWklwbnpWxf0yTFvhQf07aZCZXcybihAgMBAAGjITAfMB0GA1UdDgQWBBRy4XZVtjhVpLdve5zy4OnZNMuxeTANBgkqhkiG9w0BAQwFAAOCAQEAkn+mrRqNO1azgjJkk1xWW9RCkcl3t/GFP1v13qF20uRV3fFelR+xQc5qmlVBxmrQvcRekZEmuon0pxmctMfOTFg5qM28yoNaooYcV2unW8t4iRmzz2ko+orw/nE12eWQPRMulYBkzCUA9mPFKvQtOstDSOC4OgOOjAg3ROXrXLwV/6BX9ktIHhzzJGIDANWQfxT/bnToWiLpnAiCvOzN7ATfqfVv/LBDtJICgYplmVsVdga3Snh9uwVXw0YQJXRnvwQ3pq5GIf3e1sLxtpdxlZj7uLzaIcQT/QZtD4XwvDbYdZZGUAkoF9BYOJvM41RFNtVIY7kwblSPMvYx6T6CPw==",
+        "token.endpoint.auth.signing.alg": "RS256",
+        "use.jwks.url": "false",
+        "use.refresh.tokens": "true",
+        "post.logout.redirect.uris": "+"
+      },
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email",
+        "ait"
+      ],
+      "optionalClientScopes": [
+        "offline_access",
+        "microprofile-jwt",
+        "ait_transcript_vc_ldp"
+      ],
+      "protocolMappers": [
+        {
+          "name": "sub-from-username",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "username",
+            "claim.name": "sub",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience-self",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "wallet-demo",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "client_id-hardcoded",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "client_id",
+            "claim.value": "wallet-demo",
+            "jsonType.label": "String",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "false"
+          }
+        },
+        {
+          "name": "c_nonce-hardcoded",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "c_nonce",
+            "claim.value": "local-cnonce",
+            "jsonType.label": "String",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true",
+            "access.tokenResponse.claim": "true",
+            "userinfo.token.claim": "false"
+          }
+        },
+        {
+          "name": "c_nonce_expires_in-hardcoded",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "c_nonce_expires_in",
+            "claim.value": "86400",
+            "jsonType.label": "long",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true",
+            "access.tokenResponse.claim": "true",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "smoke",
+      "name": "Smoke test client",
+      "description": "Test-only: vc-stack/issue_and_verify.py (smoke.sh) gets tokens here with the direct-access grant. No wallet or user-facing app uses it.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": true,
+      "defaultClientScopes": [],
+      "optionalClientScopes": [
+        "ait_transcript_vc_ldp"
+      ],
+      "protocolMappers": [
+        {
+          "name": "sub-from-username",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "username",
+            "claim.name": "sub",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience-certify",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "http://certify-nginx/v1/certify/issuance/credential",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "client_id-hardcoded",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "client_id",
+            "claim.value": "smoke",
+            "jsonType.label": "String",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "false"
+          }
+        },
+        {
+          "name": "c_nonce-hardcoded",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "c_nonce",
+            "claim.value": "local-cnonce",
+            "jsonType.label": "String",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "access.tokenResponse.claim": "true",
+            "userinfo.token.claim": "false"
+          }
+        },
+        {
+          "name": "c_nonce_expires_in-hardcoded",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "c_nonce_expires_in",
+            "claim.value": "86400",
+            "jsonType.label": "long",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "access.tokenResponse.claim": "true",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "st120001",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "st120001@ait.ac.th",
+      "firstName": "Nara",
+      "lastName": "Wattanakul",
+      "attributes": {
+        "uidNumber": [
+          "12001"
+        ],
+        "gidNumber": [
+          "1000"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password1234",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "st120002",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "st120002@ait.ac.th",
+      "firstName": "Alex",
+      "lastName": "Tester",
+      "attributes": {
+        "uidNumber": [
+          "12002"
+        ],
+        "gidNumber": [
+          "1000"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password1234",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "st120003",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "st120003@ait.ac.th",
+      "firstName": "Priya",
+      "lastName": "Sharma",
+      "attributes": {
+        "uidNumber": [
+          "12003"
+        ],
+        "gidNumber": [
+          "1000"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password1234",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "st120004",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "st120004@ait.ac.th",
+      "firstName": "Kenji",
+      "lastName": "Watanabe",
+      "attributes": {
+        "uidNumber": [
+          "12004"
+        ],
+        "gidNumber": [
+          "1000"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password1234",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "st120005",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "st120005@ait.ac.th",
+      "firstName": "Fatima",
+      "lastName": "Al-Rashid",
+      "attributes": {
+        "uidNumber": [
+          "12005"
+        ],
+        "gidNumber": [
+          "1000"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password1234",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "st120006",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "st120006@ait.ac.th",
+      "firstName": "Somchai",
+      "lastName": "Prasert",
+      "attributes": {
+        "uidNumber": [
+          "12006"
+        ],
+        "gidNumber": [
+          "1000"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password1234",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "st120007",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "st120007@ait.ac.th",
+      "firstName": "Suda",
+      "lastName": "Thongkham",
+      "attributes": {
+        "uidNumber": [
+          "12007"
+        ],
+        "gidNumber": [
+          "1000"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password1234",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "st120008",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "st120008@ait.ac.th",
+      "firstName": "Kittisak",
+      "lastName": "Prasert",
+      "attributes": {
+        "uidNumber": [
+          "12008"
+        ],
+        "gidNumber": [
+          "1000"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password1234",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "st120009",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "st120009@ait.ac.th",
+      "firstName": "Pimchanok",
+      "lastName": "Rungruang",
+      "attributes": {
+        "uidNumber": [
+          "12009"
+        ],
+        "gidNumber": [
+          "1000"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password1234",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "st120010",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "st120010@ait.ac.th",
+      "firstName": "Thanawat",
+      "lastName": "Boonmee",
+      "attributes": {
+        "uidNumber": [
+          "12010"
+        ],
+        "gidNumber": [
+          "1000"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password1234",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "st120011",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "st120011@ait.ac.th",
+      "firstName": "Nara",
+      "lastName": "Wattanakul",
+      "attributes": {
+        "uidNumber": [
+          "12011"
+        ],
+        "gidNumber": [
+          "1000"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password1234",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "st120012",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "st120012@ait.ac.th",
+      "firstName": "Fatima",
+      "lastName": "Al-Rashid",
+      "attributes": {
+        "uidNumber": [
+          "12012"
+        ],
+        "gidNumber": [
+          "1000"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password1234",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "st120099",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "st120099@ait.ac.th",
+      "firstName": "Smoke",
+      "lastName": "Unknown",
+      "attributes": {
+        "uidNumber": [
+          "12099"
+        ],
+        "gidNumber": [
+          "1000"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password1234",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}

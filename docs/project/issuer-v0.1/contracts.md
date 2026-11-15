@@ -21,7 +21,7 @@ Served in v0.1 by Keycloak (stock image, Thas's configuration): realm `inji` for
 - Flow: authorization code. Clients: wallets (through Certify's OpenID4VCI endpoints) and the Portal, which obtains tokens for Certify too: its student login requests the credential scopes with Certify's audience, because the Portal redeems the hard copy's credential in the student's own session (section 3).
 - Every client that obtains tokens for Certify carries a `client_id` claim equal to its client id, because Certify's token filter requires it and the Data-provider plugin records the issuing client in Certify's ledger (`tokenClientId`, section 2a). Keycloak: a hardcoded-claim protocol mapper per client, as the demo realm already does for the wallet client; eSignet or Authentik must do the same (2026-10-20).
 - Endpoints the server must expose: `/.well-known/openid-configuration`, `/authorize`, `/token`, `/userinfo`, `/jwks.json` (§3.1).
-- ID token `sub`: the AIT student ID (`ait-2026-0001` in the test data). For staff, the employee ID.
+- ID token `sub`: the AIT student ID (`st120001` in the test data). For staff, the employee ID.
 - **Proposed:** a `roles` claim carrying `registrar` for OSA officers, so the admin API (section 3) can authorise staff.
 - Certify accepts tokens from exactly one issuer (`issuer-uri` and `jwk-set-uri` are single-valued in 0.14), so swapping the Authorization Server is one configuration change per installation, never two servers at once.
 

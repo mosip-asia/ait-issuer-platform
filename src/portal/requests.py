@@ -19,7 +19,7 @@ INJI_VERIFY_URL = os.environ.get("INJI_VERIFY_URL", "http://localhost:4007")
 # The installation's Authorization Server, from its authorization-server.env (Compose's env_file); no host default.
 AUTH_SERVER_PUBLIC_URL = os.environ.get("AUTH_SERVER_PUBLIC_URL", "")
 AUTH_SERVER_WALLET_CLIENT_ID = os.environ.get("AUTH_SERVER_WALLET_CLIENT_ID", "")
-KEYCLOAK_DEMO_PASSWORD = "inji"
+KEYCLOAK_DEMO_PASSWORD = "password1234"
 # Keycloak's browser flow has the Cookie/SSO step disabled (see deploy/ait/
 # keycloak-realm.json's "browser-no-sso" flow), so switching to a *different* degree's
 # identity in the same tab needs an explicit sign-out first — otherwise Keycloak refuses

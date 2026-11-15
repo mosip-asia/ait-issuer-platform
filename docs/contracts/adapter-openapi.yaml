@@ -106,14 +106,14 @@ components:
       required: true
       description: |
         The access token's `sub`, unchanged, URL-encoded as one path segment. On the stand-in realms it is the row
-        id, one per degree (`ait-2026-0001`). Under campus sign-in, campus and the SIS Adapter agree on what it
+        id, one per degree (`st120001`). Under campus sign-in, campus and the SIS Adapter agree on what it
         holds. Keep it out of storage and access logs.
       schema:
         type: string
         minLength: 1
       examples:
         standIn:
-          value: ait-2026-0001
+          value: st120001
         campusUsername:
           value: st123456
   responses:

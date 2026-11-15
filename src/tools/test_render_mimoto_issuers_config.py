@@ -29,8 +29,8 @@ def test_issuer_list_is_rendered_from_and_into_the_installation() -> None:
     repo_root = Path(__file__).resolve().parent.parent.parent
     assert {p.resolve() for p in out} == {
         repo_root / "deploy" / "ait" / "mimoto-issuers-config.json",
-        repo_root / "deploy" / "local" / "mimoto-issuers-mobile.json",
-        repo_root / "deploy" / "local" / "public-gateway-mobile.conf",
+        repo_root / "deploy" / "base" / "mimoto-issuers-mobile.json",
+        repo_root / "deploy" / "base" / "public-gateway-mobile.conf",
     }
 
 
@@ -68,8 +68,8 @@ def test_public_snippet_swaps_only_authorization_servers() -> None:
     assert "location = /v1/mimoto/issuers" in snippet
     assert "location = /.well-known/openid-credential-issuer" in snippet
     assert (
-        """sub_filter '"authorization_servers":["http://keycloak:8080/realms/inji"]' """
-        """'"authorization_servers":["https://keycloak.demo.example/realms/inji"]';"""
+        """sub_filter '"authorization_servers":["http://keycloak:8080/realms/ait"]' """
+        """'"authorization_servers":["https://keycloak.demo.example/realms/ait"]';"""
     ) in snippet
     # Variable proxy_pass must carry no URI part (docs/reference/vc-download-troubleshooting.md #3).
     assert "proxy_pass http://$certify_nginx_upstream;" in snippet

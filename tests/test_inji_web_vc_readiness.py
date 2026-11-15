@@ -28,12 +28,11 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BASE_DIR = REPO_ROOT / "deploy" / "base"
-LOCAL_DIR = REPO_ROOT / "deploy" / "local"
-MIMOTO_PROPS_DIR = LOCAL_DIR if (LOCAL_DIR / "mimoto-default.properties").is_file() else BASE_DIR
+MIMOTO_PROPS_DIR = BASE_DIR
 INSTALLATION_DIR = REPO_ROOT / "deploy" / os.environ.get("INSTALLATION", "ait")
 
 INJI_WEB_ORIGIN = "http://localhost:4004"
-KEYCLOAK_PUBLIC = "http://localhost:9080"
+KEYCLOAK_PUBLIC = "http://localhost:8080"
 ISSUER_ID = json.loads((INSTALLATION_DIR / "mimoto-issuers-config.json.template").read_text(encoding="utf-8"))[
     "issuers"][0]["issuer_id"]
 CREDENTIAL_CONFIGS = {f["credentialConfig"] for f in json.loads((INSTALLATION_DIR / "smoke.json").read_text(encoding="utf-8"))}
@@ -86,12 +85,15 @@ def test_mimoto_cors_allows_inji_web_host_port() -> None:
 
 def test_mimoto_keycloak_external_is_browser_url() -> None:
     props = (MIMOTO_PROPS_DIR / "mimoto-default.properties").read_text(encoding="utf-8")
-    assert "keycloak.external.url=http://localhost:9080" in props
+    assert "keycloak.external.url=http://localhost:8080" in props
     assert "keycloak.internal.url=http://keycloak:8080" in props
 
 
 def test_keycloak_wallet_demo_redirect_includes_inji_web() -> None:
-    realm = json.loads((INSTALLATION_DIR / "keycloak-realm.json").read_text(encoding="utf-8"))
+    realm_file = INSTALLATION_DIR / "mock" / "keycloak-realm.json"
+    if not realm_file.is_file():
+        realm_file = INSTALLATION_DIR / "keycloak-realm.json"
+    realm = json.loads(realm_file.read_text(encoding="utf-8"))
     client = next(c for c in realm["clients"] if c["clientId"] == "wallet-demo")
     redirects = client["redirectUris"]
     assert "http://localhost:4004/redirect" in redirects

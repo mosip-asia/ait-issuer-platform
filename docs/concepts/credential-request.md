@@ -18,10 +18,10 @@ For the endpoints and the full contracts see [Connecting a non-Inji OpenID4VCI w
 |---|---|---|
 | Access token | Keycloak, after the user logs in | Who is asking (`sub`) and what was granted (`scope`); Certify validates it |
 | `scope` | Asked for by the wallet at login, granted by Keycloak (`ait_transcript_vc_ldp` is an optional client scope of `wallet-demo`) | Which credential type; the plugin passes it to the Gateway unchanged, which picks the type's checklist from it, and never to the adapter |
-| `sub` | Keycloak mapper `sub-from-username` in `installations/ait/keycloak-realm.json`, so `sub` is the Keycloak username, for example `ait-2026-0001` | Whose record is read: the plugin fills it into its record URL, the adapter's `GET /student/{sub}/transcript` |
+| `sub` | Keycloak mapper `sub-from-username` in `deploy/ait/mock/keycloak-realm.json`, so `sub` is the Keycloak username, for example `st120001` | Whose record is read: the plugin fills it into its record URL, the adapter's `GET /student/{sub}/transcript` |
 | Proof JWT | The wallet, signed with its own key, identified as `did:jwk` | The holder id placed in the credential; it says which wallet receives it, not which student the data is about |
 
-Identity is per degree: a student with two degrees has two Keycloak users and so two `sub` values (`ait-2026-0005` and `ait-2026-0005-phd` in the test realm).
+Identity is per degree: a student with two degrees has two Keycloak users and so two `sub` values (`st120001` and `st120001-phd` in the test realm).
 
 ## The token is signed, not encrypted
 
@@ -29,8 +29,8 @@ The access token is a JWT: `base64url(header).base64url(payload).signature`. Any
 
 ```json
 {
-  "iss": "http://keycloak:8080/realms/inji",
-  "sub": "ait-2026-0001",
+  "iss": "http://keycloak:8080/realms/ait",
+  "sub": "st120001",
   "scope": "ait_transcript_vc_ldp",
   "client_id": "wallet-demo",
   "aud": ["wallet-demo"],

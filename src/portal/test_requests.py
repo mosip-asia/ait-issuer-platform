@@ -50,7 +50,7 @@ def test_approve_sets_status_and_claim_panel() -> None:
     panel = req_workflow.claim_panel_for_student(sid, DEGREE_A1)
     assert panel is not None
     assert panel["keycloak_username"] == STUDENT_A["degrees"][0]["keycloakId"]
-    assert panel["keycloak_password"] == "inji"
+    assert panel["keycloak_password"] == "password1234"
 
 
 def test_reject_no_claim_panel() -> None:

@@ -19,9 +19,9 @@ the repository root: it reads the personas' passwords from installations/<name>/
 
   docker compose -f vc-stack/compose.yaml run --rm --no-deps \\
       -v "$PWD/vc-stack/issue_and_verify.py:/demo/vc-stack/issue_and_verify.py:ro" demo-app \\
-      python vc-stack/issue_and_verify.py issue ait ait-2026-0001 ait_transcript_vc_ldp .demo-state/smoke-credential.json
+      python vc-stack/issue_and_verify.py issue ait st120001 ait_transcript_vc_ldp .demo-state/smoke-credential.json
   (same, ending in: python vc-stack/issue_and_verify.py verify .demo-state/smoke-credential.json fullName)
-  (same, ending in: python vc-stack/issue_and_verify.py refused ait ait-2026-0002 ait_transcript_vc_ldp checklist_failed)
+  (same, ending in: python vc-stack/issue_and_verify.py refused ait st120002 ait_transcript_vc_ldp checklist_failed)
 """
 
 from __future__ import annotations
@@ -172,7 +172,7 @@ def main() -> int:
     steps = parser.add_subparsers(dest="step", required=True)
     p_issue = steps.add_parser("issue", help="issue a credential and write it to OUT")
     p_issue.add_argument("installation")
-    p_issue.add_argument("persona", help="Keycloak username, e.g. ait-2026-0001")
+    p_issue.add_argument("persona", help="Keycloak username, e.g. st120001")
     p_issue.add_argument("scope", help="credential scope, e.g. ait_transcript_vc_ldp")
     p_issue.add_argument("out", type=Path)
     p_verify = steps.add_parser("verify", help="verify a credential file, then tampered copies")

@@ -38,7 +38,7 @@ services:
     volumes:
       - ./deploy/base/vcga-nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./deploy/${INSTALLATION}:/usr/share/nginx/html/installation:ro
-      - ./deploy/local:/usr/share/nginx/html/local:ro
+      - ./deploy/base:/usr/share/nginx/html/base:ro
     networks:
       trust-network:
         aliases:
