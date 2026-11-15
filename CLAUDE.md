@@ -65,7 +65,7 @@ Read before touching the stack:
 ## Repository rules
 
 - `*.sh` files are LF (`.gitattributes`); other text files are CRLF in a Windows checkout.
-- Generated and environment files stay git-ignored: `deploy/<name>/mimoto-issuers-config.json`, `vc-stack/.env`, `vc-stack/certs/`, `vc-stack/data/`, `vc-stack/plugins/`, `src/issuer/target/`, `.demo-state/`. No jar is committed.
+- Generated and environment files stay git-ignored: `deploy/<name>/vcga/mimoto-issuers-config.json`, `vc-stack/.env`, `vc-stack/certs/`, `vc-stack/data/`, `vc-stack/plugins/`, `src/issuer/target/`, `.demo-state/`. No jar is committed.
 - `AGENTS.md`, `PLAN.md` and `docs/log.md` at the root are local-only and git-ignored.
 
 ## Docs

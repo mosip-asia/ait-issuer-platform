@@ -121,7 +121,7 @@ Once designed, deploy the Student ID Card across the **five core runtime compone
 |---|---|---|---|
 | **1. VDR** | JSON-LD schema, templates & brand assets | `deploy/<inst>/vdr/contexts/<vc>/v1.json` | `curl -s http://vdr.localhost/contexts/<vc>/v1.json` |
 | **2. Certify** | Issuer engine, signing keys, status lists | `deploy/<inst>/credentials/<vc>.json` | `curl -s http://issuer.localhost/.well-known/openid-credential-issuer` |
-| **3. VCGA** | Mimoto issuer catalog for wallet discovery | `deploy/<inst>/mimoto-issuers-config.json` | `curl -s http://vcga.localhost/mimoto-issuers-config.json` |
+| **3. VCGA** | Mimoto issuer catalog for wallet discovery | `deploy/<inst>/vcga/mimoto-issuers-config.json` | `curl -s http://vcga.localhost/mimoto-issuers-config.json` |
 | **4. Wallet** | Digital wallet (Inji Web / Mobile) | Card display properties & template | `curl -s http://wallet.localhost/v1/mimoto/issuers/.../configuration` |
 | **5. Verify** | Signature & schema verification | `deploy/base/verify-config.json` | `curl -s -X POST http://verifier.localhost/v1/verify/v2/vc-verification` |
 
@@ -436,7 +436,7 @@ docker compose -f compose.certify.yaml exec -T database \
 **Role**: The Verifiable Credentials Global Architecture (VCGA) catalog tells wallets which issuers exist, what credentials they issue, and how to reach their OAuth and OpenID4VCI endpoints. In this stack, it is statically served at `http://vcga.localhost` via Traefik edge ingress.
 
 ### 3.1 What to Configure
-In [`deploy/ait/mimoto-issuers-config.json`](../../deploy/ait/mimoto-issuers-config.json), ensure your issuer points to Certify's discovery endpoint:
+In [`deploy/ait/vcga/mimoto-issuers-config.json`](../../deploy/ait/vcga/mimoto-issuers-config.json), ensure your issuer points to Certify's discovery endpoint:
 
 ```json
 {

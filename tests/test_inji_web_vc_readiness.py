@@ -33,8 +33,10 @@ INSTALLATION_DIR = REPO_ROOT / "deploy" / os.environ.get("INSTALLATION", "ait")
 
 INJI_WEB_ORIGIN = os.environ.get("INJI_WEB_URL", "http://wallet.localhost")
 KEYCLOAK_PUBLIC = os.environ.get("KEYCLOAK_PUBLIC_BASE_URL", "http://auth.localhost")
-ISSUER_ID = json.loads((INSTALLATION_DIR / "mimoto-issuers-config.json.template").read_text(encoding="utf-8"))[
-    "issuers"][0]["issuer_id"]
+_tmpl = INSTALLATION_DIR / "vcga" / "mimoto-issuers-config.json.template"
+if not _tmpl.is_file():
+    _tmpl = INSTALLATION_DIR / "mimoto-issuers-config.json.template"
+ISSUER_ID = json.loads(_tmpl.read_text(encoding="utf-8"))["issuers"][0]["issuer_id"]
 CREDENTIAL_CONFIGS = {f["credentialConfig"] for f in json.loads((INSTALLATION_DIR / "smoke.json").read_text(encoding="utf-8"))}
 MIMOTO_ISSUERS = f"{INJI_WEB_ORIGIN}/v1/mimoto/issuers"
 MIMOTO_CONFIG = f"{INJI_WEB_ORIGIN}/v1/mimoto/issuers/{ISSUER_ID}/configuration"
@@ -63,7 +65,10 @@ def _http_json(url: str, method: str = "GET", body: dict | None = None) -> tuple
 
 
 def test_issuers_config_token_endpoint_uses_inji_web_proxy() -> None:
-    cfg = json.loads((INSTALLATION_DIR / "mimoto-issuers-config.json").read_text(encoding="utf-8"))
+    cfg_file = INSTALLATION_DIR / "vcga" / "mimoto-issuers-config.json"
+    if not cfg_file.is_file():
+        cfg_file = INSTALLATION_DIR / "mimoto-issuers-config.json"
+    cfg = json.loads(cfg_file.read_text(encoding="utf-8"))
     issuer = cfg["issuers"][0]
     token_ep = issuer["token_endpoint"]
     valid_tokens = {

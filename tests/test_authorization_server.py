@@ -46,7 +46,7 @@ REALM_PATH_ALLOWED = [
         r"\.md$",
         r"(^|/)test_[^/]*\.py$",
         r"Test\.java$",
-        r"^deploy/base/mimoto-issuers-mobile\.json$",
+        r"^deploy/base/(vcga/)?mimoto-issuers-mobile\.json$",
         r"^vc-stack/config/mimoto-issuers-mobile\.json$",
         r"^deploy/hackathon/adapter/student_identity_data\.csv$",
     )
@@ -85,7 +85,10 @@ def certify_properties(installation: str, env: dict[str, str]) -> dict[str, str]
 
 def mimoto_issuer(installation: str, env: dict[str, str]) -> dict:
     out = r.render({"INSTALLATION": installation, **env})
-    return json.loads(out[INSTALLATIONS / installation / "mimoto-issuers-config.json"])["issuers"][0]
+    target = INSTALLATIONS / installation / "vcga" / "mimoto-issuers-config.json"
+    if target not in out:
+        target = INSTALLATIONS / installation / "mimoto-issuers-config.json"
+    return json.loads(out[target])["issuers"][0]
 
 
 def test_every_installation_has_the_same_settings_each_overridable() -> None:

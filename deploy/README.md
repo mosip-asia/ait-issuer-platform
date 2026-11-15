@@ -15,7 +15,8 @@ deploy/
 ├── ait/                       # AIT Tenant profile (academic transcript)
 │   ├── certify-installation.properties
 │   ├── authorization-server.env
-│   ├── mimoto-issuers-config.json.template
+│   ├── vdr/                   # Tenant schemas, templates, and brand assets
+│   ├── vcga/                  # Tenant Mimoto issuer registry configuration
 │   ├── gateway.env
 │   ├── smoke.json
 │   ├── adapter/
@@ -26,7 +27,8 @@ deploy/
 ├── hackathon/                 # Hackathon Tenant profile (developer passport & achievements)
 │   ├── certify-installation.properties
 │   ├── authorization-server.env
-│   ├── mimoto-issuers-config.json.template
+│   ├── vdr/                   # Tenant schemas, templates, and brand assets
+│   ├── vcga/                  # Tenant Mimoto issuer registry configuration
 │   ├── gateway.env
 │   ├── smoke.json
 │   ├── adapter/
