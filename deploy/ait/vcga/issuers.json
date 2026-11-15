@@ -1,0 +1,31 @@
+{
+  "issuers": [
+    {
+      "credential_issuer": "AITUniversity",
+      "issuer_id": "AITUniversity",
+      "protocol": "OpenId4VCI",
+      "display": [
+        {
+          "name": "AIT University Registrar",
+          "logo": {
+            "url": "http://vdr.localhost/assets/AIT_globe.png",
+            "alt_text": "ait-logo"
+          },
+          "title": "AIT University",
+          "description": "Download your AIT credentials",
+          "language": "en"
+        }
+      ],
+      "client_id": "wallet-demo",
+      "redirect_uri": "http://wallet.localhost/redirect",
+      "token_endpoint": "http://wallet.localhost/v1/mimoto/get-token/AITUniversity",
+      "authorization_audience": "http://auth.localhost/realms/ait/protocol/openid-connect/token",
+      "proxy_token_endpoint": "http://auth.localhost/realms/ait/protocol/openid-connect/token",
+      "client_alias": "wallet-demo-client",
+      "qr_code_type": "EmbeddedVC",
+      "credential_issuer_host": "http://issuer.localhost",
+      "enabled": "true",
+      "wellknown_endpoint": "http://issuer.localhost/.well-known/openid-credential-issuer"
+    }
+  ]
+}

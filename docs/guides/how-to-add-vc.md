@@ -121,7 +121,7 @@ Once the schema, template, and visual assets are designed, deploy them across th
 |---|---|---|---|
 | **1. VDR** | JSON-LD schema, templates & brand assets | `deploy/<inst>/vdr/contexts/<vc>/v1.json` | `curl -s http://vdr.localhost/contexts/<vc>/v1.json` |
 | **2. Certify** | Issuer engine, signing keys, status lists | `deploy/<inst>/credentials/<vc>.json` | `curl -s http://issuer.localhost/.well-known/openid-credential-issuer` |
-| **3. VCGA** | Mimoto issuer catalog for wallet discovery | `deploy/<inst>/mimoto-issuers-config.json` | `curl -s http://vcga.localhost/mimoto-issuers-config.json` |
+| **3. VCGA** | Trusted issuer catalog for wallet discovery | `deploy/<inst>/vcga/issuers.json` | `curl -s http://vcga.localhost/issuers` |
 | **4. Wallet** | Digital wallet (Inji Web / Mobile) | Card display properties & template | `curl -s http://wallet.localhost/v1/mimoto/issuers/.../configuration` |
 | **5. Verify** | Signature & schema verification | `deploy/base/verify-config.json` | `curl -s -X POST http://verifier.localhost/v1/verify/v2/vc-verification` |
 
@@ -351,10 +351,10 @@ docker compose -f compose.certify.yaml exec -T database \
 
 ## 3. Configure VCGA (Issuers Catalog)
 
-**Role**: Verifiable Credentials Global Architecture (VCGA) serves `mimoto-issuers-config.json` at `http://vcga.localhost`. Wallets query this catalog to discover issuers and their OpenID4VCI endpoints.
+**Role**: Verifiable Credentials Global Architecture (VCGA) serves `issuers.json` at `http://vcga.localhost/issuers`. Wallets query this catalog to discover issuers and their OpenID4VCI endpoints.
 
 ### 3.1 What to Configure
-In `deploy/<installation>/mimoto-issuers-config.json`, ensure your issuer is listed and enabled:
+In `deploy/<installation>/vcga/issuers.json`, ensure your issuer is listed and enabled:
 ```json
 {
   "issuers": [

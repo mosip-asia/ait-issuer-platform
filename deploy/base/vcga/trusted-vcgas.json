@@ -1,0 +1,10 @@
+{
+  "trusted_vcga_registries": [
+    {
+      "id": "ait-institutional-vcga",
+      "name": "AIT Institutional Governance Authority",
+      "url": "http://vcga.localhost",
+      "type": "InstitutionalVCGA"
+    }
+  ]
+}

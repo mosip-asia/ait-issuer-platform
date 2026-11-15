@@ -41,8 +41,8 @@ services:
     restart: unless-stopped
     volumes:
       - ./deploy/base/vcga-nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./deploy/${INSTALLATION}:/usr/share/nginx/html/installation:ro
-      - ./deploy/base:/usr/share/nginx/html/base:ro
+      - ./deploy/${INSTALLATION}/vcga:/usr/share/nginx/html/vcga:ro
+      - ./deploy/base/vcga:/usr/share/nginx/html/base-vcga:ro
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.vcga.rule=Host(`vcga.localhost`) || Host(`vcga.lan`) || Host(`vcga.dpi.ait.ac.th`) || Host(`vcga.ait.ac.th`)"

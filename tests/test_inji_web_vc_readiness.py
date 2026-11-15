@@ -33,8 +33,10 @@ INSTALLATION_DIR = REPO_ROOT / "deploy" / os.environ.get("INSTALLATION", "ait")
 
 INJI_WEB_ORIGIN = os.environ.get("INJI_WEB_URL", "http://wallet.localhost")
 KEYCLOAK_PUBLIC = os.environ.get("KEYCLOAK_PUBLIC_BASE_URL", "http://auth.localhost")
-ISSUER_ID = json.loads((INSTALLATION_DIR / "mimoto-issuers-config.json.template").read_text(encoding="utf-8"))[
-    "issuers"][0]["issuer_id"]
+_cfg = INSTALLATION_DIR / "vcga" / "issuers.json"
+if not _cfg.is_file():
+    _cfg = INSTALLATION_DIR / "mimoto-issuers-config.json"
+ISSUER_ID = json.loads(_cfg.read_text(encoding="utf-8"))["issuers"][0]["issuer_id"]
 CREDENTIAL_CONFIGS = {f["credentialConfig"] for f in json.loads((INSTALLATION_DIR / "smoke.json").read_text(encoding="utf-8"))}
 MIMOTO_ISSUERS = f"{INJI_WEB_ORIGIN}/v1/mimoto/issuers"
 MIMOTO_CONFIG = f"{INJI_WEB_ORIGIN}/v1/mimoto/issuers/{ISSUER_ID}/configuration"
@@ -63,7 +65,12 @@ def _http_json(url: str, method: str = "GET", body: dict | None = None) -> tuple
 
 
 def test_issuers_config_token_endpoint_uses_inji_web_proxy() -> None:
-    cfg = json.loads((INSTALLATION_DIR / "mimoto-issuers-config.json").read_text(encoding="utf-8"))
+    cfg_file = INSTALLATION_DIR / "vcga" / "issuers.json"
+    if not cfg_file.is_file():
+        cfg_file = INSTALLATION_DIR / "vcga" / "mimoto-issuers-config.json"
+    if not cfg_file.is_file():
+        cfg_file = INSTALLATION_DIR / "mimoto-issuers-config.json"
+    cfg = json.loads(cfg_file.read_text(encoding="utf-8"))
     issuer = cfg["issuers"][0]
     token_ep = issuer["token_endpoint"]
     valid_tokens = {
@@ -75,8 +82,8 @@ def test_issuers_config_token_endpoint_uses_inji_web_proxy() -> None:
         f"token_endpoint must be same-origin Inji Web proxy (expected one of {valid_tokens}, got {token_ep}). "
         "Re-run vc-stack/bootstrap.sh to refresh issuer config."
     )
-    assert issuer["authorization_audience"].startswith("http://keycloak:8080/"), issuer["authorization_audience"]
-    assert issuer["proxy_token_endpoint"].startswith("http://keycloak:8080/"), issuer["proxy_token_endpoint"]
+    assert issuer["authorization_audience"].startswith("http://auth.localhost/"), issuer["authorization_audience"]
+    assert issuer["proxy_token_endpoint"].startswith("http://auth.localhost/"), issuer["proxy_token_endpoint"]
     valid_redirects = {
         f"http://wallet.localhost/redirect",
         f"http://localhost:4004/redirect",
@@ -98,7 +105,7 @@ def test_mimoto_cors_allows_inji_web_host_port() -> None:
 def test_mimoto_keycloak_external_is_browser_url() -> None:
     props = (MIMOTO_PROPS_DIR / "mimoto-default.properties").read_text(encoding="utf-8")
     assert "keycloak.external.url=http://auth.localhost" in props or "keycloak.external.url=http://localhost:8080" in props
-    assert "keycloak.internal.url=http://keycloak:8080" in props
+    assert "keycloak.internal.url=http://auth.localhost" in props
 
 
 def test_keycloak_wallet_demo_redirect_includes_inji_web() -> None:

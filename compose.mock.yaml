@@ -29,6 +29,7 @@ services:
     environment:
       - KEYCLOAK_ADMIN=admin
       - KEYCLOAK_ADMIN_PASSWORD=admin
+      - KC_HOSTNAME=http://auth.localhost
       - KC_HOSTNAME_STRICT=false
       - KC_PROXY_HEADERS=xforwarded
       - KC_HTTP_ENABLED=true
@@ -54,6 +55,11 @@ services:
       dockerfile: src/portal/Dockerfile
     extra_hosts:
       - "host.docker.internal:host-gateway"
+      - "auth.localhost:host-gateway"
+      - "issuer.localhost:host-gateway"
+      - "wallet.localhost:host-gateway"
+      - "vdr.localhost:host-gateway"
+      - "vcga.localhost:host-gateway"
     environment:
       - AIT_DEMO_DB=/demo/.demo-state/demo_requests.db
       - INJI_WEB_URL=${INJI_WEB_URL}
@@ -82,6 +88,11 @@ services:
       dockerfile: src/gateway/Dockerfile
     extra_hosts:
       - "host.docker.internal:host-gateway"
+      - "auth.localhost:host-gateway"
+      - "issuer.localhost:host-gateway"
+      - "wallet.localhost:host-gateway"
+      - "vdr.localhost:host-gateway"
+      - "vcga.localhost:host-gateway"
     env_file:
       - ./deploy/${INSTALLATION}/gateway.env
     labels:

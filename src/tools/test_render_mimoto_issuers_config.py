@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import render_mimoto_issuers_config as r  # noqa: E402
 
 AIT = {"INSTALLATION": "ait"}
-MIMOTO_OUT = r.REPO_ROOT / "deploy" / "ait" / "mimoto-issuers-config.json"
+MIMOTO_OUT = r.REPO_ROOT / "deploy" / "ait" / "vcga" / "issuers.json"
 PUBLIC = {
     **AIT,
     "INJI_WEB_URL": "https://wallet.demo.example",
@@ -28,8 +28,8 @@ def test_issuer_list_is_rendered_from_and_into_the_installation() -> None:
     out = r.render(AIT)
     repo_root = Path(__file__).resolve().parent.parent.parent
     assert {p.resolve() for p in out} == {
-        repo_root / "deploy" / "ait" / "mimoto-issuers-config.json",
-        repo_root / "deploy" / "base" / "mimoto-issuers-mobile.json",
+        repo_root / "deploy" / "ait" / "vcga" / "issuers.json",
+        repo_root / "deploy" / "base" / "vcga" / "issuers-mobile.json",
         repo_root / "deploy" / "base" / "public-gateway-mobile.conf",
     }
 
@@ -45,7 +45,16 @@ def test_mimoto_file_ignores_mobile_settings() -> None:
     assert with_mobile == web_only
     issuer = json.loads(with_mobile)["issuers"][0]
     assert issuer["redirect_uri"] == "https://wallet.demo.example/redirect"
-    assert issuer["credential_issuer_host"] == "http://host.docker.internal:9091"
+    assert issuer["credential_issuer_host"] == "https://issuer.dpi.ait.ac.th"
+
+
+def test_local_issuer_host_is_domain_based() -> None:
+    out = r.render(AIT)[MIMOTO_OUT]
+    issuer = json.loads(out)["issuers"][0]
+    assert issuer["credential_issuer_host"] == "http://issuer.localhost"
+    assert issuer["wellknown_endpoint"] == "http://issuer.localhost/.well-known/openid-credential-issuer"
+    assert "9091" not in out
+    assert "host.docker.internal" not in out
 
 
 def test_public_mobile_list_is_phone_reachable() -> None:
@@ -68,7 +77,7 @@ def test_public_snippet_swaps_only_authorization_servers() -> None:
     assert "location = /v1/mimoto/issuers" in snippet
     assert "location = /.well-known/openid-credential-issuer" in snippet
     assert (
-        """sub_filter '"authorization_servers":["http://keycloak:8080/realms/ait"]' """
+        """sub_filter '"authorization_servers":["http://auth.localhost/realms/ait"]' """
         """'"authorization_servers":["https://keycloak.demo.example/realms/ait"]';"""
     ) in snippet
     # Variable proxy_pass must carry no URI part (docs/reference/vc-download-troubleshooting.md #3).
@@ -79,7 +88,7 @@ def test_an_installation_without_the_mobile_wallet_renders_only_mimotos_list() -
     # No public-gateway-mobile.conf.template in the installation: the tracked phone files in vc-stack/config/ stay untouched.
     for env in ({"INSTALLATION": "hackathon"}, {**PUBLIC, "INSTALLATION": "hackathon"}):
         out = r.render(env)
-        hackathon_list = r.REPO_ROOT / "deploy" / "hackathon" / "mimoto-issuers-config.json"
+        hackathon_list = r.REPO_ROOT / "deploy" / "hackathon" / "vcga" / "issuers.json"
         assert list(out) == [hackathon_list], list(out)
         assert json.loads(out[hackathon_list])["issuers"][0]["issuer_id"] == "AITHackathon"
 
