@@ -23,6 +23,10 @@ services:
       - "${VDR_PORT}:80"
     volumes:
       - ./deploy/${INSTALLATION}/contexts:/usr/share/nginx/html/contexts:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vdr.rule=Host(`vdr.localhost`) || Host(`vdr.lan`) || Host(`vdr.dpi.ait.ac.th`) || Host(`vdr.ait.ac.th`)"
+      - "traefik.http.services.vdr.loadbalancer.server.port=80"
     networks:
       trust-network:
         aliases:
@@ -39,6 +43,10 @@ services:
       - ./deploy/base/vcga-nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./deploy/${INSTALLATION}:/usr/share/nginx/html/installation:ro
       - ./deploy/base:/usr/share/nginx/html/base:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vcga.rule=Host(`vcga.localhost`) || Host(`vcga.lan`) || Host(`vcga.dpi.ait.ac.th`) || Host(`vcga.ait.ac.th`)"
+      - "traefik.http.services.vcga.loadbalancer.server.port=80"
     networks:
       trust-network:
         aliases:
@@ -55,6 +63,10 @@ services:
       - ./deploy/base/cdn-nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./deploy/${INSTALLATION}/assets:/usr/share/nginx/html/assets:ro
       - ./deploy/base/assets:/usr/share/nginx/html/base-assets:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.cdn.rule=Host(`cdn.localhost`) || Host(`cdn.lan`) || Host(`cdn.dpi.ait.ac.th`) || Host(`cdn.ait.ac.th`)"
+      - "traefik.http.services.cdn.loadbalancer.server.port=80"
     networks:
       trust-network:
         aliases:

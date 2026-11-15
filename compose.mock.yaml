@@ -34,9 +34,13 @@ services:
       - KC_HTTP_ENABLED=true
       - KC_HTTP_PORT=8080
     ports:
-      - "${KEYCLOAK_PORT:-8080}:8080"
+      - "${KEYCLOAK_PORT}:8080"
     volumes:
       - ./deploy/${INSTALLATION}/mock/keycloak-realm.json:/opt/keycloak/data/import/realm.json:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.auth.rule=Host(`auth.localhost`) || Host(`auth.lan`) || Host(`auth.dpi.ait.ac.th`)"
+      - "traefik.http.services.auth.loadbalancer.server.port=8080"
     restart: unless-stopped
     networks:
       mock-network:
@@ -67,6 +71,10 @@ services:
       - ./scripts:/demo/scripts
       - ./deploy:/demo/deploy
       - ./tests/fixtures:/demo/tests/fixtures:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.portal.rule=Host(`portal.localhost`) || Host(`portal.lan`) || Host(`portal.dpi.ait.ac.th`)"
+      - "traefik.http.services.portal.loadbalancer.server.port=4100"
     networks:
       - mock-network
 

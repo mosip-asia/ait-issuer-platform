@@ -35,6 +35,9 @@ run_release_checks() {
   elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.trust.yaml docker compose config --quiet; then
     log_err "Trust compose.trust.yaml configuration failed validation."
     rc=1
+  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.traefik.yaml docker compose config --quiet; then
+    log_err "Traefik compose.traefik.yaml configuration failed validation."
+    rc=1
   elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.mock.yaml docker compose config --quiet; then
     log_err "Mock compose.mock.yaml configuration failed validation."
     rc=1

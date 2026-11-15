@@ -17,6 +17,7 @@ include:
   - compose.verify.yaml
   - compose.web-wallet.yaml
   - compose.trust.yaml
+  - compose.traefik.yaml
 
 services:
   vc-lab:
@@ -39,3 +40,7 @@ services:
       - ./deploy/${INSTALLATION}/assets:/app/assets:ro
       - ./deploy/${INSTALLATION}:/app/templates:ro
       - ./deploy/base:/app/base_templates:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vclab.rule=Host(`lab.localhost`) || Host(`vclab.localhost`) || Host(`lab.lan`) || Host(`lab.dpi.ait.ac.th`)"
+      - "traefik.http.services.vclab.loadbalancer.server.port=4200"

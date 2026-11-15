@@ -1,0 +1,45 @@
+# ==============================================================================
+# Traefik v3.7 Edge Ingress Router
+# Eliminates port memorization by routing *.localhost, *.lan, and *.dpi.ait.ac.th
+# ==============================================================================
+services:
+  traefik:
+    image: traefik:v3.7
+    container_name: traefik
+    restart: unless-stopped
+    command:
+      - "--api.insecure=true"
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "${TRAEFIK_WEB_PORT}:80"
+      - "${TRAEFIK_DASHBOARD_PORT}:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.localhost`) || Host(`traefik.lan`)"
+      - "traefik.http.routers.dashboard.service=api@internal"
+    networks:
+      - certify-network
+      - trust-network
+      - verifier-network
+      - wallet-network
+      - mock-network
+      - default
+
+networks:
+  certify-network:
+    name: ${COMPOSE_PROJECT_NAME}-certify-net
+  trust-network:
+    name: ${COMPOSE_PROJECT_NAME}-trust-net
+  verifier-network:
+    name: ${COMPOSE_PROJECT_NAME}-verify-net
+  wallet-network:
+    name: ${COMPOSE_PROJECT_NAME}-wallet-net
+  mock-network:
+    name: ${COMPOSE_PROJECT_NAME}-mock-net
+  default:
+    name: ${COMPOSE_PROJECT_NAME}_default

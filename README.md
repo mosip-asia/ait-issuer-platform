@@ -74,14 +74,16 @@ ait-transcript/
 │
 ├── docker/                               # CONTAINER PACKAGING RECIPES
 │   ├── Dockerfile.certify                # Bakes src/issuer SPI plugin into Inji Certify
-│   └── Dockerfile.template-sync          # Packages certify_template_sync (uv + Alpine)
+│   ├── Dockerfile.template-sync          # Packages certify_template_sync (uv + Alpine)
+│   └── Dockerfile.vc-lab                 # Packages VC Lab Studio & Template Designer
 │
-├── compose.yaml                          # Root orchestrator (includes certify, verify, web-wallet, trust)
+├── compose.yaml                          # Root orchestrator (includes certify, verify, web-wallet, trust, traefik)
 ├── compose.certify.yaml                  # Core Inji Certify Issuer Engine (internal DB & ingress Nginx)
 ├── compose.verify.yaml                   # Generic Inji Verifier stack (UI, backend, session DB)
 ├── compose.web-wallet.yaml               # Inji Web Wallet UI
 ├── compose.trust.yaml                    # Trust Registry (Static VDR contexts & VCGA issuer metadata)
 ├── compose.mock.yaml                     # Stand-in mock services (Keycloak, adapter, portal)
+├── compose.traefik.yaml                  # Traefik v3.7 Edge Ingress Router (*.localhost)
 ├── compose.certify-build.yaml            # Compiler container for Java SPI plugin
 ├── .env.example                          # Root developer environment configuration
 └── pyproject.toml / uv.lock              # Modern Python dependency management (uv)
@@ -385,24 +387,36 @@ A smoke test verifies real cryptographic issuance, signature verification, and l
 
 When running the Full Demo Stack:
 
-### Local Port Endpoints
+### Zero-Configuration Local Ingress (Traefik v3.7 on Port 80)
 
-| Service | Local URL | Role |
-|---|---|---|
-| **Student Portal** | [http://localhost:4100/student/login](http://localhost:4100/student/login) | Student requests transcript |
-| **Registrar Portal** | [http://localhost:4100/registrar/login](http://localhost:4100/registrar/login) | Registrar approves or revokes issuance |
-| **Inji Web Wallet** | [http://localhost:4004](http://localhost:4004) | Mock digital wallet container to claim & store credentials |
-| **Credential Verifier** | [http://localhost:4007](http://localhost:4007) | Custom branded verifier with camera QR scanner & drag-and-drop validation |
-| **Inji Certify** | [http://localhost:9091](http://localhost:9091) | OpenID4VCI credential issuer & metadata |
-| **Inji Certify Swagger UI** | [http://localhost:9091/v1/certify/swagger-ui/index.html](http://localhost:9091/v1/certify/swagger-ui/index.html) | Interactive API exploration & Swagger testing |
-| **Keycloak Admin** | [http://localhost:8080/admin/](http://localhost:8080/admin/) | Identity provider (`admin` / `admin`) |
+With **Traefik v3.7** enabled on standard HTTP port 80, you no longer need to remember individual service port numbers. Under [RFC 6761](https://tools.ietf.org/html/rfc6761), modern operating systems and web browsers natively resolve any subdomain ending in `*.localhost` to `127.0.0.1` without modifying `/etc/hosts` or setting up local DNS.
+
+| Service | Clean URL (`*.localhost`) | Direct Host Port | Role & Capabilities |
+|---|---|---|---|
+| **Traefik Dashboard** | [http://traefik.localhost](http://traefik.localhost) | [http://localhost:8088](http://localhost:8088) | Live edge ingress routing rules & container health |
+| **VC Lab Studio** | [http://lab.localhost](http://lab.localhost) | [http://localhost:4200](http://localhost:4200) | Visual credential design, live Velocity template preview, schema explorer |
+| **Inji Web Wallet** | [http://wallet.localhost](http://wallet.localhost) | [http://localhost:4004](http://localhost:4004) | Holder digital wallet to claim, view, and export credentials |
+| **Credential Verifier** | [http://verifier.localhost](http://verifier.localhost) | [http://localhost:8000](http://localhost:8000) | Branded verifier UI with QR camera scanning & JSON validation |
+| **Inji Certify** | [http://issuer.localhost](http://issuer.localhost) | [http://localhost:9091](http://localhost:9091) | OpenID4VCI credential issuer engine & discovery metadata |
+| **Certify Swagger UI** | [http://issuer.localhost/v1/certify/swagger-ui/index.html](http://issuer.localhost/v1/certify/swagger-ui/index.html) | [http://localhost:9091/v1/certify/swagger-ui/index.html](http://localhost:9091/v1/certify/swagger-ui/index.html) | Interactive API exploration & Pre-Authorized Code testing |
+| **Student Portal** | [http://portal.localhost/student/login](http://portal.localhost/student/login) | [http://localhost:4100/student/login](http://localhost:4100/student/login) | Student credential request journey |
+| **Registrar Portal** | [http://portal.localhost/registrar/login](http://portal.localhost/registrar/login) | [http://localhost:4100/registrar/login](http://localhost:4100/registrar/login) | Institutional clearance, issuance approval, and revocation |
+| **Keycloak IAM** | [http://auth.localhost](http://auth.localhost) | [http://localhost:8080](http://localhost:8080) | Identity provider & token issuer ([Admin Console](http://auth.localhost/admin/)) |
+| **VDR (Schemas)** | [http://vdr.localhost](http://vdr.localhost) | [http://localhost:9098](http://localhost:9098) | Public JSON-LD contexts & vocabularies |
+| **CDN (Assets)** | [http://cdn.localhost](http://cdn.localhost) | [http://localhost:9097](http://localhost:9097) | Static brand assets, university seals, and logos |
+| **VCGA (Catalog)** | [http://vcga.localhost](http://vcga.localhost) | [http://localhost:9099](http://localhost:9099) | Inji Mimoto trusted issuer registry catalog |
+
+> [!TIP]
+> **LAN and Institutional Hostnames:**
+> In addition to `*.localhost`, Traefik also routes `*.lan` (e.g. `http://wallet.lan`, `http://issuer.lan`) and `*.dpi.ait.ac.th` (e.g. `http://issuer.dpi.ait.ac.th`) to mirror production domain names locally.
 
 ### Stakeholder Walkthrough:
-1. Open **Student Portal** ([http://localhost:4100/student/login](http://localhost:4100/student/login)) $\rightarrow$ Select `Nara Wattanakul` (`st120001`) $\rightarrow$ Click **Request my transcript VC**.
-2. Open **Registrar Portal** ([http://localhost:4100/registrar/login](http://localhost:4100/registrar/login)) $\rightarrow$ Sign in as Academic Registrar $\rightarrow$ Click **Approve**.
-3. Return to Student Portal $\rightarrow$ Click **Claim your credential** $\rightarrow$ Redirects to **Inji Web**.
+1. Open **Student Portal** ([http://portal.localhost/student/login](http://portal.localhost/student/login) or [http://localhost:4100/student/login](http://localhost:4100/student/login)) $\rightarrow$ Select `Nara Wattanakul` (`st120001`) $\rightarrow$ Click **Request my transcript VC**.
+2. Open **Registrar Portal** ([http://portal.localhost/registrar/login](http://portal.localhost/registrar/login) or [http://localhost:4100/registrar/login](http://localhost:4100/registrar/login)) $\rightarrow$ Sign in as Academic Registrar $\rightarrow$ Click **Approve**.
+3. Return to Student Portal $\rightarrow$ Click **Claim your credential** $\rightarrow$ Redirects to **Inji Web** ([http://wallet.localhost](http://wallet.localhost)).
 4. In Inji Web, sign in (`st120001` / `password1234`), select **AIT University**, and download the **AIT Transcript**.
-5. Open **Credential Verifier** ([http://localhost:4007](http://localhost:4007)) $\rightarrow$ Upload the downloaded credential JSON or scan QR code $\rightarrow$ Verdict reports **Authentic Credential Verified**.
+5. Open **Credential Verifier** ([http://verifier.localhost](http://verifier.localhost) or [http://localhost:8000](http://localhost:8000)) $\rightarrow$ Upload the downloaded credential JSON or scan QR code $\rightarrow$ Verdict reports **Authentic Credential Verified**.
+6. Design and preview credential templates in **VC Lab Studio** ([http://lab.localhost](http://lab.localhost) or [http://localhost:4200](http://localhost:4200)).
 
 ---
 

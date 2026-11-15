@@ -87,18 +87,20 @@ To prevent cryptographic signature invalidation and environment drift, productio
 - **VDR Schema URI**: `https://vdr.dpi.ait.ac.th/contexts/student-id/v1.json`
 - **CDN Asset URI**: `https://cdn.dpi.ait.ac.th/assets/AIT_globe.png`
 
-| Role | Institutional Production Domain | Local Compose Service / Port |
-|---|---|---|
-| **VDR (Schemas)** | `https://vdr.dpi.ait.ac.th` | `vdr` (`http://localhost:9098`) |
-| **CDN (Assets)** | `https://cdn.dpi.ait.ac.th` | `cdn` (`http://localhost:9097`) |
-| **VCGA (Catalog)** | `https://vcga.dpi.ait.ac.th` | `vcga` (`http://localhost:9099`) |
-| **Issuer Engine** | `https://issuer.dpi.ait.ac.th` | `certify-nginx` (`http://localhost:9091`) |
-| **Verifier UI** | `https://verifier.dpi.ait.ac.th` | `verify-ui` (`http://localhost:8000`) |
-| **Web Wallet** | `https://wallet.dpi.ait.ac.th` | `inji-web` (`http://localhost:4004`) |
+| Role | Institutional Production Domain | Local Clean URL (*.localhost) | Direct Compose Port |
+|---|---|---|---|
+| **VDR (Schemas)** | `https://vdr.dpi.ait.ac.th` | `http://vdr.localhost` | `http://localhost:9098` |
+| **CDN (Assets)** | `https://cdn.dpi.ait.ac.th` | `http://cdn.localhost` | `http://localhost:9097` |
+| **VCGA (Catalog)** | `https://vcga.dpi.ait.ac.th` | `http://vcga.localhost` | `http://localhost:9099` |
+| **Issuer Engine** | `https://issuer.dpi.ait.ac.th` | `http://issuer.localhost` | `http://localhost:9091` |
+| **Verifier UI** | `https://verifier.dpi.ait.ac.th` | `http://verifier.localhost` | `http://localhost:8000` |
+| **Web Wallet** | `https://wallet.dpi.ait.ac.th` | `http://wallet.localhost` | `http://localhost:4004` |
+| **VC Lab Studio** | `https://lab.dpi.ait.ac.th` | `http://lab.localhost` | `http://localhost:4200` |
 
 In local development:
+- **Zero-Config Ingress (Traefik v3.7)**: All `*.localhost` domains (RFC 6761) resolve natively to `127.0.0.1` on port 80 without modifying `/etc/hosts`.
 - **Inside Docker**: `compose.trust.yaml`, `compose.certify.yaml`, `compose.verify.yaml`, and `compose.web-wallet.yaml` define network aliases and `extra_hosts` mapping `*.dpi.ait.ac.th` to `host-gateway`.
-- **On Developer Host**: Add local resolution aliases to `/etc/hosts` if testing with direct FQDNs:
+- **On Developer Host (Optional)**: If you want to use the full `*.dpi.ait.ac.th` production domain names locally on your host machine, add them to `/etc/hosts`:
   ```bash
   127.0.0.1 vdr.dpi.ait.ac.th cdn.dpi.ait.ac.th vcga.dpi.ait.ac.th issuer.dpi.ait.ac.th verifier.dpi.ait.ac.th wallet.dpi.ait.ac.th
   ```

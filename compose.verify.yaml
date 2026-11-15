@@ -38,6 +38,10 @@ services:
       - VERIFY_SERVICE_API_URL=/v1/verify
     volumes:
       - ./deploy/base/verify-config.json:/usr/share/nginx/html/assets/config.json:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.verify.rule=Host(`verifier.localhost`) || Host(`verify.localhost`) || Host(`verifier.lan`) || Host(`verifier.dpi.ait.ac.th`) || Host(`verifer.dpi.ait.ac.th`)"
+      - "traefik.http.services.verify.loadbalancer.server.port=8000"
     depends_on:
       - service
     networks:
