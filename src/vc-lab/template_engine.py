@@ -23,8 +23,8 @@ sys.path.insert(0, str(REPO_ROOT / "mock" / "adapter"))
 from ait_courses import enrich_ait_transcript_subject  # noqa: E402
 
 STUDENTS_JSON = REPO_ROOT / "tests" / "fixtures" / "students.json"
-CDN_BASE_URL = (os.environ.get("CDN_BASE_URL") or "http://cdn.localhost").rstrip("/")
-DEFAULT_LOGO = f"{CDN_BASE_URL}/assets/AIT_globe.png"
+VDR_BASE_URL = (os.environ.get("VDR_BASE_URL") or "http://vdr.localhost").rstrip("/")
+DEFAULT_LOGO = f"{VDR_BASE_URL}/assets/AIT_globe.png"
 
 
 def generate_mock_qr_png_base64() -> str:

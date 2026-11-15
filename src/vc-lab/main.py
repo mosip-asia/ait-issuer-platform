@@ -36,14 +36,14 @@ app = FastAPI(
 
 # Configuration from environment or defaults
 CREDENTIALS_DIR = Path(os.environ.get("CREDENTIALS_DIR", REPO_ROOT / "deploy" / "ait" / "credentials"))
-CONTEXTS_DIR = Path(os.environ.get("CONTEXTS_DIR", REPO_ROOT / "deploy" / "ait" / "contexts"))
-ASSETS_DIR = Path(os.environ.get("ASSETS_DIR", REPO_ROOT / "deploy" / "ait" / "assets"))
-TEMPLATES_DIR = Path(os.environ.get("TEMPLATES_DIR", REPO_ROOT / "deploy" / "ait"))
-BASE_TEMPLATES_DIR = Path(os.environ.get("BASE_TEMPLATES_DIR", REPO_ROOT / "deploy" / "base"))
+CONTEXTS_DIR = Path(os.environ.get("CONTEXTS_DIR", REPO_ROOT / "deploy" / "ait" / "vdr" / "contexts"))
+ASSETS_DIR = Path(os.environ.get("ASSETS_DIR", REPO_ROOT / "deploy" / "ait" / "vdr" / "assets"))
+TEMPLATES_DIR = Path(os.environ.get("TEMPLATES_DIR", REPO_ROOT / "deploy" / "ait" / "vdr" / "templates"))
+BASE_TEMPLATES_DIR = Path(os.environ.get("BASE_TEMPLATES_DIR", REPO_ROOT / "deploy" / "base" / "vdr" / "templates"))
 STUDENTS_FILE = Path(os.environ.get("STUDENTS_FILE", REPO_ROOT / "tests" / "fixtures" / "students.json"))
 INSTALLATION = os.environ.get("INSTALLATION", "ait")
 VDR_BASE_URL = (os.environ.get("VDR_BASE_URL") or "http://vdr.localhost").rstrip("/")
-CDN_BASE_URL = (os.environ.get("CDN_BASE_URL") or "http://cdn.localhost").rstrip("/")
+CDN_BASE_URL = (os.environ.get("CDN_BASE_URL") or VDR_BASE_URL).rstrip("/")
 
 
 class PreviewRequest(BaseModel):
@@ -52,7 +52,7 @@ class PreviewRequest(BaseModel):
     student_id: Optional[str] = "st120001"
     claims: Optional[dict[str, Any]] = None
     title: Optional[str] = "Asian Institute of Technology Credential"
-    logo_url: Optional[str] = f"{CDN_BASE_URL}/assets/AIT_globe.png"
+    logo_url: Optional[str] = f"{VDR_BASE_URL}/assets/AIT_globe.png"
     text_color: Optional[str] = "#000000"
     bg_color: Optional[str] = "#FFFFFF"
 
@@ -408,7 +408,7 @@ def studio_dashboard() -> HTMLResponse:
         </div>
 
         <div class="card">
-          <h2>2. Brand Assets (CDN)</h2>
+          <h2>2. Brand Assets (VDR)</h2>
           <table>
             <thead><tr><th>Asset</th><th>URI</th><th>Size</th></tr></thead>
             <tbody>{assets_rows}</tbody>

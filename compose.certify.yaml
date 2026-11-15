@@ -39,7 +39,6 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
       - "vdr.localhost:host-gateway"
-      - "cdn.localhost:host-gateway"
       - "vcga.localhost:host-gateway"
       - "issuer.localhost:host-gateway"
       - "verifier.localhost:host-gateway"
@@ -48,7 +47,6 @@ services:
       - "adapter.localhost:host-gateway"
       - "gateway.localhost:host-gateway"
       - "vdr.dpi.ait.ac.th:host-gateway"
-      - "cdn.dpi.ait.ac.th:host-gateway"
       - "vcga.dpi.ait.ac.th:host-gateway"
       - "issuer.dpi.ait.ac.th:host-gateway"
       - "verifier.dpi.ait.ac.th:host-gateway"
@@ -127,7 +125,6 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=inji_certify
       - VDR_BASE_URL=${VDR_BASE_URL}
-      - CDN_BASE_URL=${CDN_BASE_URL}
     networks:
       - certify-network
 

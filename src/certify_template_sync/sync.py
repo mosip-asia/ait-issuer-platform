@@ -80,7 +80,7 @@ def load_credential_configs(creds_dir):
         sys.exit(1)
 
     vdr_base = os.getenv("VDR_BASE_URL") or "http://vdr.localhost"
-    cdn_base = os.getenv("CDN_BASE_URL") or "http://cdn.localhost"
+    cdn_base = os.getenv("CDN_BASE_URL") or vdr_base
     certify_did = os.getenv("CERTIFY_DID")
 
     substitutions = {
@@ -96,7 +96,7 @@ def load_credential_configs(creds_dir):
             for var_name, var_val in substitutions.items():
                 content = content.replace(f"${{{var_name}}}", var_val)
             content = content.replace("http://vdr.localhost", substitutions["VDR_BASE_URL"])
-            content = content.replace("http://cdn.localhost", substitutions["CDN_BASE_URL"])
+            content = content.replace("http://cdn.localhost", substitutions["VDR_BASE_URL"])
             try:
                 data = json.loads(content)
                 configs.append((p.name, data))

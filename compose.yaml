@@ -28,16 +28,16 @@ services:
     environment:
       - INSTALLATION=${INSTALLATION}
       - CREDENTIALS_DIR=/app/credentials
-      - CONTEXTS_DIR=/app/contexts
-      - ASSETS_DIR=/app/assets
-      - TEMPLATES_DIR=/app/templates
+      - CONTEXTS_DIR=/app/vdr/contexts
+      - ASSETS_DIR=/app/vdr/assets
+      - TEMPLATES_DIR=/app/vdr/templates
       - BASE_TEMPLATES_DIR=/app/base_templates
     volumes:
       - ./deploy/${INSTALLATION}/credentials:/app/credentials:ro
-      - ./deploy/${INSTALLATION}/contexts:/app/contexts:ro
-      - ./deploy/${INSTALLATION}/assets:/app/assets:ro
-      - ./deploy/${INSTALLATION}:/app/templates:ro
-      - ./deploy/base:/app/base_templates:ro
+      - ./deploy/${INSTALLATION}/vdr/contexts:/app/vdr/contexts:ro
+      - ./deploy/${INSTALLATION}/vdr/assets:/app/vdr/assets:ro
+      - ./deploy/${INSTALLATION}/vdr/templates:/app/vdr/templates:ro
+      - ./deploy/base/vdr/templates:/app/base_templates:ro
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.vclab.rule=Host(`lab.localhost`) || Host(`vclab.localhost`) || Host(`lab.lan`) || Host(`lab.dpi.ait.ac.th`)"

@@ -8,7 +8,7 @@
         {
           "name": "AIT University Registrar",
           "logo": {
-            "url": "${CDN_BASE_URL}/assets/AIT_globe.png",
+            "url": "${VDR_BASE_URL}/assets/AIT_globe.png",
             "alt_text": "ait-logo"
           },
           "title": "AIT University",

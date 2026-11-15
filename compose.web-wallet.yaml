@@ -21,14 +21,12 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
       - "vdr.localhost:host-gateway"
-      - "cdn.localhost:host-gateway"
       - "vcga.localhost:host-gateway"
       - "issuer.localhost:host-gateway"
       - "verifier.localhost:host-gateway"
       - "wallet.localhost:host-gateway"
       - "auth.localhost:host-gateway"
       - "vdr.dpi.ait.ac.th:host-gateway"
-      - "cdn.dpi.ait.ac.th:host-gateway"
       - "vcga.dpi.ait.ac.th:host-gateway"
       - "issuer.dpi.ait.ac.th:host-gateway"
       - "verifier.dpi.ait.ac.th:host-gateway"
@@ -41,8 +39,8 @@ services:
       - ./deploy/base/mimoto-default.properties:/home/mosip/mimoto-default.properties
       - ./deploy/${INSTALLATION}/mimoto-issuers-config.json:/home/mosip/mimoto-issuers-config.json
       - ./deploy/base/mimoto-trusted-verifiers.json:/home/mosip/mimoto-trusted-verifiers.json
-      - ./deploy/base/credential-template.html:/home/mosip/credential-template.html
-      - ./deploy/ait/AITUniversity-ait-transcript-template.html:/home/mosip/AITUniversity-ait-transcript-template.html
+      - ./deploy/base/vdr/templates/credential-template.html:/home/mosip/credential-template.html
+      - ./deploy/ait/vdr/templates/AITUniversity-ait-transcript-template.html:/home/mosip/AITUniversity-ait-transcript-template.html
       - ./deploy/base/nginx.conf:/etc/nginx/conf.d/default.conf
     restart: unless-stopped
     labels:
