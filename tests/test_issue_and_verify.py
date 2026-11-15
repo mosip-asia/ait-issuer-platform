@@ -38,7 +38,7 @@ def mock_client(handler) -> tuple[httpx.Client, list[httpx.Request]]:
 def test_token_request_is_a_password_grant_on_the_smoke_client() -> None:
     client, seen = mock_client(lambda r: httpx.Response(200, json={"access_token": "t", "c_nonce": "n"}))
     endpoint = "https://as.example/realms/x/protocol/openid-connect/token"
-    token = iv.request_token(client, endpoint, "ait-2026-0001", "inji", "ait_transcript_vc_ldp")
+    token = iv.request_token(client, endpoint, "st120001", "password1234", "ait_transcript_vc_ldp")
     assert token == {"access_token": "t", "c_nonce": "n"}
     (req,) = seen
     assert req.method == "POST"
@@ -46,8 +46,8 @@ def test_token_request_is_a_password_grant_on_the_smoke_client() -> None:
     assert parse_qs(req.content.decode()) == {
         "grant_type": ["password"],
         "client_id": ["smoke"],
-        "username": ["ait-2026-0001"],
-        "password": ["inji"],
+        "username": ["st120001"],
+        "password": ["password1234"],
         "scope": ["ait_transcript_vc_ldp"],
     }
 
@@ -217,6 +217,29 @@ def test_verify_step_fails_when_the_credential_itself_does_not_verify() -> None:
     client, _ = mock_client(lambda r: httpx.Response(200, json=SIGNATURE_FAILED))
     problems = iv.verify_step(client, CREDENTIAL, TAMPER)
     assert problems and "SUCCESS" in problems[0], problems
+
+
+def test_student_id_credential_verification_and_tampered_copies() -> None:
+    student_id_vc = {
+        "type": ["VerifiableCredential", "AitStudentIdCredential"],
+        "credentialSubject": {
+            "id": "did:jwk:abc",
+            "studentId": "st125001",
+            "fullName": "Nara Wattanakul",
+            "faculty": "School of Engineering and Technology",
+            "academicProgram": "M.Eng Computer Science",
+            "studentStatus": "Active",
+            "issueDate": "2026-09-17",
+            "expiryDate": "2027-09-17",
+        },
+        "proof": {"type": "Ed25519Signature2020", "proofValue": "z..."},
+    }
+    client, seen = mock_client(lambda r: httpx.Response(200, json=SUCCESS))
+    assert iv.verify(client, student_id_vc) == "SUCCESS"
+    tampered = iv.tampered_copies(student_id_vc, ["fullName", "studentId"])
+    assert list(tampered) == ["id", "fullName", "studentId"]
+    assert tampered["fullName"]["credentialSubject"]["fullName"] != "Nara Wattanakul"
+    assert tampered["studentId"]["credentialSubject"]["studentId"] != "st125001"
 
 
 if __name__ == "__main__":

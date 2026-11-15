@@ -178,6 +178,41 @@
     },
     {
       "logo": "/assets/cert.png",
+      "name": "AIT Student ID",
+      "type": "AitStudentIdCredential",
+      "clientIdScheme": "did",
+      "definition": {
+        "purpose": "Verify the holder's AIT student ID card credential.",
+        "format": {
+          "ldp_vc": {
+            "proof_type": ["Ed25519Signature2020"]
+          }
+        },
+        "input_descriptors": [
+          {
+            "id": "student id credential",
+            "format": {
+              "ldp_vc": {
+                "proof_type": ["Ed25519Signature2020"]
+              }
+            },
+            "constraints": {
+              "fields": [
+                {
+                  "path": ["$.type"],
+                  "filter": {
+                    "type": "object",
+                    "pattern": "AitStudentIdCredential"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "logo": "/assets/cert.png",
       "name": "Land Registry",
       "type": "LandStatementCredential",
       "clientIdScheme":"did",
@@ -247,6 +282,14 @@
       "degreeAwarded",
       "dateGraduation",
       "faculty"
+    ],
+    "AitStudentIdCredentialRenderOrder": [
+      "studentId",
+      "fullName",
+      "faculty",
+      "academicProgram",
+      "studentStatus",
+      "expiryDate"
     ],
     "IncomeTaxAccountCredentialRenderOrder": [
       "fullName",

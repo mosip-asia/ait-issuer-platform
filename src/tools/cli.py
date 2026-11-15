@@ -11,6 +11,7 @@ import typer
 
 from tools import generate_csv as gc_mod
 from tools import issue_and_verify as iv_mod
+from tools import preview_template as pt_mod
 from tools import render_mimoto_issuers_config as rmc_mod
 
 app = typer.Typer(
@@ -96,7 +97,7 @@ issue_verify_app = typer.Typer(
 @issue_verify_app.command("issue")
 def issue_cmd(
     installation: Annotated[str, typer.Argument(help="Target installation (e.g. ait, hackathon)")],
-    persona: Annotated[str, typer.Argument(help="Keycloak username, e.g. ait-2026-0001")],
+    persona: Annotated[str, typer.Argument(help="Keycloak username, e.g. st120001")],
     scope: Annotated[str, typer.Option("--scope", "-s", help="Credential scope")] = "ait_transcript_vc_ldp",
     out: Annotated[
         Path,
@@ -153,7 +154,7 @@ def verify_cmd(
 @issue_verify_app.command("refused")
 def refused_cmd(
     installation: Annotated[str, typer.Argument(help="Target installation (e.g. ait, hackathon)")],
-    persona: Annotated[str, typer.Argument(help="Keycloak username, e.g. ait-2026-0002")],
+    persona: Annotated[str, typer.Argument(help="Keycloak username, e.g. st120002")],
     code: Annotated[str, typer.Argument(help="Expected OpenID4VCI error code, e.g. checklist_failed")],
     scope: Annotated[str, typer.Option("--scope", "-s", help="Credential scope")] = "ait_transcript_vc_ldp",
     certify_url: Annotated[str, typer.Option("--certify-url", help="Certify base URL")] = iv_mod.CERTIFY,
@@ -183,6 +184,8 @@ def refused_cmd(
 app.add_typer(generate_csv_app, name="generate-csv")
 app.add_typer(render_mimoto_app, name="render-mimoto")
 app.add_typer(issue_verify_app, name="issue-and-verify")
+if hasattr(pt_mod, "preview_template_app"):
+    app.add_typer(pt_mod.preview_template_app, name="preview-template")
 
 
 def main() -> None:

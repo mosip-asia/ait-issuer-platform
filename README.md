@@ -2,47 +2,191 @@
 
 An enterprise Verifiable Credential (VC) platform built on **MOSIP Inji Certify**, issuing W3C VCDM 2.0 credentials (JSON-LD with Ed25519Signature2020) via OpenID4VCI.
 
-The platform provides end-to-end credential lifecycle management: institutional clearance workflow, dynamic data resolution, cryptographic signing, credential design studio, and wallet issuance.
+The platform provides end-to-end credential lifecycle management: visual credential design, dynamic identity resolution, institutional clearance gating, cryptographic signing, Bitstring Status List revocation, and wallet issuance.
 
 ```mermaid
 flowchart TD
     subgraph Client["Holder Wallets & Verifiers"]
-        Wallet["Holder Wallet<br>(Inji Web :4004 / Mobile)"]
-        Verifier["Inji Verify :4007"]
+        Wallet["Holder Wallet<br>(wallet.localhost)"]
+        Verifier["Inji Verify<br>(verifier.localhost)"]
+    end
+
+    subgraph Edge["Edge Ingress (Traefik v3.7 :80)"]
+        Traefik["Traefik Edge Router<br>(Zero-Config *.localhost)"]
     end
 
     subgraph Platform["Institutional VC Platform (src/)"]
-        Certify["Inji Certify Engine<br>(OpenID4VCI :9091)"]
+        Certify["Inji Certify Engine<br>(issuer.localhost)"]
         Plugin["IssuerDataProviderPlugin<br>(Java 21 SPI)"]
-        Gateway["Institutional Clearance Workflow<br>(Gateway :8000)"]
-        VCLab["VC Lab Registry<br>(Contexts, Schemas, Templates)"]
+        Gateway["Institutional Clearance<br>(gateway.localhost)"]
+        VCLab["VC Lab Design Studio<br>(lab.localhost)"]
+        Portal["Demo Portal<br>(portal.localhost)"]
         Certify --- Plugin
         Plugin -->|1. POST /evaluations| Gateway
         Plugin -->|"2. GET /student/{sub}/transcript"| Adapter
     end
 
-    subgraph Upstream["Institutional Systems & Ingress"]
-        Adapter["SIS Data Adapter :8000"]
-        Auth["Keycloak / OAuth Server :9080"]
+    subgraph Upstream["Upstream Identity & Mock Services"]
+        Adapter["SIS Data Adapter<br>(adapter.localhost)"]
+        Auth["Keycloak IAM<br>(auth.localhost)"]
     end
 
+    Client -->|HTTP :80| Edge
+    Edge --> Wallet
+    Edge --> Verifier
+    Edge --> Certify
+    Edge --> VCLab
+    Edge --> Portal
+    Edge --> Auth
+    Edge --> Adapter
+    Edge --> Gateway
+
     Wallet -->|Bearer Token & Offer| Certify
-    Wallet -.->|Auth Code Flow| Auth
+    Wallet -.->|OAuth2 Authorization Code| Auth
     Wallet -->|Present Credential| Verifier
     Certify -.->|Fetch Schemas / Contexts| VCLab
 ```
 
 ---
 
-## 1. Repository Architecture
+## 1. Local Environment Overview (Zero-Port Architecture)
 
-The codebase is organized into modular components separating pure source code, container packaging, and deployment orchestration:
+The local development environment uses a **pure domain ingress architecture** powered by **Traefik v3.7** on standard HTTP **port 80**.
+
+### Why No Port Numbers to Memorize?
+Under [RFC 6761](https://tools.ietf.org/html/rfc6761), every modern operating system and web browser (Chrome, Firefox, Safari, Edge on Linux, macOS, and Windows) natively resolves any subdomain ending in `*.localhost` directly to `127.0.0.1`.
+- **No `/etc/hosts` changes required** for local development.
+- **Zero host port conflicts**: Downstream service containers do not publish ports directly to your host machine. Only Traefik listens on port 80 (and 8088 for its dashboard).
+- **Docker-native isolation**: Containers communicate with each other over internal Docker bridge networks (`certify-network`, `mock-network`, `trust-network`, etc.).
+
+### Local Service Directory
+
+| Service | Clean Local URL (`*.localhost`) | Internal Port | Role & Capabilities |
+|---|---|---|---|
+| **Traefik Dashboard** | [http://traefik.localhost](http://traefik.localhost) (or [http://localhost:8088](http://localhost:8088)) | `8080` | Live edge ingress routing rules & container health |
+| **VC Lab Studio** | [http://lab.localhost](http://lab.localhost) | `4200` | Visual credential design, live Velocity template preview, schema explorer |
+| **Student Portal** | [http://portal.localhost/student/login](http://portal.localhost/student/login) | `4100` | Student requests transcript & ID credentials |
+| **Registrar Portal** | [http://portal.localhost/registrar/login](http://portal.localhost/registrar/login) | `4100` | Academic registrar clearance approval & revocation |
+| **Inji Web Wallet** | [http://wallet.localhost](http://wallet.localhost) | `3004` | Holder digital wallet to claim, view, and export credentials |
+| **Credential Verifier** | [http://verifier.localhost](http://verifier.localhost) | `8000` | Branded verifier UI with camera QR scanner & JSON drag-and-drop |
+| **Inji Certify** | [http://issuer.localhost](http://issuer.localhost) | `80` | OpenID4VCI credential issuer engine & discovery metadata |
+| **Certify Swagger UI** | [http://issuer.localhost/v1/certify/swagger-ui/index.html](http://issuer.localhost/v1/certify/swagger-ui/index.html) | `80` | Interactive API exploration & Pre-Authorized Code testing |
+| **Keycloak IAM** | [http://auth.localhost](http://auth.localhost) | `8080` | Identity provider & token authority ([Admin Console](http://auth.localhost/admin/): `admin` / `admin`) |
+| **SIS Adapter** | [http://adapter.localhost](http://adapter.localhost) | `8000` | Mock SIS student record API (`/student/{sub}/transcript`) |
+| **Clearance Gateway** | [http://gateway.localhost](http://gateway.localhost) | `8000` | Institutional checklist evaluator (`/evaluations`) |
+| **VDR (Schemas)** | [http://vdr.localhost](http://vdr.localhost) | `80` | Public JSON-LD contexts & vocabularies |
+| **CDN (Assets)** | [http://cdn.localhost](http://cdn.localhost) | `80` | Static brand assets, university seals, and logos |
+| **VCGA (Catalog)** | [http://vcga.localhost](http://vcga.localhost) | `80` | Inji Mimoto trusted issuer registry catalog |
+
+> [!TIP]
+> **LAN and Canonical Production Domain Mirroring:**
+> Traefik also routes `*.lan` (e.g. `http://wallet.lan`, `http://issuer.lan`) and mirrors canonical production domains `*.dpi.ait.ac.th` (e.g. `http://issuer.dpi.ait.ac.th`) so that container network aliases and local testing match production behavior.
+
+---
+
+## 2. Quickstart: Up and Running in 2 Minutes
+
+### Prerequisites
+- **Docker Desktop** (Compose v2) with Linux containers or WSL2 (on Windows).
+- **Python 3.11+** and [`uv`](https://github.com/astral-sh/uv) (for running local tools and test suites).
+- Standard CLI tools: `curl`, `jq`.
+
+### 1. Boot the Stack
+From the repository root:
+```bash
+# 1. Initialize environment configuration
+cp .env.example .env
+
+# 2. Deploy the full platform stack (builds SPI plugin, runs DB migrations, launches Traefik and all services)
+./scripts/deploy.sh ait
+```
+
+`./scripts/deploy.sh` automatically:
+- Builds the Java SPI plugin via an isolated compiler container (no host Maven required).
+- Synchronizes GitOps credential templates into PostgreSQL via the `template-sync` init container.
+- Boots Traefik, Certify, Keycloak, Portal, Wallet, Verifier, and mock services.
+- Executes an automated OpenID4VCI post-deployment issuance smoke test.
+
+### 2. Verify Stack Readiness
+Run the post-deployment smoke test anytime:
+```bash
+./scripts/smoke-test.sh
+```
+*Expected: Requests pre-authorized issuance for `st120001`, exchanges token with Certify, signs with ephemeral DID key, and cryptographically verifies the issued W3C Verifiable Credential.*
+
+---
+
+## 3. Developer Inner Loops & Everyday Workflows
+
+### Inner Loop 1: Visual Credential Design in VC Lab Studio
+When adding or styling a new credential:
+1. Open the **VC Lab Studio** dashboard at [http://lab.localhost](http://lab.localhost).
+2. Explore active JSON-LD schemas (`contexts/`) and Inji display configurations (`credentials/`).
+3. Preview Velocity HTML templates in real time against student personas:
+   ```bash
+   uv run vc-lab-preview --installation ait --student st120001
+   ```
+4. Inspect the generated printable card layout and dynamic QR codes in `preview.html`.
+
+### Inner Loop 2: Fast SPI Plugin Development (`src/issuer/`)
+When modifying the Java SPI Data-Provider Plugin (`src/issuer/`):
+- **Fast Recompile & Reload (~2s):**
+  ```bash
+  docker compose -f compose.certify-build.yaml run --rm plugin-builder && docker compose restart certify
+  ```
+- **Run In-Memory Java Unit Tests (~3s):**
+  ```bash
+  cd src/issuer && mvn test
+  # Or via Docker:
+  docker run --rm -v "$PWD/src/issuer:/src" -w /src maven:3.9-eclipse-temurin-21 mvn test
+  ```
+
+### Inner Loop 3: GitOps Declarative Credential Sync (`certify-template-sync`)
+Credential blueprints are declarative JSON files under `deploy/<installation>/credentials/`.
+- **Dry-run inspect template changes:**
+  ```bash
+  uv run certify-template-sync --dry-run
+  ```
+- **Apply changes directly to PostgreSQL (zero downtime):**
+  ```bash
+  uv run certify-template-sync --apply
+  ```
+  Updating a template only executes an SQL `UPSERT` on `certify.credential_config` without wiping signing keys (`key_store`), ledger audit records (`ledger`), or revocation lists (`status_list`).
+
+### Inner Loop 4: Headless API Exploration & Swagger UI
+You do not need Keycloak or a wallet to test Certify endpoints:
+- **Interactive Swagger UI:** [http://issuer.localhost/v1/certify/swagger-ui/index.html](http://issuer.localhost/v1/certify/swagger-ui/index.html)
+- **OpenAPI 3.0 Documentation:** [http://issuer.localhost/v1/certify/v3/api-docs](http://issuer.localhost/v1/certify/v3/api-docs)
+- **Pre-Authorized Issuance via cURL:**
+  ```bash
+  # 1. Stage issuance offer:
+  OFFER_URI=$(curl -s -X POST http://issuer.localhost/v1/certify/pre-authorized-data \
+    -H "Content-Type: application/json" \
+    -d '{"credential_configuration_id": "ait-transcript", "claims": {"registrationNo": "st120001"}}' \
+    | jq -r .credential_offer_uri)
+
+  # 2. Extract offer ID and fetch code:
+  OFFER_ID=$(echo "$OFFER_URI" | sed 's/.*credential-offer-data%2F//')
+  PRE_AUTH_CODE=$(curl -s "http://issuer.localhost/v1/certify/credential-offer-data/$OFFER_ID" \
+    | jq -r '.grants["urn:ietf:params:oauth:grant-type:pre-authorized_code"]["pre-authorized_code"]')
+
+  # 3. Exchange for Access Token:
+  ACCESS_TOKEN=$(curl -s -X POST http://issuer.localhost/v1/certify/oauth/token \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    -d "grant_type=urn:ietf:params:oauth:grant-type:pre-authorized_code&pre-authorized_code=$PRE_AUTH_CODE" \
+    | jq -r .access_token)
+  ```
+
+---
+
+## 4. Repository Layout & Module Architecture
 
 ```
 ait-transcript/
 ├── scripts/                               # AUTOMATION & PIPELINES
 │   ├── deploy.sh                          # Deploy or update platform compose stack
 │   ├── release.sh                         # Build and release artifacts/images
+│   ├── check.sh                           # Pre-push validation runner (tests + data guard)
 │   └── smoke-test.sh                      # Post-deployment OpenID4VCI smoke test
 │
 ├── deploy/                               # DEPLOYMENT OVERLAYS & PLATFORM RUNTIME
@@ -63,7 +207,7 @@ ait-transcript/
 │   ├── issuer/                           # Java 21 SPI Data-Provider Plugin (pom.xml + src/)
 │   ├── portal/                           # Demonstration Portal (Registrar & Student UI)
 │   ├── tools/                            # Developer utilities (CSV generators, mock rendering)
-│   ├── vc-lab/                           # Visual Credential Studio & Designer (Planned)
+│   ├── vc-lab/                           # Visual Credential Studio & Designer (FastAPI + Preview)
 │   └── verifier/                         # Custom Branded Credential Verifier UI & API
 │
 ├── mock/                                 # OFFLINE DEMO MOCKS
@@ -74,19 +218,24 @@ ait-transcript/
 │
 ├── docker/                               # CONTAINER PACKAGING RECIPES
 │   ├── Dockerfile.certify                # Bakes src/issuer SPI plugin into Inji Certify
-│   └── Dockerfile.template-sync          # Packages certify_template_sync (uv + Alpine)
+│   ├── Dockerfile.template-sync          # Packages certify_template_sync (uv + Alpine)
+│   └── Dockerfile.vc-lab                 # Packages VC Lab Studio & Template Designer
 │
-├── compose.yaml                          # Core Issuer Platform compose (Certify, DB, Nginx, VDR)
-├── compose.verify.yaml                   # Verifier stack compose (custom Verifier + Verify service)
-├── compose.demo.yaml                     # Full demo stack compose (Inji Web mock wallet, demo app, Keycloak)
-├── compose.dev.yaml                      # Loop 3: Hot JAR mount dev overlay (~3s reload)
+├── compose.yaml                          # Root orchestrator (includes certify, verify, web-wallet, trust, traefik)
+├── compose.certify.yaml                  # Core Inji Certify Issuer Engine (internal DB & ingress Nginx)
+├── compose.verify.yaml                   # Generic Inji Verifier stack (UI, backend, session DB)
+├── compose.web-wallet.yaml               # Inji Web Wallet UI
+├── compose.trust.yaml                    # Trust Registry (Static VDR contexts & VCGA issuer metadata)
+├── compose.mock.yaml                     # Stand-in mock services (Keycloak, adapter, portal)
+├── compose.traefik.yaml                  # Traefik v3.7 Edge Ingress Router (*.localhost)
+├── compose.certify-build.yaml            # Compiler container for Java SPI plugin
 ├── .env.example                          # Root developer environment configuration
 └── pyproject.toml / uv.lock              # Modern Python dependency management (uv)
 ```
 
 ---
 
-## 2. How Credential Issuance Works (Lifecycle & Data Flow)
+## 5. How Credential Issuance Works (Lifecycle & Data Flow)
 
 Understanding the complete OpenID4VCI credential lifecycle requires four architectural pillars:
 
@@ -146,74 +295,6 @@ sequenceDiagram
    - **Cryptographic Proof:** The document is canonicalized into RDF triples (URDNA2015) and signed with the Issuer's private key (`Ed25519Signature2020`).
    - **Delivery:** The finalized W3C VC is delivered to the wallet. When Inji Verify checks the credential later, it fetches the public `@context` and verifies the status bit to ensure it has not been revoked.
 
-### Testing APIs & Data Sources Without OAuth/VDR
-
-If you only want to verify that your Data Source or Adapter is integrated successfully, you **do not need Keycloak, a wallet, or a VDR**.
-
-#### 1. Interactive Swagger UI
-Inji Certify includes an interactive Swagger UI for exploring and testing endpoints:
-* **Swagger UI:** [http://localhost:9091/v1/certify/swagger-ui/index.html](http://localhost:9091/v1/certify/swagger-ui/index.html)
-* **OpenAPI Spec:** [http://localhost:9091/v1/certify/v3/api-docs](http://localhost:9091/v1/certify/v3/api-docs)
-
-#### 2. Official OpenID4VCI Pre-Authorized Code Flow (Headless Testing)
-Official Inji Certify supports the **Pre-Authorized Code Flow** natively. Certify acts as its own token authority, allowing automated server-to-server issuance testing without human login:
-
-```bash
-# 1. Pre-authorize issuance for a student (creates credential offer):
-OFFER_URI=$(curl -s -X POST http://localhost:9091/v1/certify/pre-authorized-data \
-  -H "Content-Type: application/json" \
-  -d '{"credential_configuration_id": "ait-transcript", "claims": {"registrationNo": "st125001"}}' \
-  | jq -r .credential_offer_uri)
-
-# 2. Extract offer ID and fetch the pre-authorized code:
-OFFER_ID=$(echo "$OFFER_URI" | sed 's/.*credential-offer-data%2F//')
-PRE_AUTH_CODE=$(curl -s "http://localhost:9091/v1/certify/credential-offer-data/$OFFER_ID" \
-  | jq -r '.grants["urn:ietf:params:oauth:grant-type:pre-authorized_code"]["pre-authorized_code"]')
-
-# 3. Exchange code for an Access Token directly with Inji Certify:
-ACCESS_TOKEN=$(curl -s -X POST http://localhost:9091/v1/certify/oauth/token \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=urn:ietf:params:oauth:grant-type:pre-authorized_code&pre-authorized_code=$PRE_AUTH_CODE" \
-  | jq -r .access_token)
-```
-This tests the full running Inji Certify engine, real database templates, DataProviderPlugin, and Data Source without external OAuth or VDR dependencies.
-
-#### 3. One-Command Headless Issuance Smoke Test (`scripts/smoke-test.sh`)
-To verify the complete issuer engine, GitOps template, and SIS connectivity end-to-end without Python or OAuth dependencies, run the included pure bash smoke test:
-
-```bash
-# Run smoke test on local deployment:
-./scripts/smoke-test.sh
-
-# Target a remote deployment (e.g. over NetBird VPN):
-./scripts/smoke-test.sh http://100.x.y.z:9091 st123456 ait-transcript
-```
-
----
-
-### Declarative GitOps Credential Configuration
-
-Credential templates and configurations are managed natively as **GitOps declarative JSON artifacts** under `deploy/<installation>/credentials/` (e.g. `deploy/ait/credentials/ait-transcript.json`).
-
-* **Human-Readable & Version-Controlled:** Templates are plain JSON files. No base64-encoded strings or manual SQL seed scripts.
-* **Automatic Init Synchronization:** When executing `docker compose up -d`, the `template-sync` init container runs first, executing an idempotent SQL `UPSERT` into PostgreSQL (`ON CONFLICT (credential_config_key_id) DO UPDATE`) before `certify` boots.
-* **Zero Downtime & Safe Updates:** Updating a template in Git only refreshes the `credential_config` table without wiping runtime signing keys (`key_store`), audit logs (`ledger`), or revocation lists (`status_list`).
-* **Manual Sync / Dry Run:**
-  ```bash
-  # Dry-run inspect template changes:
-  uv run certify-template-sync --dry-run
-
-  # Apply changes directly to PostgreSQL:
-  uv run certify-template-sync --apply
-
-  # Or execute sync via Docker Compose:
-  docker compose run --rm template-sync
-  ```
-
-> [!TIP]
-> **Remote Access on GCP (NetBird VPN):**
-> On the deployed GCP environment, port `9091` is closed to the public internet by the GCP cloud firewall. Authorized engineers, campus systems, and administrative batch scripts reach Swagger UI and the Pre-Authorized API directly over the **NetBird Zero-Trust Mesh VPN** (`http://<vm-netbird-ip>:9091/...`) without exposing unauthenticated endpoints publicly. See [Section 7: Deploying to GCP](#7-deploying-to-gcp).
-
 ---
 
 ### Security Architecture: Public vs. Private Ingress Boundary
@@ -223,7 +304,7 @@ Because Inji Certify serves both public wallet protocols and internal cryptograp
 ```mermaid
 flowchart TD
     Internet["Public Internet (Holders & Verifiers)"] --> Ingress["Ingress Gateway / Reverse Proxy<br>(Nginx / Caddy / Cloudflare)"]
-    
+
     subgraph PublicEndpoints["ALLOWED: Public Wallet & Verifier Endpoints"]
         IssuerMeta["GET /.well-known/openid-credential-issuer"]
         Issuance["POST /v1/certify/issuance/credential<br>(Strictly locked by Keycloak Bearer Token + Proof JWT)"]
@@ -231,7 +312,7 @@ flowchart TD
         Contexts["GET /contexts/*<br>(Public JSON-LD schemas)"]
         JWKS["GET /.well-known/did.json / jwks.json"]
     end
-    
+
     subgraph PrivateEndpoints["BLOCKED: Private Administrative & Test Endpoints"]
         PreAuth["POST /v1/certify/pre-authorized-data<br>(Pre-issuance staging - internal admin only)"]
         Swagger["/v1/certify/swagger-ui/* & /v3/api-docs<br>(Internal API docs)"]
@@ -247,97 +328,26 @@ flowchart TD
     PrivateEndpoints --> CertifyEngine
 ```
 
-#### Why Student Records Cannot Be Stolen on the Public Path:
-1. **Cryptographic Identity Anchor (No User-Supplied IDs):**
-   On the public issuance endpoint (`/issuance/credential`), a caller cannot pass a `student_id` in the body. Inji Certify strictly reads the authenticated `sub` from the cryptographically signed Keycloak access token.
-2. **Proof-of-Possession:**
-   The wallet must sign a Proof JWT using its own private key bound to the ephemeral `c_nonce`. Stolen tokens cannot be replayed.
-3. **Institutional Clearance Gate:**
-   Certify queries the Gateway (`POST /evaluations`). If the student has holds, unpaid fees, or their degree is pending, issuance halts with `403 checklist_failed`.
-4. **Pre-Authorized Endpoint Protection:**
-   `POST /pre-authorized-data` allows creating issuance offers without human login for server-to-server batch jobs. **In production, this endpoint must be blocked at the ingress gateway** and accessible only via private network (NetBird VPN), campus VPC, or the Registrar Portal.
-
 ---
 
-## 3. Prerequisites
-
-- **Docker Desktop** (Compose v2) with Linux containers or WSL2 (on Windows).
-- **Python 3.11+** and [`uv`](https://github.com/astral-sh/uv) (recommended for running tests and scripts).
-- `jq`, `curl`, `awk` on the host.
-- **Windows:** Run commands inside WSL2, not Git Bash, to avoid path-mangling issues on volume bind-mounts.
-
----
-
-## 4. Deploy locally
-
-Run every command from the repository root. Depending on your task, you can start the **Core Issuer Platform** (fast, focused) or the **Full End-to-End Demo** (with wallet, registrar portal, and verifier).
-
-### Mode A: Core Issuer Platform (Developer Fast-Track)
-
-Spins up the core Verifiable Credential Platform (`certify`, `certify-nginx`, `database`, `vdr`, and `template-sync` init container):
-
-```bash
-# 1. Setup local environment
-cp .env.example .env
-
-# 2. Build the SPI plugin via the compiler container (no host Maven/Java needed)
-docker compose -f compose.build.yaml run --rm plugin-builder
-
-# 3. Start the platform
-docker compose up -d
-```
-
-#### Fast Inner Loops for SPI Plugin Development:
-- **Compiler Container Build & Reload (~2s):**
-  Recompile the JAR into `src/issuer/target/` and reload Certify without rebuilding the image:
-  ```bash
-  docker compose -f compose.build.yaml run --rm plugin-builder && docker compose restart certify
-  ```
-- **In-Memory Unit Tests (~3s):**
-  ```bash
-  cd src/issuer && mvn test
-  # Or via Docker:
-  docker run --rm -v "$PWD/src/issuer:/src" -w /src maven:3.9-eclipse-temurin-21 mvn test
-  ```
-- **Multi-Stage Production Image Build:**
-  To build the standalone release image using the 2-stage Dockerfile:
-  ```bash
-  docker build -f docker/Dockerfile.certify -t ghcr.io/mosip-asia/ait-certify:local .
-  ```
-
----
-
-### Mode B: Full End-to-End Demo (Stakeholder Journey)
-
-Brings up the complete multi-service demonstration journey (Inji Web Wallet, Keycloak OAuth Server, Registrar Portal, and Inji Verify):
-
-```bash
-./scripts/deploy.sh ait
-```
-
-`./scripts/deploy.sh` builds the plugin JAR via an isolated compiler container (if not present), applies database migrations, starts Inji Certify, Certify Nginx, VDR, and template-sync, waits for health, and executes the post-deployment issuance smoke test.
-
-#### To Reset or Switch Installation:
-```bash
-./scripts/deploy.sh ait --wipe          # Reset AIT stack with clean database
-./scripts/deploy.sh hackathon --wipe    # Switch to Hackathon profile
-```
-
-#### To Run Full Demo Stack (Mock Wallet & Verifier):
-```bash
-docker compose -f compose.yaml -f compose.verify.yaml -f compose.demo.yaml up -d
-```
-
----
-
-## 5. How to test
+## 6. How to Test
 
 All test suites are automated and runnable locally on your host or in CI.
 
-### Unit & Host Tests (Run without Docker)
-
+### Fast Pre-Push Validation (`scripts/check.sh`)
+Run the unified project validation script before committing or pushing:
 ```bash
-# Host verification tests:
+bash scripts/check.sh
+```
+This runs:
+1. **Sensitive Data Guard**: Ensures no `.env`, private keys, or CSV student data are tracked.
+2. **Docker Compose Validation**: Ensures all 7 Compose manifests are syntactically valid.
+3. **JSON Schema Verification**: Ensures all schemas, templates, and fixtures are well-formed.
+4. **Host Test Suite**: Runs all in-process Python verification suites.
+
+### Unit & Host Test Directory
+```bash
+# Host verification tests (no Docker required):
 python3 src/tools/test_generate_csv.py
 python3 src/tools/test_render_mimoto_issuers_config.py
 python3 src/verifier/test_verifier.py
@@ -351,6 +361,9 @@ python3 tests/test_inji_web_vc_readiness.py
 .venv/bin/python tests/test_courses.py
 .venv/bin/python src/gateway/tests/test_credential_types.py
 .venv/bin/python src/gateway/tests/test_evaluations.py
+.venv/bin/python src/portal/test_requests.py
+.venv/bin/python src/vc-lab/test_main.py
+.venv/bin/python src/vc-lab/test_preview_template.py
 
 # Run Java plugin unit tests:
 cd src/issuer && mvn test
@@ -358,70 +371,54 @@ cd src/issuer && mvn test
 
 | Module | Test Target | What It Verifies |
 |---|---|---|
+| **VC Lab** | `src/vc-lab/test_main.py`, `test_preview_template.py` | FastAPI dashboard, Velocity template engine, PNG QR generator |
 | **Gateway** | `src/gateway/tests/test_credential_types.py` | Credential clearance rules, hold checks, zero balance, conferral predicates |
 | **Gateway** | `src/gateway/tests/test_evaluations.py` | In-process evaluation of `POST /evaluations` across all installation personas |
 | **Issuer Plugin** | `src/issuer/` (`mvn test`) | SPI `fetchData()` contract, HTTP retry/timeouts, strict JSON escaping, trace keys |
 | **Adapter Contract** | `tests/test_adapter.py` | Validates OpenAPI contracts (`adapter-openapi.yaml`) against VCDM 2.0 schemas |
+| **Portal** | `src/portal/test_requests.py` | Student request workflow, registrar approvals, and active VC re-issue guards |
 | **Verifier** | `src/verifier/test_verifier.py` | Verifier UI branding overlay, CSS theme variables, SVG logo |
 | **Auth Server** | `tests/test_authorization_server.py` | Validates OIDC issuer URLs, Keycloak realm mappings, and public endpoints |
 | **Installations** | `tests/test_installations.py` | Verifies identities across CSV, Keycloak realms, and smoke personas |
 
 ---
 
-### Integration Smoke Tests (Requires Running Stack)
+## 7. Stakeholder End-to-End Walkthrough
 
-A smoke test verifies real cryptographic issuance, signature verification, and ledger recording.
-
-```bash
-./scripts/smoke-test.sh
-```
-
----
-
-## 6. Local Access & Stakeholder Walkthrough
-
-When running the Full Demo Stack:
-
-### Local Port Endpoints
-
-| Service | Local URL | Role |
-|---|---|---|
-| **Student Portal** | [http://localhost:4100/student/login](http://localhost:4100/student/login) | Student requests transcript |
-| **Registrar Portal** | [http://localhost:4100/registrar/login](http://localhost:4100/registrar/login) | Registrar approves or revokes issuance |
-| **Inji Web Wallet** | [http://localhost:4004](http://localhost:4004) | Mock digital wallet container to claim & store credentials |
-| **Credential Verifier** | [http://localhost:4007](http://localhost:4007) | Custom branded verifier with camera QR scanner & drag-and-drop validation |
-| **Inji Certify** | [http://localhost:9091](http://localhost:9091) | OpenID4VCI credential issuer & metadata |
-| **Inji Certify Swagger UI** | [http://localhost:9091/v1/certify/swagger-ui/index.html](http://localhost:9091/v1/certify/swagger-ui/index.html) | Interactive API exploration & Swagger testing |
-| **Keycloak Admin** | [http://localhost:9080/admin/](http://localhost:9080/admin/) | Identity provider (`admin` / `admin`) |
-
-### Stakeholder Walkthrough:
-1. Open **Student Portal** ([http://localhost:4100/student/login](http://localhost:4100/student/login)) $\rightarrow$ Select `Nara Wattanakul` (`ait-2026-0001`) $\rightarrow$ Click **Request my transcript VC**.
-2. Open **Registrar Portal** ([http://localhost:4100/registrar/login](http://localhost:4100/registrar/login)) $\rightarrow$ Sign in as Academic Registrar $\rightarrow$ Click **Approve**.
-3. Return to Student Portal $\rightarrow$ Click **Claim your credential** $\rightarrow$ Redirects to **Inji Web**.
-4. In Inji Web, sign in (`ait-2026-0001` / `inji`), select **AIT University**, and download the **AIT Transcript**.
-5. Open **Credential Verifier** ([http://localhost:4007](http://localhost:4007)) $\rightarrow$ Upload the downloaded credential JSON or scan QR code $\rightarrow$ Verdict reports **Authentic Credential Verified**.
+To experience the complete stakeholder journey:
+1. Open **Student Portal** ([http://portal.localhost/student/login](http://portal.localhost/student/login)) $\rightarrow$ Select `Nara Wattanakul` (`st120001`) $\rightarrow$ Click **Request my transcript VC**.
+2. Open **Registrar Portal** ([http://portal.localhost/registrar/login](http://portal.localhost/registrar/login)) $\rightarrow$ Sign in as Academic Registrar $\rightarrow$ Click **Approve**.
+3. Return to Student Portal $\rightarrow$ Click **Claim your credential** $\rightarrow$ Redirects to **Inji Web** ([http://wallet.localhost](http://wallet.localhost)).
+4. In Inji Web, sign in (`st120001` / `password1234`), select **AIT University**, and download the **AIT Transcript**.
+5. Open **Credential Verifier** ([http://verifier.localhost](http://verifier.localhost)) $\rightarrow$ Upload the downloaded credential JSON or scan QR code $\rightarrow$ Verdict reports **Authentic Credential Verified**.
+6. Design and preview credential templates in **VC Lab Studio** ([http://lab.localhost](http://lab.localhost)).
 
 ---
 
-## 7. Deploying to GCP
+## 8. Deploying to GCP & Production Domains
 
 The demonstration environment is continuously deployed to a Google Compute Engine VM (`ait-vc-transcript-demo`) behind Caddy (TLS) and NetBird Zero-Trust Mesh.
 
-### Public Web Ingress (TLS / Caddy)
+### Production Domain Architecture (*.dpi.ait.ac.th)
+Permanent institutional endpoints for cryptographic schema resolution, issuance, and verification:
+- **Issuer Engine:** `https://issuer.dpi.ait.ac.th`
+- **Credential Verifier:** `https://verifier.dpi.ait.ac.th` (or `https://verifer.dpi.ait.ac.th`)
+- **Inji Web Wallet:** `https://wallet.dpi.ait.ac.th`
+- **VDR (Schemas & Contexts):** `https://vdr.dpi.ait.ac.th`
+- **VCGA (Issuers Catalog):** `https://vcga.dpi.ait.ac.th`
+- **CDN (Brand Assets & Logos):** `https://cdn.dpi.ait.ac.th`
 
-These public endpoints are internet-facing for student holders and external verifiers:
-
+### Staging Demo Web Ingress (TLS / Caddy)
+These public endpoints are internet-facing on the demo VM for student holders and external verifiers:
 - **Student Portal:** `https://transcript-demo.ait-vc.dpi.ait.ac.th/student/login`
 - **Registrar Portal:** `https://transcript-demo.ait-vc.dpi.ait.ac.th/registrar/login`
-- **Inji Web Wallet:** `https://wallet.transcript-demo.ait-vc.dpi.ait.ac.th`
+- **Inji Web Wallet:** `https://wallet.transcript-demo.ait.ac.th`
 - **Inji Verify:** `https://verify.transcript-demo.ait-vc.dpi.ait.ac.th`
 - **Issuer Metadata & Issuance:** `https://api.transcript-demo.ait-vc.dpi.ait.ac.th/.well-known/openid-credential-issuer` (routed via Caddy to `certify-nginx:8090`)
 
 ### Private Administrative & API Access via NetBird VPN
-
 To protect sensitive administrative functions and pre-authorized issuance, internal ports are **never exposed to the public internet**:
-
-- **GCP Firewall Policy:** Only inbound ports `80` and `443` are open to `0.0.0.0/0`. Direct engine ports (`9091` Certify, `8000` Adapter, `5432` PostgreSQL, `9080` Keycloak Admin) are blocked from public internet access.
+- **GCP Firewall Policy:** Only inbound ports `80` and `443` are open to `0.0.0.0/0`. Direct engine ports are blocked from public internet access.
 - **NetBird Mesh Overlay:** The GCP VM joins the campus private NetBird WireGuard network (alongside campus infrastructure like `ait-itserv-vm.netbird.selfhosted`).
 - **Zero-Trust Access:** Authorized administrators, engineers, and campus backend systems connected to NetBird access internal services directly using the VM's NetBird IP (`100.x.y.z`) or hostname without bastion hosts or SSH tunneling:
   - **Interactive Swagger UI:** `http://<vm-netbird-ip>:9091/v1/certify/swagger-ui/index.html`
@@ -429,10 +426,7 @@ To protect sensitive administrative functions and pre-authorized issuance, inter
   - **SIS Adapter Contract Verification:** `http://<vm-netbird-ip>:8000/student/{sub}/eligibility`
   - **Health & Actuator Metrics:** `http://<vm-netbird-ip>:9091/v1/certify/actuator/health`
 
-This ensures that administrative pre-issuance and automated test harnesses remain fully functional remotely while strictly enforcing the public vs. private ingress boundary.
-
 ### Continuous Deployment
-
 Continuous Deployment is automated via GitHub Actions (`.github/workflows/cd.yml`) across three environments:
 - **dev**: Deployed on tag push (`v*`) cut from `dev` branch to the development VM.
 - **uat**: Deployed on fast-forward push to `uat` branch (`scripts/release.sh promote uat`).
@@ -442,14 +436,15 @@ Target hosts execute `scripts/deploy.sh` over an encrypted NetBird mesh network 
 
 ---
 
-## 8. Documentation & References
+## 9. Documentation Index
 
-- [Documentation Index (`docs/OVERVIEW.md`)](./docs/OVERVIEW.md)
-- [CI/CD & Deployment Architecture (`docs/deployment.md`)](./docs/deployment.md)
-- [Institutional VC Issuer Proposal (`docs/project/proposal-issuer.md`)](./docs/project/proposal-issuer.md)
-- [Verifier Scope & Architecture (`docs/project/verifier-scope.md`)](./docs/project/verifier-scope.md)
+- [Documentation Overview (`docs/OVERVIEW.md`)](./docs/OVERVIEW.md)
+- [How to Add a New Verifiable Credential (`docs/guides/how-to-add-vc.md`)](./docs/guides/how-to-add-vc.md)
+- [How to Add Student ID Card VC (`docs/guides/how-to-add-student-card-vc.md`)](./docs/guides/how-to-add-student-card-vc.md)
+- [VC Lab Studio & Template Designer (`src/vc-lab/README.md`)](./src/vc-lab/README.md)
 - [Architecture & Topology (`docs/architecture/vc-stack.md`)](./docs/architecture/vc-stack.md)
 - [ADR 0001: Approval Gate Beside the Data Path](./docs/adr/0001-approval-gate-beside-the-data-path.md)
+- [CI/CD & Deployment Architecture (`docs/deployment.md`)](./docs/deployment.md)
 - [Inji Certify Standalone Deployment (`deploy/README.md`)](./deploy/README.md)
 - [Gateway Workflow Engine (`src/gateway/README.md`)](./src/gateway/README.md)
-- [VC Lab Designer (`src/vc-lab/README.md`)](./src/vc-lab/README.md)
+- [Verifier Custom Theme & Overlay (`src/verifier/README.md`)](./src/verifier/README.md)

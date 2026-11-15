@@ -12,14 +12,14 @@ STATUS_PENDING = "pending"
 STATUS_APPROVED = "approved"
 STATUS_REJECTED = "rejected"
 
-# Same vars as compose.demo.yaml's demo-app service — localhost
+# Same vars as compose.mock.yaml's demo-app service — localhost
 # defaults for local dev, set in .env for a public deployment.
-INJI_WEB_URL = os.environ.get("INJI_WEB_URL", "http://localhost:4004")
-INJI_VERIFY_URL = os.environ.get("INJI_VERIFY_URL", "http://localhost:4007")
+INJI_WEB_URL = os.environ.get("INJI_WEB_URL", "http://wallet.localhost")
+INJI_VERIFY_URL = os.environ.get("INJI_VERIFY_URL", "http://verifier.localhost")
 # The installation's Authorization Server, from its authorization-server.env (Compose's env_file); no host default.
 AUTH_SERVER_PUBLIC_URL = os.environ.get("AUTH_SERVER_PUBLIC_URL", "")
 AUTH_SERVER_WALLET_CLIENT_ID = os.environ.get("AUTH_SERVER_WALLET_CLIENT_ID", "")
-KEYCLOAK_DEMO_PASSWORD = "inji"
+KEYCLOAK_DEMO_PASSWORD = "password1234"
 # Keycloak's browser flow has the Cookie/SSO step disabled (see deploy/ait/
 # keycloak-realm.json's "browser-no-sso" flow), so switching to a *different* degree's
 # identity in the same tab needs an explicit sign-out first — otherwise Keycloak refuses

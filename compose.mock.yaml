@@ -1,0 +1,109 @@
+# ==============================================================================
+# Offline Development & Stand-in Mock Services Stack
+# ==============================================================================
+# Isolated Stack for Offline Testing & Stand-in Dependencies:
+# - Stand-in Keycloak OAuth Server & Nginx (port 9080)
+# - Stand-in SIS Mock Adapter (port 8082)
+# - Approval Gateway (port 8000)
+# - Demo Portal (Registrar & Student UI) (port 4100)
+#
+# Network: mock-network (isolated)
+# Integration: Bridges to Certify/Wallet via host ports / host.docker.internal
+# ==============================================================================
+name: ${COMPOSE_PROJECT_NAME}-mock
+
+networks:
+  mock-network:
+    name: ${COMPOSE_PROJECT_NAME}-mock-net
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1
+    command:
+      [
+        "start-dev",
+        "--import-realm",
+        "--health-enabled=true",
+        "--metrics-enabled=true",
+      ]
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+      - KC_HOSTNAME_STRICT=false
+      - KC_PROXY_HEADERS=xforwarded
+      - KC_HTTP_ENABLED=true
+      - KC_HTTP_PORT=8080
+    volumes:
+      - ./deploy/${INSTALLATION}/mock/keycloak-realm.json:/opt/keycloak/data/import/realm.json:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.auth.rule=Host(`auth.localhost`) || Host(`auth.lan`) || Host(`auth.dpi.ait.ac.th`)"
+      - "traefik.http.services.auth.loadbalancer.server.port=8080"
+    restart: unless-stopped
+    networks:
+      mock-network:
+        aliases:
+          - keycloak
+          - keycloak-server
+
+  demo-app:
+    profiles:
+      - portal-gateway
+    build:
+      context: .
+      dockerfile: src/portal/Dockerfile
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - AIT_DEMO_DB=/demo/.demo-state/demo_requests.db
+      - INJI_WEB_URL=${INJI_WEB_URL}
+      - INJI_VERIFY_URL=${INJI_VERIFY_URL}
+      - CERTIFY_PUBLIC_BASE_URL=${CERTIFY_PUBLIC_BASE_URL}
+      - INSTALLATION=${INSTALLATION}
+    env_file:
+      - ./deploy/${INSTALLATION}/authorization-server.env
+    volumes:
+      - ./src/portal:/demo/src/portal
+      - ./scripts:/demo/scripts
+      - ./deploy:/demo/deploy
+      - ./tests/fixtures:/demo/tests/fixtures:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.portal.rule=Host(`portal.localhost`) || Host(`portal.lan`) || Host(`portal.dpi.ait.ac.th`)"
+      - "traefik.http.services.portal.loadbalancer.server.port=4100"
+    networks:
+      - mock-network
+
+  gateway:
+    profiles:
+      - portal-gateway
+    build:
+      context: .
+      dockerfile: src/gateway/Dockerfile
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - ./deploy/${INSTALLATION}/gateway.env
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gateway.rule=Host(`gateway.localhost`) || Host(`gateway.lan`)"
+      - "traefik.http.services.gateway.loadbalancer.server.port=8000"
+    restart: unless-stopped
+    networks:
+      - mock-network
+
+  adapter:
+    build:
+      context: .
+      dockerfile: mock/adapter/Dockerfile
+    environment:
+      - ADAPTER_CSV=/data/student_identity_data.csv
+    volumes:
+      - ./deploy/${INSTALLATION}/adapter:/data:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.adapter.rule=Host(`adapter.localhost`) || Host(`adapter.lan`)"
+      - "traefik.http.services.adapter.loadbalancer.server.port=8000"
+    restart: unless-stopped
+    networks:
+      - mock-network

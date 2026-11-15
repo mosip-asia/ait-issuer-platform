@@ -26,10 +26,14 @@ An **Installation** (`deploy/<name>/`) is one issuing deployment's settings: `ai
   - `.venv/bin/python tests/test_issue_and_verify.py`
   - `.venv/bin/python src/adapter/test_adapter.py`
   - `.venv/bin/python src/gateway/tests/test_evaluations.py`
-- Compose profiles:
-  - `compose.yaml`: Inji Certify, Certify Nginx, PostgreSQL database, VDR context server, template-sync.
-  - `compose.verify.yaml`: Custom branded Verifier (`src/verifier` on port 4007) and Inji Verify service (port 9095).
-  - `compose.demo.yaml`: End-to-end demo with Inji Web Wallet mock (port 4004), Mimoto (port 9099), Keycloak (port 9080), demo app (port 4100), gateway, and adapter.
+- Compose manifests:
+  - `compose.yaml`: Root orchestrator including certify, verify, web-wallet, and trust.
+  - `compose.certify.yaml`: Core Inji Certify Issuer Engine, Certify Nginx (:80), internal PostgreSQL, template-sync.
+  - `compose.verify.yaml`: Custom branded Verifier (`src/verifier` on port 8000), Inji Verify service (:9095), and PostgreSQL.
+  - `compose.web-wallet.yaml`: Inji Web Wallet UI (port 4004).
+  - `compose.trust.yaml`: Trust registry containing VDR context server (:9098) and static VCGA issuer metadata (:9099).
+  - `compose.mock.yaml`: Stand-in mock services with Keycloak (port 9080), mock adapter (:8082), demo app (:4100), and gateway (:8000).
+  - `compose.certify-build.yaml`: Compiler container for the SPI plugin JAR (`plugin-builder`).
 
 Deployment is manual: push, then run the `Deploy` workflow for a commit. A commit that changes an Installation's `certify_seed.sql` needs `wipe=true`, which also renews the signing key and `did:key`.
 

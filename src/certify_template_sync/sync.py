@@ -79,10 +79,26 @@ def load_credential_configs(creds_dir):
         print(f"[-] Error: Credentials directory not found: {creds_dir}", file=sys.stderr)
         sys.exit(1)
 
+    vdr_base = os.getenv("VDR_BASE_URL") or "http://vdr.localhost"
+    cdn_base = os.getenv("CDN_BASE_URL") or "http://cdn.localhost"
+    certify_did = os.getenv("CERTIFY_DID")
+
+    substitutions = {
+        "VDR_BASE_URL": vdr_base.rstrip("/"),
+        "CDN_BASE_URL": cdn_base.rstrip("/"),
+    }
+    if certify_did:
+        substitutions["CERTIFY_DID"] = certify_did
+
     for p in sorted(creds_dir.glob("*.json")):
         with open(p, "r", encoding="utf-8") as f:
+            content = f.read()
+            for var_name, var_val in substitutions.items():
+                content = content.replace(f"${{{var_name}}}", var_val)
+            content = content.replace("http://vdr.localhost", substitutions["VDR_BASE_URL"])
+            content = content.replace("http://cdn.localhost", substitutions["CDN_BASE_URL"])
             try:
-                data = json.load(f)
+                data = json.loads(content)
                 configs.append((p.name, data))
             except json.JSONDecodeError as e:
                 print(f"[-] Error parsing {p}: {e}", file=sys.stderr)
@@ -123,10 +139,13 @@ def escape_sql_text_array(val):
 def generate_sql_statement(config):
     key_id = config["credential_config_key_id"]
     status = config.get("status", "active")
-    b64_template = build_vc_template_base64(config["vc_template"])
-    context_str = ",".join(config.get("context", []))
+    vc_template = config.get("vc_template")
+    b64_template = build_vc_template_base64(vc_template) if vc_template is not None else None
+    context_str = ",".join(config.get("context", [])) if config.get("context") else None
     cred_type = config.get("credential_type", "AitTranscriptCredential,VerifiableCredential")
     cred_format = config.get("credential_format", "ldp_vc")
+    doctype = config.get("doctype")
+    sd_jwt_vct = config.get("sd_jwt_vct")
     did_url = config.get("did_url", "did:key:z6MkpPLACEHOLDERreplaceMeViaBootstrapDidRefreshScript1")
     key_mgr_app = config.get("key_manager_app_id", "CERTIFY_VC_SIGN_ED25519")
     key_mgr_ref = config.get("key_manager_ref_id", "ED25519_SIGN")
@@ -141,6 +160,7 @@ def generate_sql_statement(config):
     signing_algs_arr = escape_sql_text_array(config.get("credential_signing_alg_values_supported"))
     proof_types_jsonb = escape_sql_jsonb(config.get("proof_types_supported"))
     cred_subject_jsonb = escape_sql_jsonb(config.get("credential_subject"))
+    mso_mdoc_claims_jsonb = escape_sql_jsonb(config.get("mso_mdoc_claims"))
     plugin_configs_jsonb = escape_sql_jsonb(config.get("plugin_configurations"))
     status_purpose_arr = escape_sql_text_array(config.get("credential_status_purpose"))
     qr_settings_jsonb = escape_sql_jsonb(config.get("qr_settings"))
@@ -158,8 +178,8 @@ INSERT INTO certify.credential_config (
     gen_random_uuid()::VARCHAR(255),
     {escape_sql_str(status)},
     {escape_sql_str(b64_template)},
-    NULL,
-    NULL,
+    {escape_sql_str(doctype)},
+    {escape_sql_str(sd_jwt_vct)},
     {escape_sql_str(context_str)},
     {escape_sql_str(cred_type)},
     {escape_sql_str(cred_format)},
@@ -176,7 +196,7 @@ INSERT INTO certify.credential_config (
     {signing_algs_arr},
     {proof_types_jsonb},
     {cred_subject_jsonb},
-    NULL,
+    {mso_mdoc_claims_jsonb},
     {plugin_configs_jsonb},
     {status_purpose_arr},
     {qr_settings_jsonb},
@@ -186,6 +206,8 @@ INSERT INTO certify.credential_config (
 )
 ON CONFLICT (credential_config_key_id) DO UPDATE SET
     vc_template = EXCLUDED.vc_template,
+    doctype = EXCLUDED.doctype,
+    sd_jwt_vct = EXCLUDED.sd_jwt_vct,
     context = EXCLUDED.context,
     credential_type = EXCLUDED.credential_type,
     credential_format = EXCLUDED.credential_format,
@@ -199,6 +221,7 @@ ON CONFLICT (credential_config_key_id) DO UPDATE SET
     credential_signing_alg_values_supported = EXCLUDED.credential_signing_alg_values_supported,
     proof_types_supported = EXCLUDED.proof_types_supported,
     credential_subject = EXCLUDED.credential_subject,
+    mso_mdoc_claims = EXCLUDED.mso_mdoc_claims,
     plugin_configurations = EXCLUDED.plugin_configurations,
     credential_status_purpose = EXCLUDED.credential_status_purpose,
     qr_settings = EXCLUDED.qr_settings,

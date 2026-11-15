@@ -8,7 +8,7 @@
   ],
   "students": [
     {
-      "id": "ait-2026-0001",
+      "id": "st120001",
       "role": "student",
       "displayName": "Nara Wattanakul (M.Eng + Ph.D. Computer Science)",
       "fullName": "Nara Wattanakul",
@@ -18,9 +18,13 @@
         {
           "degreeId": "meng-cs",
           "level": "Masters",
-          "keycloakId": "ait-2026-0001",
-          "eligibility": { "holds": [], "conferralStatus": "Conferred", "balance": "0.00" },
-          "registrationNo": "st125001",
+          "keycloakId": "st120001",
+          "eligibility": {
+            "holds": [],
+            "conferralStatus": "Conferred",
+            "balance": "0.00"
+          },
+          "registrationNo": "st120001",
           "previousDegree": "B.Eng Computer Engineering, Kasetsart University",
           "yearAwarded": "2023",
           "dateAdmitted": "2024-08-19",
@@ -43,9 +47,30 @@
             {
               "term": "August Semester 2024",
               "courses": [
-                { "no": "CS601", "title": "Advanced Algorithms", "lab": "0", "lec": "45", "credits": "3", "grade": "A" },
-                { "no": "CS602", "title": "Machine Learning", "lab": "45", "lec": "30", "credits": "3", "grade": "A-" },
-                { "no": "CS603", "title": "Distributed Systems", "lab": "45", "lec": "30", "credits": "3", "grade": "B+" }
+                {
+                  "no": "CS601",
+                  "title": "Advanced Algorithms",
+                  "lab": "0",
+                  "lec": "45",
+                  "credits": "3",
+                  "grade": "A"
+                },
+                {
+                  "no": "CS602",
+                  "title": "Machine Learning",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "A-"
+                },
+                {
+                  "no": "CS603",
+                  "title": "Distributed Systems",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "B+"
+                }
               ],
               "credits": "9",
               "gpa": "3.67",
@@ -54,9 +79,30 @@
             {
               "term": "January Semester 2025",
               "courses": [
-                { "no": "CS604", "title": "Computer Vision", "lab": "45", "lec": "30", "credits": "3", "grade": "A" },
-                { "no": "CS605", "title": "Cryptography and Network Security", "lab": "0", "lec": "45", "credits": "3", "grade": "A" },
-                { "no": "CS606", "title": "Cloud Computing", "lab": "45", "lec": "30", "credits": "3", "grade": "A-" }
+                {
+                  "no": "CS604",
+                  "title": "Computer Vision",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "A"
+                },
+                {
+                  "no": "CS605",
+                  "title": "Cryptography and Network Security",
+                  "lab": "0",
+                  "lec": "45",
+                  "credits": "3",
+                  "grade": "A"
+                },
+                {
+                  "no": "CS606",
+                  "title": "Cloud Computing",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "A-"
+                }
               ],
               "credits": "9",
               "gpa": "3.89",
@@ -67,9 +113,13 @@
         {
           "degreeId": "phd-cs",
           "level": "PhD",
-          "keycloakId": "ait-2026-0001-phd",
-          "eligibility": { "holds": [], "conferralStatus": "Conferred", "balance": "0.00" },
-          "registrationNo": "st126001",
+          "keycloakId": "st120011",
+          "eligibility": {
+            "holds": [],
+            "conferralStatus": "Conferred",
+            "balance": "0.00"
+          },
+          "registrationNo": "st120011",
           "previousDegree": "Master of Engineering in Computer Science, Asian Institute of Technology",
           "yearAwarded": "2026",
           "dateAdmitted": "2026-08-19",
@@ -92,8 +142,22 @@
             {
               "term": "August Semester 2026",
               "courses": [
-                { "no": "CS701", "title": "Advanced Distributed Systems", "lab": "0", "lec": "45", "credits": "3", "grade": "A" },
-                { "no": "CS702", "title": "Research Methods in Computer Science", "lab": "0", "lec": "30", "credits": "3", "grade": "A-" }
+                {
+                  "no": "CS701",
+                  "title": "Advanced Distributed Systems",
+                  "lab": "0",
+                  "lec": "45",
+                  "credits": "3",
+                  "grade": "A"
+                },
+                {
+                  "no": "CS702",
+                  "title": "Research Methods in Computer Science",
+                  "lab": "0",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "A-"
+                }
               ],
               "credits": "6",
               "gpa": "3.83",
@@ -102,8 +166,22 @@
             {
               "term": "January Semester 2027",
               "courses": [
-                { "no": "CS703", "title": "Formal Verification", "lab": "0", "lec": "45", "credits": "3", "grade": "A" },
-                { "no": "CS704", "title": "Selected Topics in Trust and Identity", "lab": "0", "lec": "30", "credits": "3", "grade": "A" }
+                {
+                  "no": "CS703",
+                  "title": "Formal Verification",
+                  "lab": "0",
+                  "lec": "45",
+                  "credits": "3",
+                  "grade": "A"
+                },
+                {
+                  "no": "CS704",
+                  "title": "Selected Topics in Trust and Identity",
+                  "lab": "0",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "A"
+                }
               ],
               "credits": "6",
               "gpa": "4.00",
@@ -114,7 +192,7 @@
       ]
     },
     {
-      "id": "ait-2026-0002",
+      "id": "st120002",
       "role": "student",
       "displayName": "Alex Tester (M.Eng Structural Engineering)",
       "fullName": "Alex Tester",
@@ -124,9 +202,15 @@
         {
           "degreeId": "meng-struct",
           "level": "Masters",
-          "keycloakId": "ait-2026-0002",
-          "eligibility": { "holds": ["Library fine"], "conferralStatus": "Conferred", "balance": "0.00" },
-          "registrationNo": "st125002",
+          "keycloakId": "st120002",
+          "eligibility": {
+            "holds": [
+              "Library fine"
+            ],
+            "conferralStatus": "Conferred",
+            "balance": "0.00"
+          },
+          "registrationNo": "st120002",
           "previousDegree": "B.Eng Civil Engineering, Purdue University",
           "yearAwarded": "2022",
           "dateAdmitted": "2024-08-19",
@@ -149,9 +233,30 @@
             {
               "term": "August Semester 2024",
               "courses": [
-                { "no": "CE501", "title": "Structural Analysis", "lab": "0", "lec": "45", "credits": "3", "grade": "A-" },
-                { "no": "CE502", "title": "Finite Element Methods", "lab": "45", "lec": "30", "credits": "3", "grade": "B+" },
-                { "no": "CE503", "title": "Earthquake Engineering", "lab": "0", "lec": "45", "credits": "3", "grade": "A" }
+                {
+                  "no": "CE501",
+                  "title": "Structural Analysis",
+                  "lab": "0",
+                  "lec": "45",
+                  "credits": "3",
+                  "grade": "A-"
+                },
+                {
+                  "no": "CE502",
+                  "title": "Finite Element Methods",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "B+"
+                },
+                {
+                  "no": "CE503",
+                  "title": "Earthquake Engineering",
+                  "lab": "0",
+                  "lec": "45",
+                  "credits": "3",
+                  "grade": "A"
+                }
               ],
               "credits": "9",
               "gpa": "3.56",
@@ -160,9 +265,30 @@
             {
               "term": "January Semester 2025",
               "courses": [
-                { "no": "CE504", "title": "Bridge Design", "lab": "45", "lec": "30", "credits": "3", "grade": "B+" },
-                { "no": "CE505", "title": "Steel Structure Design", "lab": "0", "lec": "45", "credits": "3", "grade": "A-" },
-                { "no": "CE506", "title": "Geotechnical Earthquake Engineering", "lab": "0", "lec": "45", "credits": "3", "grade": "B+" }
+                {
+                  "no": "CE504",
+                  "title": "Bridge Design",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "B+"
+                },
+                {
+                  "no": "CE505",
+                  "title": "Steel Structure Design",
+                  "lab": "0",
+                  "lec": "45",
+                  "credits": "3",
+                  "grade": "A-"
+                },
+                {
+                  "no": "CE506",
+                  "title": "Geotechnical Earthquake Engineering",
+                  "lab": "0",
+                  "lec": "45",
+                  "credits": "3",
+                  "grade": "B+"
+                }
               ],
               "credits": "9",
               "gpa": "3.44",
@@ -173,7 +299,7 @@
       ]
     },
     {
-      "id": "ait-2026-0003",
+      "id": "st120003",
       "role": "student",
       "displayName": "Priya Sharma (MBA)",
       "fullName": "Priya Sharma",
@@ -183,9 +309,13 @@
         {
           "degreeId": "mba",
           "level": "Masters",
-          "keycloakId": "ait-2026-0003",
-          "eligibility": { "holds": [], "conferralStatus": "Pending", "balance": "0.00" },
-          "registrationNo": "st125003",
+          "keycloakId": "st120003",
+          "eligibility": {
+            "holds": [],
+            "conferralStatus": "Pending",
+            "balance": "0.00"
+          },
+          "registrationNo": "st120003",
           "previousDegree": "B.Com, University of Delhi",
           "yearAwarded": "2024",
           "dateAdmitted": "2025-01-13",
@@ -208,9 +338,30 @@
             {
               "term": "January Semester 2025",
               "courses": [
-                { "no": "MBA501", "title": "Corporate Finance", "lab": "0", "lec": "45", "credits": "3", "grade": "A" },
-                { "no": "MBA502", "title": "Strategic Management", "lab": "0", "lec": "45", "credits": "3", "grade": "A" },
-                { "no": "MBA503", "title": "Marketing Analytics", "lab": "15", "lec": "30", "credits": "3", "grade": "A-" }
+                {
+                  "no": "MBA501",
+                  "title": "Corporate Finance",
+                  "lab": "0",
+                  "lec": "45",
+                  "credits": "3",
+                  "grade": "A"
+                },
+                {
+                  "no": "MBA502",
+                  "title": "Strategic Management",
+                  "lab": "0",
+                  "lec": "45",
+                  "credits": "3",
+                  "grade": "A"
+                },
+                {
+                  "no": "MBA503",
+                  "title": "Marketing Analytics",
+                  "lab": "15",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "A-"
+                }
               ],
               "credits": "9",
               "gpa": "3.89",
@@ -219,9 +370,30 @@
             {
               "term": "August Semester 2025",
               "courses": [
-                { "no": "MBA504", "title": "Operations Management", "lab": "0", "lec": "45", "credits": "3", "grade": "A" },
-                { "no": "MBA505", "title": "Organizational Behavior", "lab": "0", "lec": "45", "credits": "3", "grade": "A-" },
-                { "no": "MBA506", "title": "Digital Marketing", "lab": "15", "lec": "30", "credits": "3", "grade": "A" }
+                {
+                  "no": "MBA504",
+                  "title": "Operations Management",
+                  "lab": "0",
+                  "lec": "45",
+                  "credits": "3",
+                  "grade": "A"
+                },
+                {
+                  "no": "MBA505",
+                  "title": "Organizational Behavior",
+                  "lab": "0",
+                  "lec": "45",
+                  "credits": "3",
+                  "grade": "A-"
+                },
+                {
+                  "no": "MBA506",
+                  "title": "Digital Marketing",
+                  "lab": "15",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "A"
+                }
               ],
               "credits": "9",
               "gpa": "3.89",
@@ -232,7 +404,7 @@
       ]
     },
     {
-      "id": "ait-2026-0004",
+      "id": "st120004",
       "role": "student",
       "displayName": "Kenji Watanabe (Ph.D. Environmental Engineering)",
       "fullName": "Kenji Watanabe",
@@ -242,9 +414,13 @@
         {
           "degreeId": "phd-envman",
           "level": "PhD",
-          "keycloakId": "ait-2026-0004",
-          "eligibility": { "holds": [], "conferralStatus": "Conferred", "balance": "1250.00" },
-          "registrationNo": "st125004",
+          "keycloakId": "st120004",
+          "eligibility": {
+            "holds": [],
+            "conferralStatus": "Conferred",
+            "balance": "1250.00"
+          },
+          "registrationNo": "st120004",
           "previousDegree": "B.Eng Environmental Engineering, Tohoku University",
           "yearAwarded": "2023",
           "dateAdmitted": "2024-08-19",
@@ -267,9 +443,30 @@
             {
               "term": "August Semester 2024",
               "courses": [
-                { "no": "EV601", "title": "Water Supply Engineering", "lab": "45", "lec": "30", "credits": "3", "grade": "A" },
-                { "no": "EV602", "title": "Wastewater Treatment", "lab": "45", "lec": "30", "credits": "3", "grade": "A" },
-                { "no": "EV603", "title": "Environmental Impact Assessment", "lab": "0", "lec": "45", "credits": "3", "grade": "B+" }
+                {
+                  "no": "EV601",
+                  "title": "Water Supply Engineering",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "A"
+                },
+                {
+                  "no": "EV602",
+                  "title": "Wastewater Treatment",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "A"
+                },
+                {
+                  "no": "EV603",
+                  "title": "Environmental Impact Assessment",
+                  "lab": "0",
+                  "lec": "45",
+                  "credits": "3",
+                  "grade": "B+"
+                }
               ],
               "credits": "9",
               "gpa": "3.78",
@@ -278,8 +475,22 @@
             {
               "term": "January Semester 2025",
               "courses": [
-                { "no": "EV604", "title": "Solid Waste Management", "lab": "0", "lec": "45", "credits": "3", "grade": "A-" },
-                { "no": "EV605", "title": "Air Pollution Control", "lab": "45", "lec": "30", "credits": "3", "grade": "B+" }
+                {
+                  "no": "EV604",
+                  "title": "Solid Waste Management",
+                  "lab": "0",
+                  "lec": "45",
+                  "credits": "3",
+                  "grade": "A-"
+                },
+                {
+                  "no": "EV605",
+                  "title": "Air Pollution Control",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "B+"
+                }
               ],
               "credits": "6",
               "gpa": "3.50",
@@ -290,7 +501,7 @@
       ]
     },
     {
-      "id": "ait-2026-0005",
+      "id": "st120005",
       "role": "student",
       "displayName": "Fatima Al-Rashid (M.Eng + Ph.D. Geoinformatics)",
       "fullName": "Fatima Al-Rashid",
@@ -300,9 +511,13 @@
         {
           "degreeId": "meng-geo",
           "level": "Masters",
-          "keycloakId": "ait-2026-0005",
-          "eligibility": { "holds": [], "conferralStatus": "Conferred", "balance": "0.00" },
-          "registrationNo": "st125005",
+          "keycloakId": "st120005",
+          "eligibility": {
+            "holds": [],
+            "conferralStatus": "Conferred",
+            "balance": "0.00"
+          },
+          "registrationNo": "st120005",
           "previousDegree": "B.Sc Surveying Engineering, University of Jordan",
           "yearAwarded": "2024",
           "dateAdmitted": "2025-01-13",
@@ -325,9 +540,30 @@
             {
               "term": "January Semester 2025",
               "courses": [
-                { "no": "GI501", "title": "Principles of Remote Sensing", "lab": "45", "lec": "30", "credits": "3", "grade": "A" },
-                { "no": "GI502", "title": "Geographic Information Systems", "lab": "45", "lec": "30", "credits": "3", "grade": "A-" },
-                { "no": "GI503", "title": "Digital Image Processing", "lab": "45", "lec": "30", "credits": "3", "grade": "B+" }
+                {
+                  "no": "GI501",
+                  "title": "Principles of Remote Sensing",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "A"
+                },
+                {
+                  "no": "GI502",
+                  "title": "Geographic Information Systems",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "A-"
+                },
+                {
+                  "no": "GI503",
+                  "title": "Digital Image Processing",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "B+"
+                }
               ],
               "credits": "9",
               "gpa": "3.56",
@@ -336,8 +572,22 @@
             {
               "term": "August Semester 2025",
               "courses": [
-                { "no": "GI504", "title": "Spatial Database Systems", "lab": "45", "lec": "30", "credits": "3", "grade": "A" },
-                { "no": "GI505", "title": "UAV Photogrammetry", "lab": "45", "lec": "15", "credits": "3", "grade": "A" }
+                {
+                  "no": "GI504",
+                  "title": "Spatial Database Systems",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "A"
+                },
+                {
+                  "no": "GI505",
+                  "title": "UAV Photogrammetry",
+                  "lab": "45",
+                  "lec": "15",
+                  "credits": "3",
+                  "grade": "A"
+                }
               ],
               "credits": "6",
               "gpa": "4.00",
@@ -348,9 +598,13 @@
         {
           "degreeId": "phd-geo",
           "level": "PhD",
-          "keycloakId": "ait-2026-0005-phd",
-          "eligibility": { "holds": [], "conferralStatus": "Conferred", "balance": "0.00" },
-          "registrationNo": "st126005",
+          "keycloakId": "st120012",
+          "eligibility": {
+            "holds": [],
+            "conferralStatus": "Conferred",
+            "balance": "0.00"
+          },
+          "registrationNo": "st120012",
           "previousDegree": "Master of Engineering in Geoinformatics, Asian Institute of Technology",
           "yearAwarded": "2026",
           "dateAdmitted": "2026-08-19",
@@ -373,8 +627,22 @@
             {
               "term": "August Semester 2026",
               "courses": [
-                { "no": "GI701", "title": "Advanced Remote Sensing Analytics", "lab": "45", "lec": "30", "credits": "3", "grade": "A" },
-                { "no": "GI702", "title": "Research Methods in Geoinformatics", "lab": "0", "lec": "30", "credits": "3", "grade": "A-" }
+                {
+                  "no": "GI701",
+                  "title": "Advanced Remote Sensing Analytics",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "A"
+                },
+                {
+                  "no": "GI702",
+                  "title": "Research Methods in Geoinformatics",
+                  "lab": "0",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "A-"
+                }
               ],
               "credits": "6",
               "gpa": "3.83",
@@ -383,8 +651,22 @@
             {
               "term": "January Semester 2027",
               "courses": [
-                { "no": "GI703", "title": "Disaster Risk Modeling", "lab": "45", "lec": "30", "credits": "3", "grade": "A" },
-                { "no": "GI704", "title": "Selected Topics in Geospatial AI", "lab": "0", "lec": "30", "credits": "3", "grade": "A" }
+                {
+                  "no": "GI703",
+                  "title": "Disaster Risk Modeling",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "A"
+                },
+                {
+                  "no": "GI704",
+                  "title": "Selected Topics in Geospatial AI",
+                  "lab": "0",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "A"
+                }
               ],
               "credits": "6",
               "gpa": "4.00",
@@ -395,7 +677,7 @@
       ]
     },
     {
-      "id": "st123456",
+      "id": "st120006",
       "role": "student",
       "displayName": "Somchai Prasert (SIS test student, M.Eng Information Management)",
       "fullName": "Somchai Prasert",
@@ -405,9 +687,13 @@
         {
           "degreeId": "meng-im",
           "level": "Masters",
-          "keycloakId": "st123456",
-          "eligibility": { "holds": [], "conferralStatus": "Conferred", "balance": "0.00" },
-          "registrationNo": "st123456",
+          "keycloakId": "st120006",
+          "eligibility": {
+            "holds": [],
+            "conferralStatus": "Conferred",
+            "balance": "0.00"
+          },
+          "registrationNo": "st120006",
           "previousDegree": "B.Sc Computer Science, Chulalongkorn University",
           "yearAwarded": "2022",
           "dateAdmitted": "2024-08-19",
@@ -430,9 +716,30 @@
             {
               "term": "August Semester 2024",
               "courses": [
-                { "no": "IM601", "title": "Database Systems", "lab": "45", "lec": "30", "credits": "3", "grade": "A" },
-                { "no": "IM602", "title": "Information Retrieval", "lab": "0", "lec": "45", "credits": "3", "grade": "A-" },
-                { "no": "IM603", "title": "Data Warehousing", "lab": "45", "lec": "30", "credits": "3", "grade": "B+" }
+                {
+                  "no": "IM601",
+                  "title": "Database Systems",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "A"
+                },
+                {
+                  "no": "IM602",
+                  "title": "Information Retrieval",
+                  "lab": "0",
+                  "lec": "45",
+                  "credits": "3",
+                  "grade": "A-"
+                },
+                {
+                  "no": "IM603",
+                  "title": "Data Warehousing",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "B+"
+                }
               ],
               "credits": "9",
               "gpa": "3.67",
@@ -441,8 +748,410 @@
             {
               "term": "January Semester 2025",
               "courses": [
-                { "no": "IM604", "title": "Data Integration", "lab": "45", "lec": "30", "credits": "3", "grade": "A" },
-                { "no": "IM605", "title": "Information Security Management", "lab": "0", "lec": "45", "credits": "3", "grade": "A" }
+                {
+                  "no": "IM604",
+                  "title": "Data Integration",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "A"
+                },
+                {
+                  "no": "IM605",
+                  "title": "Information Security Management",
+                  "lab": "0",
+                  "lec": "45",
+                  "credits": "3",
+                  "grade": "A"
+                }
+              ],
+              "credits": "6",
+              "gpa": "4.00",
+              "cumGpa": "3.80"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "st120007",
+      "role": "student",
+      "displayName": "Suda Thongkham (M.Eng Computer Science)",
+      "fullName": "Suda Thongkham",
+      "dateOfBirth": "2001-01-02",
+      "country": "Thailand",
+      "degrees": [
+        {
+          "degreeId": "meng-cs",
+          "level": "Masters",
+          "keycloakId": "st120007",
+          "eligibility": {
+            "holds": [],
+            "conferralStatus": "Conferred",
+            "balance": "0.00"
+          },
+          "registrationNo": "st120007",
+          "previousDegree": "B.Eng Computer Engineering, Chulalongkorn University",
+          "yearAwarded": "2023",
+          "dateAdmitted": "2024-08-19",
+          "option": "Thesis",
+          "degreeAwarded": "Master of Engineering",
+          "dateGraduation": "2026-08-31",
+          "faculty": "School of Engineering and Technology",
+          "academicProgram": "M.Eng Computer Science",
+          "areaOfSpecialization": "Software Engineering",
+          "notes": "-",
+          "issueDate": "2026-09-17",
+          "thesisTitle": "Verifiable Credential Implementation Study 2",
+          "thesisGrade": "A",
+          "programCommittee": "Prof. Kittipong Wongsathan (Chair)\nDr. Priya Ramaswamy",
+          "courseworkCredits": "24.0",
+          "thesisCredits": "22.0",
+          "totalCredits": "46.0",
+          "thesisExamination": "Passed",
+          "courses": [
+            {
+              "term": "August Semester 2024",
+              "courses": [
+                {
+                  "no": "CS601",
+                  "title": "Advanced Algorithms",
+                  "lab": "0",
+                  "lec": "45",
+                  "credits": "3",
+                  "grade": "A"
+                },
+                {
+                  "no": "CS602",
+                  "title": "Machine Learning",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "A-"
+                },
+                {
+                  "no": "CS603",
+                  "title": "Distributed Systems",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "B+"
+                }
+              ],
+              "credits": "9",
+              "gpa": "3.67",
+              "cumGpa": "3.67"
+            },
+            {
+              "term": "January Semester 2025",
+              "courses": [
+                {
+                  "no": "CS604",
+                  "title": "Computer Vision",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "A"
+                },
+                {
+                  "no": "CS605",
+                  "title": "Cryptography and Network Security",
+                  "lab": "0",
+                  "lec": "45",
+                  "credits": "3",
+                  "grade": "A"
+                }
+              ],
+              "credits": "6",
+              "gpa": "4.00",
+              "cumGpa": "3.80"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "st120008",
+      "role": "student",
+      "displayName": "Kittisak Prasert (M.Eng Computer Science)",
+      "fullName": "Kittisak Prasert",
+      "dateOfBirth": "2001-01-03",
+      "country": "Thailand",
+      "degrees": [
+        {
+          "degreeId": "meng-cs",
+          "level": "Masters",
+          "keycloakId": "st120008",
+          "eligibility": {
+            "holds": [],
+            "conferralStatus": "Conferred",
+            "balance": "0.00"
+          },
+          "registrationNo": "st120008",
+          "previousDegree": "B.Eng Computer Engineering, Chulalongkorn University",
+          "yearAwarded": "2023",
+          "dateAdmitted": "2024-08-19",
+          "option": "Thesis",
+          "degreeAwarded": "Master of Engineering",
+          "dateGraduation": "2026-08-31",
+          "faculty": "School of Engineering and Technology",
+          "academicProgram": "M.Eng Computer Science",
+          "areaOfSpecialization": "Software Engineering",
+          "notes": "-",
+          "issueDate": "2026-09-17",
+          "thesisTitle": "Verifiable Credential Implementation Study 3",
+          "thesisGrade": "A",
+          "programCommittee": "Prof. Kittipong Wongsathan (Chair)\nDr. Priya Ramaswamy",
+          "courseworkCredits": "24.0",
+          "thesisCredits": "22.0",
+          "totalCredits": "46.0",
+          "thesisExamination": "Passed",
+          "courses": [
+            {
+              "term": "August Semester 2024",
+              "courses": [
+                {
+                  "no": "CS601",
+                  "title": "Advanced Algorithms",
+                  "lab": "0",
+                  "lec": "45",
+                  "credits": "3",
+                  "grade": "A"
+                },
+                {
+                  "no": "CS602",
+                  "title": "Machine Learning",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "A-"
+                },
+                {
+                  "no": "CS603",
+                  "title": "Distributed Systems",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "B+"
+                }
+              ],
+              "credits": "9",
+              "gpa": "3.67",
+              "cumGpa": "3.67"
+            },
+            {
+              "term": "January Semester 2025",
+              "courses": [
+                {
+                  "no": "CS604",
+                  "title": "Computer Vision",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "A"
+                },
+                {
+                  "no": "CS605",
+                  "title": "Cryptography and Network Security",
+                  "lab": "0",
+                  "lec": "45",
+                  "credits": "3",
+                  "grade": "A"
+                }
+              ],
+              "credits": "6",
+              "gpa": "4.00",
+              "cumGpa": "3.80"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "st120009",
+      "role": "student",
+      "displayName": "Pimchanok Rungruang (M.Eng Computer Science)",
+      "fullName": "Pimchanok Rungruang",
+      "dateOfBirth": "2001-01-04",
+      "country": "Thailand",
+      "degrees": [
+        {
+          "degreeId": "meng-cs",
+          "level": "Masters",
+          "keycloakId": "st120009",
+          "eligibility": {
+            "holds": [],
+            "conferralStatus": "Conferred",
+            "balance": "0.00"
+          },
+          "registrationNo": "st120009",
+          "previousDegree": "B.Eng Computer Engineering, Chulalongkorn University",
+          "yearAwarded": "2023",
+          "dateAdmitted": "2024-08-19",
+          "option": "Thesis",
+          "degreeAwarded": "Master of Engineering",
+          "dateGraduation": "2026-08-31",
+          "faculty": "School of Engineering and Technology",
+          "academicProgram": "M.Eng Computer Science",
+          "areaOfSpecialization": "Software Engineering",
+          "notes": "-",
+          "issueDate": "2026-09-17",
+          "thesisTitle": "Verifiable Credential Implementation Study 4",
+          "thesisGrade": "A",
+          "programCommittee": "Prof. Kittipong Wongsathan (Chair)\nDr. Priya Ramaswamy",
+          "courseworkCredits": "24.0",
+          "thesisCredits": "22.0",
+          "totalCredits": "46.0",
+          "thesisExamination": "Passed",
+          "courses": [
+            {
+              "term": "August Semester 2024",
+              "courses": [
+                {
+                  "no": "CS601",
+                  "title": "Advanced Algorithms",
+                  "lab": "0",
+                  "lec": "45",
+                  "credits": "3",
+                  "grade": "A"
+                },
+                {
+                  "no": "CS602",
+                  "title": "Machine Learning",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "A-"
+                },
+                {
+                  "no": "CS603",
+                  "title": "Distributed Systems",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "B+"
+                }
+              ],
+              "credits": "9",
+              "gpa": "3.67",
+              "cumGpa": "3.67"
+            },
+            {
+              "term": "January Semester 2025",
+              "courses": [
+                {
+                  "no": "CS604",
+                  "title": "Computer Vision",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "A"
+                },
+                {
+                  "no": "CS605",
+                  "title": "Cryptography and Network Security",
+                  "lab": "0",
+                  "lec": "45",
+                  "credits": "3",
+                  "grade": "A"
+                }
+              ],
+              "credits": "6",
+              "gpa": "4.00",
+              "cumGpa": "3.80"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "st120010",
+      "role": "student",
+      "displayName": "Thanawat Boonmee (M.Eng Computer Science)",
+      "fullName": "Thanawat Boonmee",
+      "dateOfBirth": "2001-01-05",
+      "country": "Thailand",
+      "degrees": [
+        {
+          "degreeId": "meng-cs",
+          "level": "Masters",
+          "keycloakId": "st120010",
+          "eligibility": {
+            "holds": [],
+            "conferralStatus": "Conferred",
+            "balance": "0.00"
+          },
+          "registrationNo": "st120010",
+          "previousDegree": "B.Eng Computer Engineering, Chulalongkorn University",
+          "yearAwarded": "2023",
+          "dateAdmitted": "2024-08-19",
+          "option": "Thesis",
+          "degreeAwarded": "Master of Engineering",
+          "dateGraduation": "2026-08-31",
+          "faculty": "School of Engineering and Technology",
+          "academicProgram": "M.Eng Computer Science",
+          "areaOfSpecialization": "Software Engineering",
+          "notes": "-",
+          "issueDate": "2026-09-17",
+          "thesisTitle": "Verifiable Credential Implementation Study 5",
+          "thesisGrade": "A",
+          "programCommittee": "Prof. Kittipong Wongsathan (Chair)\nDr. Priya Ramaswamy",
+          "courseworkCredits": "24.0",
+          "thesisCredits": "22.0",
+          "totalCredits": "46.0",
+          "thesisExamination": "Passed",
+          "courses": [
+            {
+              "term": "August Semester 2024",
+              "courses": [
+                {
+                  "no": "CS601",
+                  "title": "Advanced Algorithms",
+                  "lab": "0",
+                  "lec": "45",
+                  "credits": "3",
+                  "grade": "A"
+                },
+                {
+                  "no": "CS602",
+                  "title": "Machine Learning",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "A-"
+                },
+                {
+                  "no": "CS603",
+                  "title": "Distributed Systems",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "B+"
+                }
+              ],
+              "credits": "9",
+              "gpa": "3.67",
+              "cumGpa": "3.67"
+            },
+            {
+              "term": "January Semester 2025",
+              "courses": [
+                {
+                  "no": "CS604",
+                  "title": "Computer Vision",
+                  "lab": "45",
+                  "lec": "30",
+                  "credits": "3",
+                  "grade": "A"
+                },
+                {
+                  "no": "CS605",
+                  "title": "Cryptography and Network Security",
+                  "lab": "0",
+                  "lec": "45",
+                  "credits": "3",
+                  "grade": "A"
+                }
               ],
               "credits": "6",
               "gpa": "4.00",

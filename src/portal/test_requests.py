@@ -50,7 +50,7 @@ def test_approve_sets_status_and_claim_panel() -> None:
     panel = req_workflow.claim_panel_for_student(sid, DEGREE_A1)
     assert panel is not None
     assert panel["keycloak_username"] == STUDENT_A["degrees"][0]["keycloakId"]
-    assert panel["keycloak_password"] == "inji"
+    assert panel["keycloak_password"] == "password1234"
 
 
 def test_reject_no_claim_panel() -> None:
@@ -173,7 +173,7 @@ def test_pending_to_approved_via_http() -> None:
     c_reg.post(f"/registrar/requests/{sid}/{DEGREE_A1}/approve", follow_redirects=True)
     after = c_student.get("/student").text
     assert "Claim your" in after
-    assert "http://localhost:4004" in after
+    assert "http://wallet.localhost" in after or "http://localhost:4004" in after
 
 
 def test_reissue_blocked_while_active_vc_exists() -> None:

@@ -14,23 +14,27 @@ deploy/
 │   └── certify-nginx.conf     # Nginx reverse proxy routing
 ├── ait/                       # AIT Tenant profile (academic transcript)
 │   ├── certify-installation.properties
-│   ├── keycloak-realm.json
+│   ├── authorization-server.env
 │   ├── mimoto-issuers-config.json.template
 │   ├── gateway.env
 │   ├── smoke.json
 │   ├── adapter/
+│   ├── mock/                  # Stand-in dependencies for local offline testing
+│   │   └── keycloak-realm.json
 │   ├── vp_request_config.json # OpenID4VP request specifications
 │   └── private_key/           # Isolated signing keystore (git-ignored)
 ├── hackathon/                 # Hackathon Tenant profile (developer passport & achievements)
 │   ├── certify-installation.properties
-│   ├── keycloak-realm.json
+│   ├── authorization-server.env
 │   ├── mimoto-issuers-config.json.template
 │   ├── gateway.env
 │   ├── smoke.json
 │   ├── adapter/
+│   ├── mock/                  # Stand-in dependencies for local offline testing
+│   │   └── keycloak-realm.json
 │   ├── vp_request_config.json # OpenID4VP request specifications
 │   └── private_key/           # Isolated signing keystore (git-ignored)
-└── base/                      # Shared base SQL initializers and templates
+└── base/                      # Common Inji platform defaults and shared templates
 ```
 
 ---

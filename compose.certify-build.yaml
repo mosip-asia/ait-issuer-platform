@@ -6,9 +6,9 @@
 # without requiring Java or Maven installed on the host machine.
 #
 # Usage:
-#   docker compose -f compose.build.yaml run --rm plugin-builder
+#   docker compose -f compose.certify-build.yaml run --rm plugin-builder
 # ==============================================================================
-name: ait-issuer-build
+name: ${COMPOSE_PROJECT_NAME}-build
 
 services:
   plugin-builder:

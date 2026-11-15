@@ -20,14 +20,29 @@ run_release_checks() {
   fi
   # Pin ':' as the separator: Docker Compose on Windows splits COMPOSE_FILE on ';' by default,
   # while .env.example and the Linux hosts use the ':' form.
-  if ! COMPOSE_PATH_SEPARATOR=: docker compose config --quiet; then
-    log_err "Base compose.yaml configuration failed validation."
+  if ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.yaml docker compose config --quiet; then
+    log_err "Root compose.yaml configuration failed validation."
     rc=1
-  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.yaml:compose.verify.yaml docker compose config --quiet; then
-    log_err "Verifier overlay compose configuration failed validation."
+  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.certify.yaml docker compose config --quiet; then
+    log_err "Certify compose.certify.yaml configuration failed validation."
     rc=1
-  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.yaml:compose.demo.yaml docker compose config --quiet; then
-    log_err "Demo overlay compose configuration failed validation."
+  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.verify.yaml docker compose config --quiet; then
+    log_err "Verifier compose.verify.yaml configuration failed validation."
+    rc=1
+  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.web-wallet.yaml docker compose config --quiet; then
+    log_err "Web wallet compose.web-wallet.yaml configuration failed validation."
+    rc=1
+  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.trust.yaml docker compose config --quiet; then
+    log_err "Trust compose.trust.yaml configuration failed validation."
+    rc=1
+  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.traefik.yaml docker compose config --quiet; then
+    log_err "Traefik compose.traefik.yaml configuration failed validation."
+    rc=1
+  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.mock.yaml docker compose config --quiet; then
+    log_err "Mock compose.mock.yaml configuration failed validation."
+    rc=1
+  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.certify-build.yaml docker compose config --quiet; then
+    log_err "Certify build compose.certify-build.yaml configuration failed validation."
     rc=1
   fi
   if [[ "$temp_env" == true ]]; then
@@ -48,7 +63,7 @@ run_release_checks() {
     fi
   done
   if [[ -n "$py" ]]; then
-    for f in docs/schemas/*.json deploy/*/credentials/*.json deploy/*/contexts/*/*.json deploy/base/*.json tests/fixtures/*.json; do
+    for f in docs/schemas/*.json deploy/*/credentials/*.json deploy/*/contexts/*/*.json deploy/base/*.json deploy/*/mock/*.json tests/fixtures/*.json; do
       if [[ -f "$f" ]]; then
         if ! "$py" -m json.tool "$f" >/dev/null; then
           log_err "JSON syntax error in $f"
@@ -73,6 +88,8 @@ run_release_checks() {
   for t in \
     src/tools/test_generate_csv.py \
     src/tools/test_render_mimoto_issuers_config.py \
+    src/vc-lab/test_preview_template.py \
+    src/vc-lab/test_main.py \
     src/verifier/test_verifier.py \
     tests/test_installations.py \
     tests/test_authorization_server.py \

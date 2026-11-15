@@ -38,7 +38,7 @@ ROSTER = INSTALLATIONS / "hackathon" / "adapter" / "student_identity_data.csv"
 HOST_CSV = {"ait": AIT_ROSTER, "hackathon": ROSTER}
 # The edge cases run on the AIT installation.
 SCOPE = "ait_transcript_vc_ldp"
-ELIGIBLE = "ait-2026-0001"
+ELIGIBLE = "st120001"
 ELIGIBILITY_URL = "http://adapter:8000/student/{sub}/eligibility"
 TOKEN = "test-token"
 

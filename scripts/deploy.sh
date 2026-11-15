@@ -56,16 +56,15 @@ if [ ! -f .env ]; then
   fi
 fi
 
-# Load CERTIFY_PORT if defined in .env
-CERTIFY_PORT="$(grep -E '^CERTIFY_PORT=' .env 2>/dev/null | cut -d '=' -f2 | tr -d ' "\r' || echo "")"
-CERTIFY_PORT="${CERTIFY_PORT:-9091}"
-CERTIFY_URL="http://127.0.0.1:${CERTIFY_PORT}"
+# Determine Certify Base URL (prefer CERTIFY_PUBLIC_BASE_URL, default to http://issuer.localhost)
+CERTIFY_URL="$(grep -E '^CERTIFY_PUBLIC_BASE_URL=' .env 2>/dev/null | cut -d '=' -f2 | tr -d ' "\r' || echo "")"
+CERTIFY_URL="${CERTIFY_URL:-http://issuer.localhost}"
 
 # 2. Ensure plugin JAR is built
 PLUGIN_JAR="src/issuer/target/issuer-data-provider-plugin.jar"
 if [ ! -f "$PLUGIN_JAR" ]; then
   log_info "Building Inji Certify DataProviderPlugin JAR via compiler container..."
-  docker compose -f compose.build.yaml run --rm plugin-builder
+  docker compose -f compose.certify-build.yaml run --rm plugin-builder
 fi
 
 # 3. Tear down existing stack
@@ -102,7 +101,7 @@ done
 
 if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
   log_err "Inji Certify failed to become ready within ${TIMEOUT}s. Recent logs:"
-  docker compose logs --tail 50 certify
+  docker compose logs --tail 50 service
   exit 1
 fi
 
@@ -110,7 +109,7 @@ fi
 log_info "Running post-deployment issuance smoke test..."
 if ! bash scripts/smoke-test.sh "${CERTIFY_URL}"; then
   log_err "Post-deployment smoke test failed. Recent logs:"
-  docker compose logs --tail 50 certify
+  docker compose logs --tail 50 service
   exit 1
 fi
 log_ok "Post-deployment smoke test passed."

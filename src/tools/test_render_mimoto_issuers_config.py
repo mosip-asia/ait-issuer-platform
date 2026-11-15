@@ -68,8 +68,8 @@ def test_public_snippet_swaps_only_authorization_servers() -> None:
     assert "location = /v1/mimoto/issuers" in snippet
     assert "location = /.well-known/openid-credential-issuer" in snippet
     assert (
-        """sub_filter '"authorization_servers":["http://keycloak:8080/realms/inji"]' """
-        """'"authorization_servers":["https://keycloak.demo.example/realms/inji"]';"""
+        """sub_filter '"authorization_servers":["http://keycloak:8080/realms/ait"]' """
+        """'"authorization_servers":["https://keycloak.demo.example/realms/ait"]';"""
     ) in snippet
     # Variable proxy_pass must carry no URI part (docs/reference/vc-download-troubleshooting.md #3).
     assert "proxy_pass http://$certify_nginx_upstream;" in snippet

@@ -33,7 +33,7 @@ cd vc-stack
 ./smoke.sh                        # config + live checks — catches #2/#3/#4's config symptoms before a browser is involved
 ```
 
-Then claim a VC through the real browser flow (`http://localhost:4004` → guest → AIT University Registrar → AIT Transcript → log in as `ait-2026-0001` / password `inji`) and tail logs from a **fresh** claim attempt (old log lines from a previous attempt will mislead you):
+Then claim a VC through the real browser flow (`http://localhost:4004` → guest → AIT University Registrar → AIT Transcript → log in as `st120001` / password `password1234`) and tail logs from a **fresh** claim attempt (old log lines from a previous attempt will mislead you):
 
 ```sh
 docker logs mimoto-service --since 1m 2>&1 | grep -A2 "postApi()::error\|Exception occurred\|Initiated"

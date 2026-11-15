@@ -1,0 +1,15 @@
+{
+  "@context": {
+    "@version": 1.1,
+    "@protected": true,
+    "ait": "https://vdr.dpi.ait.ac.th/contexts/student-id/v1.json#",
+    "AitStudentIdCredential": "ait:AitStudentIdCredential",
+    "studentId": "ait:studentId",
+    "fullName": "ait:fullName",
+    "faculty": "ait:faculty",
+    "academicProgram": "ait:academicProgram",
+    "studentStatus": "ait:studentStatus",
+    "issueDate": "ait:issueDate",
+    "expiryDate": "ait:expiryDate"
+  }
+}

@@ -18,7 +18,7 @@ Registrar can revoke an issued transcript, issue a replacement, and see a studen
 
 Certify already tracks every issued VC in its own ledger (`certify.ledger`, `certify.status_list_credential`, `certify.credential_status_transaction` — see `vc-stack/certify_init.sql`). The demo app does **not** keep its own copy of "which VCs exist" — [portal/certify_client.py](../../portal/certify_client.py) queries Certify's `/ledger-search` live on every registrar page load. The app's own SQLite `requests` table stays scoped to what it already owned before this phase: the pre-issuance approval cycle (now append-only history, so a student can go through request → approve → claim more than once — [portal/requests.py](../../portal/requests.py)).
 
-Ledger rows are indexed by **claim values**, not the app's own `student_id` (`ait-2026-0001`-style). The AIT Transcript's indexed identifier is `registrationNo` (`st125001`-style) — `registrationNo` is per degree, so the Portal passes the degree's (`degree["registrationNo"]`) to every `certify_client` call.
+Ledger rows are indexed by **claim values**, not the app's own `student_id`. The AIT Transcript's indexed identifier is `registrationNo` (`st120001`-style) — `registrationNo` is per degree, so the Portal passes the degree's (`degree["registrationNo"]`) to every `certify_client` call.
 
 ```mermaid
 sequenceDiagram

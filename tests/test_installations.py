@@ -23,7 +23,7 @@ def csv_ids(installation: str) -> list[str]:
 
 
 def realm_usernames(installation: str) -> list[str]:
-    realm = json.loads((INSTALLATIONS / installation / "keycloak-realm.json").read_text(encoding="utf-8"))
+    realm = json.loads((INSTALLATIONS / installation / "mock" / "keycloak-realm.json").read_text(encoding="utf-8"))
     return [user["username"] for user in realm["users"]]
 
 

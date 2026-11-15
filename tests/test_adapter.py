@@ -303,10 +303,10 @@ def test_the_contract_mode_passes_against_the_mock() -> None:
         csv_path = Path(td) / "student_identity_data.csv"
         csv_path.write_bytes(AIT_ROSTER.read_bytes())
         get = host_get(csv_path)
-        for sub in ("ait-2026-0001", "st123456"):  # st123456: the SIS test student, so issuer-dev can gate it
+        for sub in ("st120001", "st120006"):  # st120006: the SIS test student, so issuer-dev can gate it
             check_contract(get, TRANSCRIPT_URL, sub, "ait_transcript_vc_ldp")
-        check_contract(get, TRANSCRIPT_URL, "ait-2026-0001", "openid ait_transcript_vc_ldp")  # the scope claim, whole
-        assert get("/student/st123456/eligibility") == (200, {
+        check_contract(get, TRANSCRIPT_URL, "st120001", "openid ait_transcript_vc_ldp")  # the scope claim, whole
+        assert get("/student/st120006/eligibility") == (200, {
             "holds": [], "conferralStatus": "Conferred", "balance": "0.00"})  # eligible: it passes every check
         csv_path.write_bytes(ROSTER.read_bytes())
         for scope in ROSTER_SCOPES:
@@ -326,12 +326,12 @@ def test_the_contract_mode_fails_an_adapter_that_breaks_the_contract() -> None:
                 return change(status, body) if path.startswith(path_start) else (status, body)
             return get
 
-        record = "/student/ait-2026-0001/"
+        record = "/student/st120001/"
         term = {"term": "T", "credits": "3", "gpa": "4.00", "cumGpa": "4.00"}
         course = {"no": "CS601", "title": "A", "lec": "3", "lab": "0", "credits": "3", "grade": "A"}
         breaks = {
-            "a reserved key": broken(record, lambda s, b: (s, {**b, "id": "ait-2026-0001"})),
-            "a trace key": broken(record, lambda s, b: (s, {**b, "tokenSub": "ait-2026-0001"})),
+            "a reserved key": broken(record, lambda s, b: (s, {**b, "id": "st120001"})),
+            "a trace key": broken(record, lambda s, b: (s, {**b, "tokenSub": "st120001"})),
             "a claim missing": broken(record, lambda s, b: (s, {k: v for k, v in b.items() if k != "courseList"})),
             "a number for a string": broken(record, lambda s, b: (s, {**b, "totalCredits": 49.0})),
             "a null claim": broken(record, lambda s, b: (s, {**b, "notes": None})),
@@ -361,10 +361,10 @@ def test_the_contract_mode_fails_an_adapter_that_breaks_the_contract() -> None:
             "a 200 for an unknown sub": broken("/student/no-such", lambda s, b: (200, b)),
         }
         check_contract(broken(record, lambda s, b: (s, {**b, "courses": [{**term, "courses": [course]}]})),
-                       TRANSCRIPT_URL, "ait-2026-0001", "ait_transcript_vc_ldp")  # the term and course above pass
+                       TRANSCRIPT_URL, "st120001", "ait_transcript_vc_ldp")  # the term and course above pass
         for name, get in breaks.items():
             try:
-                check_contract(get, TRANSCRIPT_URL, "ait-2026-0001", "ait_transcript_vc_ldp")
+                check_contract(get, TRANSCRIPT_URL, "st120001", "ait_transcript_vc_ldp")
             except AssertionError:
                 continue
             raise AssertionError(f"the contract mode passed an Adapter with {name}")
