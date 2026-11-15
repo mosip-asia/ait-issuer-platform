@@ -122,11 +122,7 @@ Run the post-deployment smoke test anytime:
 When adding or styling a new credential:
 1. Open the **VC Lab Studio** dashboard at [http://lab.localhost](http://lab.localhost).
 2. Explore active JSON-LD schemas (`contexts/`) and Inji display configurations (`credentials/`).
-3. Preview Velocity HTML templates in real time against student personas:
-   ```bash
-   uv run vc-lab-preview --installation ait --student st120001
-   ```
-4. Inspect the generated printable card layout and dynamic QR codes in `preview.html`.
+3. Select templates and student personas to preview live in the browser with dynamic QR codes.
 
 ### Inner Loop 2: Fast SPI Plugin Development (`src/issuer/`)
 When modifying the Java SPI Data-Provider Plugin (`src/issuer/`):
@@ -363,7 +359,7 @@ python3 tests/test_inji_web_vc_readiness.py
 .venv/bin/python src/gateway/tests/test_evaluations.py
 .venv/bin/python src/portal/test_requests.py
 .venv/bin/python src/vc-lab/test_main.py
-.venv/bin/python src/vc-lab/test_preview_template.py
+.venv/bin/python src/vc-lab/test_template_engine.py
 
 # Run Java plugin unit tests:
 cd src/issuer && mvn test
@@ -371,7 +367,7 @@ cd src/issuer && mvn test
 
 | Module | Test Target | What It Verifies |
 |---|---|---|
-| **VC Lab** | `src/vc-lab/test_main.py`, `test_preview_template.py` | FastAPI dashboard, Velocity template engine, PNG QR generator |
+| **VC Lab** | `src/vc-lab/test_main.py`, `test_template_engine.py` | FastAPI dashboard, Velocity template engine, PNG QR generator |
 | **Gateway** | `src/gateway/tests/test_credential_types.py` | Credential clearance rules, hold checks, zero balance, conferral predicates |
 | **Gateway** | `src/gateway/tests/test_evaluations.py` | In-process evaluation of `POST /evaluations` across all installation personas |
 | **Issuer Plugin** | `src/issuer/` (`mvn test`) | SPI `fetchData()` contract, HTTP retry/timeouts, strict JSON escaping, trace keys |

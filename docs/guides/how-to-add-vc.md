@@ -80,30 +80,10 @@ Credentials typically require two visual presentations:
 
 Use **VC Lab Studio** (`src/vc-lab/`) to design, render, and inspect your credential before deployment:
 
-#### Method A: Interactive Web Studio Dashboard
-When the platform stack is running, open the live VC Lab studio:
+Open the live VC Lab studio:
 - **Dashboard URL:** [http://lab.localhost](http://lab.localhost)
 - Explore active JSON-LD schemas (`contexts/`) and Inji display configurations (`credentials/`).
-- Render live template previews with sample student personas and generate dynamic QR codes.
-
-#### Method B: Standalone CLI Preview (Zero External Dependencies)
-You can also preview and test Velocity HTML templates completely offline without starting Docker:
-
-```bash
-# Preview academic transcript template with sample student persona:
-uv run vc-lab-preview \
-  --template deploy/ait/AITUniversity-ait-transcript-template.html \
-  --student st120001 \
-  --out .demo-state/preview.html
-
-# Preview a card template with custom inline claims:
-uv run vc-lab-preview \
-  --template deploy/base/credential-template.html \
-  --claims '{"studentId":"st120001","fullName":"Nara Wattanakul","faculty":"SET"}' \
-  --out .demo-state/preview.html
-```
-
-Open `.demo-state/preview.html` directly in any web browser to inspect typography, page breaks, borders, and margins before starting runtime deployment.
+- Render live template previews in the browser with sample student personas and inspect dynamic QR codes.
 
 ---
 

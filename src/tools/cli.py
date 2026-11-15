@@ -11,7 +11,6 @@ import typer
 
 from tools import generate_csv as gc_mod
 from tools import issue_and_verify as iv_mod
-from tools import preview_template as pt_mod
 from tools import render_mimoto_issuers_config as rmc_mod
 
 app = typer.Typer(
@@ -184,8 +183,6 @@ def refused_cmd(
 app.add_typer(generate_csv_app, name="generate-csv")
 app.add_typer(render_mimoto_app, name="render-mimoto")
 app.add_typer(issue_verify_app, name="issue-and-verify")
-if hasattr(pt_mod, "preview_template_app"):
-    app.add_typer(pt_mod.preview_template_app, name="preview-template")
 
 
 def main() -> None:
