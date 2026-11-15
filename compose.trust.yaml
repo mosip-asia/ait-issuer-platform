@@ -27,17 +27,14 @@ services:
       - ./deploy/base/vdr/templates:/usr/share/nginx/html/base-templates:ro
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.vdr.rule=Host(`vdr.localhost`) || Host(`cdn.localhost`) || Host(`vdr.lan`) || Host(`cdn.lan`) || Host(`vdr.dpi.ait.ac.th`) || Host(`cdn.dpi.ait.ac.th`) || Host(`vdr.ait.ac.th`) || Host(`cdn.ait.ac.th`)"
+      - "traefik.http.routers.vdr.rule=Host(`vdr.localhost`) || Host(`vdr.lan`) || Host(`vdr.dpi.ait.ac.th`) || Host(`vdr.ait.ac.th`)"
       - "traefik.http.services.vdr.loadbalancer.server.port=80"
     networks:
       trust-network:
         aliases:
           - vdr.dpi.ait.ac.th
-          - cdn.dpi.ait.ac.th
           - vdr.ait.ac.th
-          - cdn.ait.ac.th
           - vdr
-          - cdn
 
   vcga:
     image: nginx:stable

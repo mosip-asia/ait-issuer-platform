@@ -78,9 +78,8 @@ Institutional FQDNs for permanent public trust, wallet discovery, and verificati
 - **Issuer Engine**: `https://issuer.dpi.ait.ac.th`
 - **Credential Verifier**: `https://verifier.dpi.ait.ac.th` (or `https://verifer.dpi.ait.ac.th`)
 - **Inji Web Wallet**: `https://wallet.dpi.ait.ac.th`
-- **VDR (Schemas & Contexts)**: `https://vdr.dpi.ait.ac.th`
+- **VDR (Schemas, Templates & Assets)**: `https://vdr.dpi.ait.ac.th`
 - **VCGA (Issuers Catalog)**: `https://vcga.dpi.ait.ac.th`
-- **CDN (Brand Assets & Logos)**: `https://cdn.dpi.ait.ac.th`
 
 ### Staging Demo Web Ingress (TLS / Caddy)
 Internet-facing endpoints accessible on the demo VM:

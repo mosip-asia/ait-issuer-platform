@@ -17,7 +17,7 @@ This walkthrough provides a concrete, end-to-end implementation guide for adding
 
 The process follows two distinct phases:
 1. **Phase 0: Student ID Card Modeling & Design (VC Lab)**: Define the claims dictionary, select the cryptographic formats (dual W3C JSON-LD and ISO 18013-5 mDoc), design the card styling, and preview templates offline.
-2. **Phase 1: Deployment & Runtime Configuration across the 5 Components**: Deploy schema to VDR/CDN, register the credential blueprint in Certify, publish in the VCGA catalog, enable wallet discovery, and configure verification rules in Verify.
+2. **Phase 1: Deployment & Runtime Configuration across the 5 Components**: Deploy schema, templates, and assets to VDR, register the credential blueprint in Certify, publish in the VCGA catalog, enable wallet discovery, and configure verification rules in Verify.
 
 ---
 
@@ -72,7 +72,7 @@ Unlike academic transcripts which are primarily inspected in desktop PDF viewers
 2. **ISO/IEC 18013-5 Mobile Document (`mso_mdoc`) with ES256 (ECDSA P-256)**: Designed for Apple Wallet, Google Wallet, and high-throughput offline turnstiles (NFC/BLE) at campus gates and libraries.
 
 ### 0.3 Visual Card Presentation & Velocity Template
-- **Card Thumbnail**: Configured with AIT corporate brand colors: Background `#005696`, text `#FFFFFF`, and logo `http://cdn.localhost/assets/AIT_globe.png`.
+- **Card Thumbnail**: Configured with AIT corporate brand colors: Background `#005696`, text `#FFFFFF`, and logo `http://vdr.localhost/assets/AIT_globe.png`.
 - **Display Order**: `studentId`, `fullName`, `faculty`, `academicProgram`, `studentStatus`, `expiryDate`.
 - **Printable Card Template**: Uses Apache Velocity macros (`#claimValue("studentId")`) and embeds `$qrCodeImage` for instant scan verification.
 
@@ -93,7 +93,7 @@ Once designed, deploy the Student ID Card across the **five core runtime compone
 
 ```
 ┌──────────────────────────────────────────────┐
-│ 1. VDR & CDN (vdr.localhost / cdn.localhost) │  ◄── 1. Define schema & visual assets first
+│ 1. VDR (vdr.localhost)                       │  ◄── 1. Define schema & visual assets first
 │    contexts/<vc> & assets/<logo>             │
 └──────────────────────┬───────────────────────┘
                        │ resolves schema
@@ -159,16 +159,15 @@ Each component has a clear purpose, a specific configuration file, and an **expl
 2. **Brand Assets**: Place the credential logo at [`deploy/ait/vdr/assets/AIT_globe.png`](../../deploy/ait/vdr/assets/AIT_globe.png).
 
 3. **Single Source of Truth with Configurable Origin**:
-Credential JSON blueprints in `deploy/ait/credentials/*.json` use clean local domain URLs (`http://vdr.localhost` and `http://cdn.localhost`) so local development works 100% offline without external dependencies or `/etc/hosts` modifications:
+Credential JSON blueprints in `deploy/ait/credentials/*.json` use clean local domain URLs (`http://vdr.localhost`) so local development works 100% offline without external dependencies or `/etc/hosts` modifications:
 - **Local VDR Schema URI**: `http://vdr.localhost/contexts/student-id/v1.json`
-- **Local CDN Asset URI**: `http://cdn.localhost/assets/AIT_globe.png`
+- **Local VDR Asset URI**: `http://vdr.localhost/assets/AIT_globe.png`
 
-When deploying to production or staging, `certify-template-sync` automatically substitutes `VDR_BASE_URL=https://vdr.dpi.ait.ac.th` and `CDN_BASE_URL=https://cdn.dpi.ait.ac.th` when synchronizing into PostgreSQL.
+When deploying to production or staging, `certify-template-sync` automatically substitutes `VDR_BASE_URL=https://vdr.dpi.ait.ac.th` when synchronizing into PostgreSQL.
 
 | Role | Local Clean URL (*.localhost) | Institutional Production Domain | Internal Container Port |
 |---|---|---|---|
-| **VDR (Schemas)** | `http://vdr.localhost` | `https://vdr.dpi.ait.ac.th` | `80` |
-| **CDN (Assets)** | `http://cdn.localhost` | `https://cdn.dpi.ait.ac.th` | `80` |
+| **VDR (Trust Registry)** | `http://vdr.localhost` | `https://vdr.dpi.ait.ac.th` | `80` |
 | **VCGA (Catalog)** | `http://vcga.localhost` | `https://vcga.dpi.ait.ac.th` | `80` |
 | **Issuer Engine** | `http://issuer.localhost` | `https://issuer.dpi.ait.ac.th` | `80` |
 | **Verifier UI** | `http://verifier.localhost` | `https://verifier.dpi.ait.ac.th` | `8000` |
@@ -179,17 +178,17 @@ In local development:
 - **Zero-Config Domain Ingress (Traefik v3.7)**: All `*.localhost` domains (RFC 6761) resolve natively to `127.0.0.1` on port 80 without modifying `/etc/hosts` or exposing individual host ports.
 - **Inside Docker**: `compose.certify.yaml`, `compose.verify.yaml`, and `compose.web-wallet.yaml` map `*.localhost` to `host-gateway` via `extra_hosts` so containers and browsers resolve the exact same URLs.
 
-### 1.2 How to Validate VDR and CDN
+### 1.2 How to Validate VDR
 
-#### Validate VDR:
+#### Validate Schema:
 ```bash
 curl -s http://vdr.localhost/contexts/student-id/v1.json | jq .
 ```
 *Expected: HTTP 200 OK returning the JSON-LD context.*
 
-#### Validate CDN:
+#### Validate Asset:
 ```bash
-curl -s -I http://cdn.localhost/assets/AIT_globe.png
+curl -s -I http://vdr.localhost/assets/AIT_globe.png
 ```
 *Expected: HTTP 200 OK with `Content-Type: image/png` and `Access-Control-Allow-Origin: *`.*
 
@@ -224,7 +223,7 @@ Create the credential definition and Apache Velocity template at [`deploy/ait/cr
       "name": "AIT Student ID Card",
       "locale": "en",
       "logo": {
-        "url": "http://cdn.localhost/assets/AIT_globe.png",
+        "url": "http://vdr.localhost/assets/AIT_globe.png",
         "alt_text": "AIT Logo"
       },
       "background_color": "#005696",
@@ -334,7 +333,7 @@ Create [`deploy/ait/credentials/ait-student-id-mdoc.json`](../../deploy/ait/cred
       "name": "AIT Student ID (mDoc)",
       "locale": "en",
       "logo": {
-        "url": "http://cdn.localhost/assets/AIT_globe.png",
+        "url": "http://vdr.localhost/assets/AIT_globe.png",
         "alt_text": "AIT Logo"
       },
       "background_color": "#005696",

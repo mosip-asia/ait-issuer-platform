@@ -29,7 +29,7 @@ INSERT INTO certify.credential_config (
     'EdDSA',
     'Ed25519Signature2020',
     NULL,
-    '[{"name": "AIT Transcript", "locale": "en", "logo": {"url": "http://cdn.localhost/assets/AIT_globe.png", "alt_text": "AIT Logo"}, "background_color": "#ffffff", "text_color": "#000000"}]'::JSONB,
+    '[{"name": "AIT Transcript", "locale": "en", "logo": {"url": "http://vdr.localhost/assets/AIT_globe.png", "alt_text": "AIT Logo"}, "background_color": "#ffffff", "text_color": "#000000"}]'::JSONB,
     ARRAY['fullName', 'academicProgram', 'degreeAwarded', 'dateGraduation', 'registrationNo', 'courseList']::TEXT[],
     'ait_transcript_vc_ldp',
     ARRAY['did:jwk']::TEXT[],

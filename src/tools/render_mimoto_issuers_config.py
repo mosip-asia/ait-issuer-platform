@@ -61,10 +61,12 @@ def render(env: dict[str, str]) -> dict[Path, str]:
     installation_dir = REPO_ROOT / "deploy" / env["INSTALLATION"]
     template = installation_dir / "mimoto-issuers-config.json.template"
     inji_web_url = env.get("INJI_WEB_URL", "http://wallet.localhost")
-    default_cdn = "https://cdn.dpi.ait.ac.th" if inji_web_url.startswith("https://") else "http://cdn.localhost"
+    default_vdr = "https://vdr.dpi.ait.ac.th" if inji_web_url.startswith("https://") else "http://vdr.localhost"
+    vdr_base = env.get("VDR_BASE_URL", default_vdr).rstrip("/")
     values = {
         "INJI_WEB_URL": inji_web_url,
-        "CDN_BASE_URL": env.get("CDN_BASE_URL", default_cdn).rstrip("/"),
+        "VDR_BASE_URL": vdr_base,
+        "CDN_BASE_URL": vdr_base,
         **authorization_server(env["INSTALLATION"], env),
     }
     rendered = template.read_text(encoding="utf-8")

@@ -74,8 +74,7 @@ Under [RFC 6761](https://tools.ietf.org/html/rfc6761), every modern operating sy
 | **Keycloak IAM** | [http://auth.localhost](http://auth.localhost) | `8080` | Identity provider & token authority ([Admin Console](http://auth.localhost/admin/): `admin` / `admin`) |
 | **SIS Adapter** | [http://adapter.localhost](http://adapter.localhost) | `8000` | Mock SIS student record API (`/student/{sub}/transcript`) |
 | **Clearance Gateway** | [http://gateway.localhost](http://gateway.localhost) | `8000` | Institutional checklist evaluator (`/evaluations`) |
-| **VDR (Schemas)** | [http://vdr.localhost](http://vdr.localhost) | `80` | Public JSON-LD contexts & vocabularies |
-| **CDN (Assets)** | [http://cdn.localhost](http://cdn.localhost) | `80` | Static brand assets, university seals, and logos |
+| **VDR (Trust Registry)** | [http://vdr.localhost](http://vdr.localhost) | `80` | Public W3C JSON-LD contexts, templates, and brand assets |
 | **VCGA (Catalog)** | [http://vcga.localhost](http://vcga.localhost) | `80` | Inji Mimoto trusted issuer registry catalog |
 
 > [!TIP]
@@ -400,9 +399,8 @@ Permanent institutional endpoints for cryptographic schema resolution, issuance,
 - **Issuer Engine:** `https://issuer.dpi.ait.ac.th`
 - **Credential Verifier:** `https://verifier.dpi.ait.ac.th` (or `https://verifer.dpi.ait.ac.th`)
 - **Inji Web Wallet:** `https://wallet.dpi.ait.ac.th`
-- **VDR (Schemas & Contexts):** `https://vdr.dpi.ait.ac.th`
+- **VDR (Schemas, Templates & Assets):** `https://vdr.dpi.ait.ac.th`
 - **VCGA (Issuers Catalog):** `https://vcga.dpi.ait.ac.th`
-- **CDN (Brand Assets & Logos):** `https://cdn.dpi.ait.ac.th`
 
 ### Staging Demo Web Ingress (TLS / Caddy)
 These public endpoints are internet-facing on the demo VM for student holders and external verifiers:
