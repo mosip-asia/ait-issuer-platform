@@ -16,6 +16,7 @@ import argparse
 import base64
 import html
 import json
+import os
 import re
 import struct
 import sys
@@ -36,7 +37,8 @@ from ait_courses import enrich_ait_transcript_subject  # noqa: E402
 
 STUDENTS_JSON = REPO_ROOT / "tests" / "fixtures" / "students.json"
 DEFAULT_OUT = REPO_ROOT / ".demo-state" / "preview.html"
-DEFAULT_LOGO = "https://cdn.dpi.ait.ac.th/assets/AIT_globe.png"
+CDN_BASE_URL = (os.environ.get("CDN_BASE_URL") or "http://cdn.localhost").rstrip("/")
+DEFAULT_LOGO = f"{CDN_BASE_URL}/assets/AIT_globe.png"
 
 
 def generate_mock_qr_png_base64() -> str:

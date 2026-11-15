@@ -95,6 +95,8 @@ def load_credential_configs(creds_dir):
             content = f.read()
             for var_name, var_val in substitutions.items():
                 content = content.replace(f"${{{var_name}}}", var_val)
+            content = content.replace("http://vdr.localhost", substitutions["VDR_BASE_URL"])
+            content = content.replace("http://cdn.localhost", substitutions["CDN_BASE_URL"])
             try:
                 data = json.loads(content)
                 configs.append((p.name, data))

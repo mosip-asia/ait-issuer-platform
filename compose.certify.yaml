@@ -38,6 +38,15 @@ services:
     user: root
     extra_hosts:
       - "host.docker.internal:host-gateway"
+      - "vdr.localhost:host-gateway"
+      - "cdn.localhost:host-gateway"
+      - "vcga.localhost:host-gateway"
+      - "issuer.localhost:host-gateway"
+      - "verifier.localhost:host-gateway"
+      - "wallet.localhost:host-gateway"
+      - "auth.localhost:host-gateway"
+      - "adapter.localhost:host-gateway"
+      - "gateway.localhost:host-gateway"
       - "vdr.dpi.ait.ac.th:host-gateway"
       - "cdn.dpi.ait.ac.th:host-gateway"
       - "vcga.dpi.ait.ac.th:host-gateway"

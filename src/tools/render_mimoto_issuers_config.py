@@ -60,8 +60,11 @@ def render(env: dict[str, str]) -> dict[Path, str]:
     """Return {output path: content} for the given environment."""
     installation_dir = REPO_ROOT / "deploy" / env["INSTALLATION"]
     template = installation_dir / "mimoto-issuers-config.json.template"
+    inji_web_url = env.get("INJI_WEB_URL", "http://wallet.localhost")
+    default_cdn = "https://cdn.dpi.ait.ac.th" if inji_web_url.startswith("https://") else "http://cdn.localhost"
     values = {
-        "INJI_WEB_URL": env.get("INJI_WEB_URL", "http://localhost:4004"),
+        "INJI_WEB_URL": inji_web_url,
+        "CDN_BASE_URL": env.get("CDN_BASE_URL", default_cdn).rstrip("/"),
         **authorization_server(env["INSTALLATION"], env),
     }
     rendered = template.read_text(encoding="utf-8")

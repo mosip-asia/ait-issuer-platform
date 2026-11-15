@@ -171,28 +171,26 @@ Once the schema, template, and visual assets are designed, deploy them across th
 
 2. **Brand Assets**: Place your credential logo at `deploy/<installation>/assets/<logo>.png`.
 
-3. **Canonical Domain Architecture (Pattern A)**:
-In production, credentials must **never** use dynamic `.env` replacement for `@context` schemas or assets, as altering context URIs invalidates W3C JSON-LD cryptographic signatures. Always reference permanent canonical FQDNs (for AIT, under `*.dpi.ait.ac.th`):
-- **VDR Schema URI**: `"https://vdr.dpi.ait.ac.th/contexts/<vc-name>/v1.json"`
-- **CDN Asset URI**: `"https://cdn.dpi.ait.ac.th/assets/<logo>.png"`
+3. **Single Source of Truth with Configurable Origin**:
+Credential JSON blueprints in `deploy/<inst>/credentials/*.json` use clean local domain URLs (`http://vdr.localhost` and `http://cdn.localhost`) so local development works 100% offline without external dependencies or `/etc/hosts` modifications:
+- **Local VDR Schema URI**: `"http://vdr.localhost/contexts/<vc-name>/v1.json"`
+- **Local CDN Asset URI**: `"http://cdn.localhost/assets/<logo>.png"`
 
-| Role | Institutional Production Domain | Local Clean URL (*.localhost) | Internal Container Port |
+When deploying to production or staging, `certify-template-sync` automatically substitutes `VDR_BASE_URL=https://vdr.dpi.ait.ac.th` and `CDN_BASE_URL=https://cdn.dpi.ait.ac.th` when synchronizing into PostgreSQL.
+
+| Role | Local Clean URL (*.localhost) | Institutional Production Domain | Internal Container Port |
 |---|---|---|---|
-| **VDR (Schemas)** | `https://vdr.dpi.ait.ac.th` | `http://vdr.localhost` | `80` |
-| **CDN (Assets)** | `https://cdn.dpi.ait.ac.th` | `http://cdn.localhost` | `80` |
-| **VCGA (Catalog)** | `https://vcga.dpi.ait.ac.th` | `http://vcga.localhost` | `80` |
-| **Issuer Engine** | `https://issuer.dpi.ait.ac.th` | `http://issuer.localhost` | `80` |
-| **Verifier UI** | `https://verifier.dpi.ait.ac.th` | `http://verifier.localhost` | `8000` |
-| **Web Wallet** | `https://wallet.dpi.ait.ac.th` | `http://wallet.localhost` | `3004` |
-| **VC Lab Studio** | `https://lab.dpi.ait.ac.th` | `http://lab.localhost` | `4200` |
+| **VDR (Schemas)** | `http://vdr.localhost` | `https://vdr.dpi.ait.ac.th` | `80` |
+| **CDN (Assets)** | `http://cdn.localhost` | `https://cdn.dpi.ait.ac.th` | `80` |
+| **VCGA (Catalog)** | `http://vcga.localhost` | `https://vcga.dpi.ait.ac.th` | `80` |
+| **Issuer Engine** | `http://issuer.localhost` | `https://issuer.dpi.ait.ac.th` | `80` |
+| **Verifier UI** | `http://verifier.localhost` | `https://verifier.dpi.ait.ac.th` | `8000` |
+| **Web Wallet** | `http://wallet.localhost` | `https://wallet.dpi.ait.ac.th` | `3004` |
+| **VC Lab Studio** | `http://lab.localhost` | `https://lab.dpi.ait.ac.th` | `4200` |
 
 In local development:
 - **Zero-Config Domain Ingress (Traefik v3.7)**: All `*.localhost` domains (RFC 6761) resolve natively to `127.0.0.1` on port 80 without modifying `/etc/hosts` or exposing individual host ports.
-- **Inside Docker**: `compose.trust.yaml`, `compose.certify.yaml`, `compose.verify.yaml`, and `compose.web-wallet.yaml` define network aliases and `extra_hosts` mapping `*.dpi.ait.ac.th` to `host-gateway`.
-- **On Developer Host (Optional)**: If you want to use the full `*.dpi.ait.ac.th` production domain names locally on your host machine, add them to `/etc/hosts`:
-  ```bash
-  127.0.0.1 vdr.dpi.ait.ac.th cdn.dpi.ait.ac.th vcga.dpi.ait.ac.th issuer.dpi.ait.ac.th verifier.dpi.ait.ac.th wallet.dpi.ait.ac.th
-  ```
+- **Inside Docker**: `compose.certify.yaml`, `compose.verify.yaml`, and `compose.web-wallet.yaml` map `*.localhost` to `host-gateway` via `extra_hosts` so containers and browsers resolve the exact same URLs.
 #### Validate VDR:
 ```bash
 curl -s http://vdr.localhost/contexts/<vc-name>/v1.json | jq .
@@ -223,7 +221,7 @@ Create `deploy/<installation>/credentials/<credential-id>.json`:
   "credential_type": "<CredentialType>,VerifiableCredential",
   "credential_format": "ldp_vc",
   "context": [
-    "https://vdr.dpi.ait.ac.th/contexts/<vc-name>/v1.json",
+    "http://vdr.localhost/contexts/<vc-name>/v1.json",
     "https://www.w3.org/ns/credentials/v2"
   ],
   "did_url": "did:key:z6MkpPLACEHOLDERreplaceMeViaBootstrapDidRefreshScript1",
@@ -236,7 +234,7 @@ Create `deploy/<installation>/credentials/<credential-id>.json`:
       "name": "Human Friendly Credential Name",
       "locale": "en",
       "logo": {
-        "url": "https://cdn.dpi.ait.ac.th/assets/<logo>.png",
+        "url": "http://cdn.localhost/assets/<logo>.png",
         "alt_text": "Logo"
       },
       "background_color": "#005696",
@@ -259,7 +257,7 @@ Create `deploy/<installation>/credentials/<credential-id>.json`:
   "vc_template": {
     "@context": [
       "https://www.w3.org/ns/credentials/v2",
-      "https://vdr.dpi.ait.ac.th/contexts/<vc-name>/v1.json",
+      "http://vdr.localhost/contexts/<vc-name>/v1.json",
       "https://w3id.org/security/suites/ed25519-2020/v1"
     ],
     "issuer": "${_issuer}",
@@ -315,7 +313,7 @@ Create `deploy/<installation>/credentials/<credential-id>-mdoc.json`:
       "name": "Mobile Document Name",
       "locale": "en",
       "logo": {
-        "url": "https://cdn.dpi.ait.ac.th/assets/<logo>.png",
+        "url": "http://cdn.localhost/assets/<logo>.png",
         "alt_text": "Logo"
       },
       "background_color": "#005696",

@@ -80,7 +80,9 @@ AIT = gc.REPO_ROOT / "deploy" / "ait"
 
 def seed_value(pattern: str) -> str:
     """One SQL string literal of the ait-transcript credential_config row, found by its shape."""
-    return re.search(pattern, (AIT / "certify_seed.sql").read_text(encoding="utf-8"))[1]
+    text = (AIT / "certify_seed.sql").read_text(encoding="utf-8")
+    transcript_block = text.split("-- Credential: ait-transcript", 1)[-1]
+    return re.search(pattern, transcript_block)[1]
 
 
 def seed_template() -> dict:
@@ -98,7 +100,7 @@ def test_certify_configuration_names_the_generated_columns() -> None:
 
 def test_template_and_context_column_name_the_same_vdr_url() -> None:
     url = seed_value(r"'([^']*/contexts/transcript/v1\.json[^']*)'").split(",")[0]
-    assert url == "http://host.docker.internal:9098/contexts/transcript/v1.json", url
+    assert url == "http://vdr.localhost/contexts/transcript/v1.json", url
     assert seed_template()["@context"] == [
         "https://www.w3.org/ns/credentials/v2",
         url,

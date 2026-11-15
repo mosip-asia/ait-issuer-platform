@@ -8,7 +8,7 @@
         {
           "name": "AIT Hackathon",
           "logo": {
-            "url": "https://ait.ac.th/wp-content/uploads/2024/09/AIT_globe.png",
+            "url": "${CDN_BASE_URL}/assets/AIT_globe.png",
             "alt_text": "ait-logo"
           },
           "title": "AIT Hackathon",

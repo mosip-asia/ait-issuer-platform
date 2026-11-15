@@ -72,7 +72,7 @@ Unlike academic transcripts which are primarily inspected in desktop PDF viewers
 2. **ISO/IEC 18013-5 Mobile Document (`mso_mdoc`) with ES256 (ECDSA P-256)**: Designed for Apple Wallet, Google Wallet, and high-throughput offline turnstiles (NFC/BLE) at campus gates and libraries.
 
 ### 0.3 Visual Card Presentation & Velocity Template
-- **Card Thumbnail**: Configured with AIT corporate brand colors: Background `#005696`, text `#FFFFFF`, and logo `https://cdn.dpi.ait.ac.th/assets/AIT_globe.png`.
+- **Card Thumbnail**: Configured with AIT corporate brand colors: Background `#005696`, text `#FFFFFF`, and logo `http://cdn.localhost/assets/AIT_globe.png`.
 - **Display Order**: `studentId`, `fullName`, `faculty`, `academicProgram`, `studentStatus`, `expiryDate`.
 - **Printable Card Template**: Uses Apache Velocity macros (`#claimValue("studentId")`) and embeds `$qrCodeImage` for instant scan verification.
 
@@ -180,28 +180,26 @@ Each component has a clear purpose, a specific configuration file, and an **expl
 
 2. **Brand Assets**: Place the credential logo at [`deploy/ait/assets/AIT_globe.png`](../../deploy/ait/assets/AIT_globe.png).
 
-3. **Canonical Domain Architecture (`*.dpi.ait.ac.th`)**:
-To prevent cryptographic signature invalidation and environment drift, production blueprints **never** use dynamic `.env` string substitution for `@context` and assets. They use permanent canonical domain names:
-- **VDR Schema URI**: `https://vdr.dpi.ait.ac.th/contexts/student-id/v1.json`
-- **CDN Asset URI**: `https://cdn.dpi.ait.ac.th/assets/AIT_globe.png`
+3. **Single Source of Truth with Configurable Origin**:
+Credential JSON blueprints in `deploy/ait/credentials/*.json` use clean local domain URLs (`http://vdr.localhost` and `http://cdn.localhost`) so local development works 100% offline without external dependencies or `/etc/hosts` modifications:
+- **Local VDR Schema URI**: `http://vdr.localhost/contexts/student-id/v1.json`
+- **Local CDN Asset URI**: `http://cdn.localhost/assets/AIT_globe.png`
 
-| Role | Institutional Production Domain | Local Clean URL (*.localhost) | Internal Container Port |
+When deploying to production or staging, `certify-template-sync` automatically substitutes `VDR_BASE_URL=https://vdr.dpi.ait.ac.th` and `CDN_BASE_URL=https://cdn.dpi.ait.ac.th` when synchronizing into PostgreSQL.
+
+| Role | Local Clean URL (*.localhost) | Institutional Production Domain | Internal Container Port |
 |---|---|---|---|
-| **VDR (Schemas)** | `https://vdr.dpi.ait.ac.th` | `http://vdr.localhost` | `80` |
-| **CDN (Assets)** | `https://cdn.dpi.ait.ac.th` | `http://cdn.localhost` | `80` |
-| **VCGA (Catalog)** | `https://vcga.dpi.ait.ac.th` | `http://vcga.localhost` | `80` |
-| **Issuer Engine** | `https://issuer.dpi.ait.ac.th` | `http://issuer.localhost` | `80` |
-| **Verifier UI** | `https://verifier.dpi.ait.ac.th` | `http://verifier.localhost` | `8000` |
-| **Web Wallet** | `https://wallet.dpi.ait.ac.th` | `http://wallet.localhost` | `3004` |
-| **VC Lab Studio** | `https://lab.dpi.ait.ac.th` | `http://lab.localhost` | `4200` |
+| **VDR (Schemas)** | `http://vdr.localhost` | `https://vdr.dpi.ait.ac.th` | `80` |
+| **CDN (Assets)** | `http://cdn.localhost` | `https://cdn.dpi.ait.ac.th` | `80` |
+| **VCGA (Catalog)** | `http://vcga.localhost` | `https://vcga.dpi.ait.ac.th` | `80` |
+| **Issuer Engine** | `http://issuer.localhost` | `https://issuer.dpi.ait.ac.th` | `80` |
+| **Verifier UI** | `http://verifier.localhost` | `https://verifier.dpi.ait.ac.th` | `8000` |
+| **Web Wallet** | `http://wallet.localhost` | `https://wallet.dpi.ait.ac.th` | `3004` |
+| **VC Lab Studio** | `http://lab.localhost` | `https://lab.dpi.ait.ac.th` | `4200` |
 
 In local development:
 - **Zero-Config Domain Ingress (Traefik v3.7)**: All `*.localhost` domains (RFC 6761) resolve natively to `127.0.0.1` on port 80 without modifying `/etc/hosts` or exposing individual host ports.
-- **Inside Docker**: `compose.trust.yaml`, `compose.certify.yaml`, `compose.verify.yaml`, and `compose.web-wallet.yaml` define network aliases and `extra_hosts` mapping `*.dpi.ait.ac.th` to `host-gateway`.
-- **On Developer Host (Optional)**: If you want to use the full `*.dpi.ait.ac.th` production domain names locally on your host machine, add them to `/etc/hosts`:
-  ```bash
-  127.0.0.1 vdr.dpi.ait.ac.th cdn.dpi.ait.ac.th vcga.dpi.ait.ac.th issuer.dpi.ait.ac.th verifier.dpi.ait.ac.th wallet.dpi.ait.ac.th
-  ```
+- **Inside Docker**: `compose.certify.yaml`, `compose.verify.yaml`, and `compose.web-wallet.yaml` map `*.localhost` to `host-gateway` via `extra_hosts` so containers and browsers resolve the exact same URLs.
 
 ### 1.2 How to Validate VDR and CDN
 
@@ -235,7 +233,7 @@ Create the credential definition and Apache Velocity template at [`deploy/ait/cr
   "credential_type": "AitStudentIdCredential,VerifiableCredential",
   "credential_format": "ldp_vc",
   "context": [
-    "https://vdr.dpi.ait.ac.th/contexts/student-id/v1.json",
+    "http://vdr.localhost/contexts/student-id/v1.json",
     "https://www.w3.org/ns/credentials/v2"
   ],
   "did_url": "did:key:z6MkpPLACEHOLDERreplaceMeViaBootstrapDidRefreshScript1",
@@ -248,7 +246,7 @@ Create the credential definition and Apache Velocity template at [`deploy/ait/cr
       "name": "AIT Student ID Card",
       "locale": "en",
       "logo": {
-        "url": "https://cdn.dpi.ait.ac.th/assets/AIT_globe.png",
+        "url": "http://cdn.localhost/assets/AIT_globe.png",
         "alt_text": "AIT Logo"
       },
       "background_color": "#005696",
@@ -292,7 +290,7 @@ Create the credential definition and Apache Velocity template at [`deploy/ait/cr
   "vc_template": {
     "@context": [
       "https://www.w3.org/ns/credentials/v2",
-      "https://vdr.dpi.ait.ac.th/contexts/student-id/v1.json",
+      "http://vdr.localhost/contexts/student-id/v1.json",
       "https://w3id.org/security/suites/ed25519-2020/v1"
     ],
     "issuer": "${_issuer}",
@@ -358,7 +356,7 @@ Create [`deploy/ait/credentials/ait-student-id-mdoc.json`](../../deploy/ait/cred
       "name": "AIT Student ID (mDoc)",
       "locale": "en",
       "logo": {
-        "url": "https://cdn.dpi.ait.ac.th/assets/AIT_globe.png",
+        "url": "http://cdn.localhost/assets/AIT_globe.png",
         "alt_text": "AIT Logo"
       },
       "background_color": "#005696",
@@ -438,7 +436,7 @@ curl -s http://issuer.localhost/.well-known/openid-credential-issuer | jq '.cred
       "AitStudentIdCredential"
     ],
     "@context": [
-      "https://vdr.dpi.ait.ac.th/contexts/student-id/v1.json",
+      "http://vdr.localhost/contexts/student-id/v1.json",
       "https://www.w3.org/ns/credentials/v2"
     ]
   }

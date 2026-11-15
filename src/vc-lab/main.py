@@ -42,6 +42,8 @@ TEMPLATES_DIR = Path(os.environ.get("TEMPLATES_DIR", REPO_ROOT / "deploy" / "ait
 BASE_TEMPLATES_DIR = Path(os.environ.get("BASE_TEMPLATES_DIR", REPO_ROOT / "deploy" / "base"))
 STUDENTS_FILE = Path(os.environ.get("STUDENTS_FILE", REPO_ROOT / "tests" / "fixtures" / "students.json"))
 INSTALLATION = os.environ.get("INSTALLATION", "ait")
+VDR_BASE_URL = (os.environ.get("VDR_BASE_URL") or "http://vdr.localhost").rstrip("/")
+CDN_BASE_URL = (os.environ.get("CDN_BASE_URL") or "http://cdn.localhost").rstrip("/")
 
 
 class PreviewRequest(BaseModel):
@@ -50,7 +52,7 @@ class PreviewRequest(BaseModel):
     student_id: Optional[str] = "st120001"
     claims: Optional[dict[str, Any]] = None
     title: Optional[str] = "Asian Institute of Technology Credential"
-    logo_url: Optional[str] = "https://cdn.dpi.ait.ac.th/assets/AIT_globe.png"
+    logo_url: Optional[str] = f"{CDN_BASE_URL}/assets/AIT_globe.png"
     text_color: Optional[str] = "#000000"
     bg_color: Optional[str] = "#FFFFFF"
 
@@ -75,7 +77,7 @@ def list_contexts() -> list[dict[str, Any]]:
                 rel_path = f.relative_to(CONTEXTS_DIR).as_posix()
                 results.append({
                     "path": rel_path,
-                    "canonical_uri": f"https://vdr.dpi.ait.ac.th/contexts/{rel_path}",
+                    "canonical_uri": f"{VDR_BASE_URL}/contexts/{rel_path}",
                     "content": data,
                 })
             except Exception as e:
@@ -90,7 +92,12 @@ def list_credentials() -> list[dict[str, Any]]:
     if CREDENTIALS_DIR.exists():
         for f in sorted(CREDENTIALS_DIR.glob("*.json")):
             try:
-                data = json.loads(f.read_text(encoding="utf-8"))
+                content = f.read_text(encoding="utf-8")
+                content = content.replace("${VDR_BASE_URL}", VDR_BASE_URL)
+                content = content.replace("${CDN_BASE_URL}", CDN_BASE_URL)
+                content = content.replace("http://vdr.localhost", VDR_BASE_URL)
+                content = content.replace("http://cdn.localhost", CDN_BASE_URL)
+                data = json.loads(content)
                 results.append({
                     "filename": f.name,
                     "key_id": data.get("credential_config_key_id"),
@@ -113,7 +120,7 @@ def list_assets() -> list[dict[str, str]]:
             if f.is_file():
                 results.append({
                     "filename": f.name,
-                    "cdn_url": f"https://cdn.dpi.ait.ac.th/assets/{f.name}",
+                    "cdn_url": f"{CDN_BASE_URL}/assets/{f.name}",
                     "size_bytes": str(f.stat().st_size),
                 })
     return results

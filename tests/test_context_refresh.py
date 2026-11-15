@@ -14,7 +14,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BASE = REPO_ROOT / "deploy" / "base"
-LOCAL = "http://host.docker.internal:9098/contexts/transcript/v1.json"
+LOCAL = "http://vdr.localhost/contexts/transcript/v1.json"
 PUBLIC = "https://api.demo.example/contexts/transcript/v1.json"
 W3C = "https://www.w3.org/ns/credentials/v2"
 
