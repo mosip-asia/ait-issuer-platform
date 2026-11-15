@@ -82,8 +82,8 @@ def test_issuers_config_token_endpoint_uses_inji_web_proxy() -> None:
         f"token_endpoint must be same-origin Inji Web proxy (expected one of {valid_tokens}, got {token_ep}). "
         "Re-run vc-stack/bootstrap.sh to refresh issuer config."
     )
-    assert issuer["authorization_audience"].startswith("http://keycloak:8080/"), issuer["authorization_audience"]
-    assert issuer["proxy_token_endpoint"].startswith("http://keycloak:8080/"), issuer["proxy_token_endpoint"]
+    assert issuer["authorization_audience"].startswith("http://auth.localhost/"), issuer["authorization_audience"]
+    assert issuer["proxy_token_endpoint"].startswith("http://auth.localhost/"), issuer["proxy_token_endpoint"]
     valid_redirects = {
         f"http://wallet.localhost/redirect",
         f"http://localhost:4004/redirect",
@@ -105,7 +105,7 @@ def test_mimoto_cors_allows_inji_web_host_port() -> None:
 def test_mimoto_keycloak_external_is_browser_url() -> None:
     props = (MIMOTO_PROPS_DIR / "mimoto-default.properties").read_text(encoding="utf-8")
     assert "keycloak.external.url=http://auth.localhost" in props or "keycloak.external.url=http://localhost:8080" in props
-    assert "keycloak.internal.url=http://keycloak:8080" in props
+    assert "keycloak.internal.url=http://auth.localhost" in props
 
 
 def test_keycloak_wallet_demo_redirect_includes_inji_web() -> None:

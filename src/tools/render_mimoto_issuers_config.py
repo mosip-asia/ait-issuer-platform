@@ -106,12 +106,15 @@ def render(env: dict[str, str]) -> dict[Path, str]:
 
     issuer = json.loads(rendered)["issuers"][0]
     if is_public:
+        auth_token_ep = f"{values['AUTH_SERVER_PUBLIC_URL']}/protocol/openid-connect/token"
         issuer = {
             **issuer,
             "credential_issuer_host": api_url,
             "wellknown_endpoint": f"{api_url}/.well-known/openid-credential-issuer",
             "redirect_uri": MOBILE_REDIRECT_URI,
             "token_endpoint": f"{api_url}/v1/mimoto/get-token/{issuer['issuer_id']}",
+            "authorization_audience": auth_token_ep,
+            "proxy_token_endpoint": auth_token_ep,
         }
     # Same envelope Mimoto's GET /v1/mimoto/issuers returns.
     mobile_list = {"response": {"issuers": [issuer]}, "errors": []}

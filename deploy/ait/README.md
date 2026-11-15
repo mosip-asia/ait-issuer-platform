@@ -18,7 +18,7 @@ How the infra team deploys this directory (the service set, every variable and m
 
 The installation's own values:
 
-- Authorization Server: the stand-in Keycloak realm `inji` (`http://keycloak:8080/realms/inji`) unless the environment sets `AUTH_SERVER_*` in `.env`; see `authorization-server.env`
+- Authorization Server: the stand-in Keycloak realm `ait` (`http://auth.localhost/realms/ait`) unless the environment sets `AUTH_SERVER_*` in `.env`; see `authorization-server.env`
 - Keycloak realm: `inji`, with wallet client `wallet-demo`; every user's password is `inji` (test-only)
 - Test-only client `smoke`: public, direct-access grant, the `ait_transcript_vc_ldp` scope and a hardcoded `client_id` claim; only `scripts/smoke-test.sh` uses it
 - Scope: `ait_transcript_vc_ldp`

@@ -64,10 +64,10 @@ REALM_PATH = re.compile(
 def stand_in(installation: str) -> dict[str, str]:
     realm = f"/realms/{REALMS[installation]}"
     return {
-        "AUTH_SERVER_ISSUER": f"http://keycloak:8080{realm}",
-        "AUTH_SERVER_JWKS_URL": f"http://host.docker.internal:8080{realm}/protocol/openid-connect/certs",
-        "AUTH_SERVER_TOKEN_ENDPOINT": f"http://keycloak:8080{realm}/protocol/openid-connect/token",
-        "AUTH_SERVER_PUBLIC_URL": f"http://localhost:8080{realm}",
+        "AUTH_SERVER_ISSUER": f"http://auth.localhost{realm}",
+        "AUTH_SERVER_JWKS_URL": f"http://auth.localhost{realm}/protocol/openid-connect/certs",
+        "AUTH_SERVER_TOKEN_ENDPOINT": f"http://auth.localhost{realm}/protocol/openid-connect/token",
+        "AUTH_SERVER_PUBLIC_URL": f"http://auth.localhost{realm}",
         "AUTH_SERVER_WALLET_CLIENT_ID": "wallet-demo",
     }
 
@@ -120,7 +120,7 @@ def test_the_stand_in_follows_the_keycloak_bases_of_the_environment() -> None:
     settings = r.authorization_server("ait", env)
     assert settings["AUTH_SERVER_PUBLIC_URL"] == "https://keycloak.demo.example/realms/ait"
     assert settings["AUTH_SERVER_JWKS_URL"] == "http://kc:1/realms/ait/protocol/openid-connect/certs"
-    assert settings["AUTH_SERVER_ISSUER"] == "http://keycloak:8080/realms/ait"
+    assert settings["AUTH_SERVER_ISSUER"] == "http://auth.localhost/realms/ait"
     assert r.authorization_server("ait", {"AUTH_SERVER_ISSUER": ""}) == stand_in("ait")
 
 
@@ -158,7 +158,7 @@ def test_the_phones_metadata_maps_the_issuer_to_its_public_url() -> None:
     public = {"CERTIFY_PUBLIC_BASE_URL": "https://api.demo.example", "KEYCLOAK_PUBLIC_BASE_URL": "https://kc.demo.example"}
     snippet = r.render({"INSTALLATION": "ait", **public})[r.GATEWAY_SNIPPET_OUT]
     assert (
-        """'"authorization_servers":["http://keycloak:8080/realms/ait"]' """
+        """'"authorization_servers":["http://auth.localhost/realms/ait"]' """
         """'"authorization_servers":["https://kc.demo.example/realms/ait"]'"""
     ) in snippet
     snippet = r.render({"INSTALLATION": "ait", **public, **CAMPUS_ENV})[r.GATEWAY_SNIPPET_OUT]

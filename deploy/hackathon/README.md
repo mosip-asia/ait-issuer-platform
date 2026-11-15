@@ -17,7 +17,7 @@ How the infra team deploys this directory (the service set, every variable and m
 
 The installation's own values:
 
-- Authorization Server: the stand-in Keycloak realm `hackathon` (`http://keycloak:8080/realms/hackathon`) unless the environment sets `AUTH_SERVER_*` in `.env`; see `authorization-server.env`
+- Authorization Server: the stand-in Keycloak realm `hackathon` (`http://auth.localhost/realms/hackathon`) unless the environment sets `AUTH_SERVER_*` in `.env`; see `authorization-server.env`
 - Keycloak realm: `hackathon`, with wallet client `wallet-demo`; every user's password is `inji` (test-only)
 - Test-only client `smoke`: public, direct-access grant, the two scopes and a hardcoded `client_id` claim; only `scripts/smoke-test.sh` uses it
 - Scopes: `developer_passport_vc_ldp`, `achievement_certificate_vc_ldp`
