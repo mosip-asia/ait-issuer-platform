@@ -85,6 +85,8 @@ run_release_checks() {
   for t in \
     src/tools/test_generate_csv.py \
     src/tools/test_render_mimoto_issuers_config.py \
+    src/vc-lab/test_preview_template.py \
+    src/vc-lab/test_main.py \
     src/verifier/test_verifier.py \
     tests/test_installations.py \
     tests/test_authorization_server.py \

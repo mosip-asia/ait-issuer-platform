@@ -17,3 +17,25 @@ include:
   - compose.verify.yaml
   - compose.web-wallet.yaml
   - compose.trust.yaml
+
+services:
+  vc-lab:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.vc-lab
+    container_name: vc-lab
+    ports:
+      - "${VC_LAB_PORT}:4200"
+    environment:
+      - INSTALLATION=${INSTALLATION}
+      - CREDENTIALS_DIR=/app/credentials
+      - CONTEXTS_DIR=/app/contexts
+      - ASSETS_DIR=/app/assets
+      - TEMPLATES_DIR=/app/templates
+      - BASE_TEMPLATES_DIR=/app/base_templates
+    volumes:
+      - ./deploy/${INSTALLATION}/credentials:/app/credentials:ro
+      - ./deploy/${INSTALLATION}/contexts:/app/contexts:ro
+      - ./deploy/${INSTALLATION}/assets:/app/assets:ro
+      - ./deploy/${INSTALLATION}:/app/templates:ro
+      - ./deploy/base:/app/base_templates:ro

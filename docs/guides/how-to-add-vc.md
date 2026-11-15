@@ -1,67 +1,209 @@
 ---
 title: "How to Develop and Add a Verifiable Credential to Inji Platform"
-description: "High-level architectural and step-by-step developer guide for adding a new Verifiable Credential (VC) across the 5 core components: Certify, VCGA, VDR, Wallet, and Verify, including validation commands for each."
+description: "High-level architectural and step-by-step developer guide for designing and adding a new Verifiable Credential (VC) from Phase 0 (Design & Modeling) through Phase 1 (5 Core Runtime Components: VDR/CDN, Certify, VCGA, Wallet, and Verify)."
 tags:
   - guide
-  - certify
-  - credential
-  - template
-  - vcga
+  - design
   - vdr
+  - cdn
+  - certify
+  - vcga
   - wallet
   - verify
 ---
 
 # How to Add a Verifiable Credential to Inji Platform
 
-This guide explains the developer workflow for adding a new **Verifiable Credential (VC)** to the platform.
+This guide explains the developer and designer workflow for authoring, modeling, and deploying a new **Verifiable Credential (VC)** to the platform.
 
-Adding a credential touches **five core components**:
-
-```
-                      ┌─────────────────────────────────┐
-                      │ 2. VCGA (Issuers Catalog :9099) │
-                      │    mimoto-issuers-config.json   │
-                      └────────────────┬────────────────┘
-                                       │ discovers issuer
-                                       ▼
-┌──────────────────────────────┐              ┌──────────────────────────────┐
-│ 3. VDR (Context Server :9098)│              │ 4. Wallet (Inji Web :4004)   │
-│    contexts/<vc>/v1.json     │              │    views, claims & stores VC │
-└──────────────┬───────────────┘              └──────────────┬───────────────┘
-               │ resolves schema                             │ OID4VCI request
-               ▼                                             ▼
-┌────────────────────────────────────────────────────────────────────────────┐
-│ 1. Inji Certify (Issuer Engine :9091)                                      │
-│    credentials/<vc>.json (template, scope, keys) & PostgreSQL sync         │
-└──────────────────────────────────────┬─────────────────────────────────────┘
-                                       │ issues signed VC
-                                       ▼
-                      ┌─────────────────────────────────┐
-                      │ 5. Inji Verify (Verifier :8000) │
-                      │    verify-config.json           │
-                      └─────────────────────────────────┘
-```
+The credential lifecycle is structured into two phases:
+1. **Phase 0: Credential Design & Modeling (Upstream Authoring)**: Define the claims dictionary, select the cryptographic format, craft the visual card and printable HTML template, and preview offline without running infrastructure.
+2. **Phase 1: Deployment & Runtime Configuration (The 5 Core Components)**: Deploy schema and assets to VDR/CDN, configure signing engine in Certify, register in VCGA catalog, expose in Wallet, and enforce verification rules in Verify.
 
 ---
 
-## The 5 Core Components Overview
+## Phase 0: Credential Design & Modeling (Upstream Authoring)
+
+Before deploying files into Docker containers or databases, the data contract and visual presentation must be designed and verified.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       PHASE 0: CREDENTIAL DESIGN                            │
+└─────────────────────────────────────┬───────────────────────────────────────┘
+                                      │
+         ┌────────────────────────────┼────────────────────────────┐
+         ▼                            ▼                            ▼
+┌──────────────────┐         ┌──────────────────┐         ┌──────────────────┐
+│ 1. Claims        │         │ 2. Visual Layout │         │ 3. Format &      │
+│    Dictionary    │         │ & HTML Template  │         │ Cryptography     │
+│ - Fields & Types │         │ - Wallet Card    │         │ - W3C JSON-LD vs │
+│ - Mandatory vs   │         │ - Printable PDF  │         │   mso_mdoc       │
+│   Optional       │         │ - Logo & Colors  │         │ - Ed25519 vs     │
+└────────┬─────────┘         └────────┬─────────┘         │   ES256 P-256    │
+         │                            │                   └────────┬─────────┘
+         └────────────────────────────┼────────────────────────────┘
+                                      │
+                                      ▼ Generates 5 Artifacts
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 1. Schema (@context)         ──► deploy/<inst>/contexts/<vc>/v1.json (VDR)  │
+│ 2. Brand Artwork             ──► deploy/<inst>/assets/<logo>.png (CDN)      │
+│ 3. Certify Blueprint         ──► deploy/<inst>/credentials/<vc>.json        │
+│ 4. Printable HTML Template   ──► deploy/base/<issuer>-<vc>-template.html    │
+│ 5. Verification Rules        ──► deploy/base/verify-config.json             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 0.1 Define the Claims Dictionary
+Identify the core attributes that this credential asserts:
+- What attributes are required vs optional? (e.g. `studentId`, `fullName`, `faculty`, `academicProgram`).
+- What data formats apply (dates, strings, arrays)?
+- Which claims are public vs sensitive?
+
+### 0.2 Select Format & Cryptographic Suite
+Inji Certify natively supports three primary credential formats defined in OpenID4VCI:
+
+| Credential Format | Standard | Data Representation | Signature Scheme | Best Used For |
+|---|---|---|---|---|
+| **`ldp_vc`** | W3C VCDM 2.0 | JSON-LD text with `@context` | Linked Data Proofs (`Ed25519Signature2020` / EdDSA) | Academic transcripts, web wallets (Inji Web), cloud PDF verification |
+| **`mso_mdoc`** | ISO/IEC 18013-5 | Binary CBOR (Mobile Security Object) | COSE (`COSE_Sign1` with `ES256` ECDSA P-256) | Student ID cards, Apple Wallet, Google Wallet, offline NFC/BLE gate turnstiles |
+| **`vc+sd-jwt`** | IETF SD-JWT VC | Base64url JSON Web Tokens | JWS (`ES256` / `RS256`) with SHA-256 disclosure digests | Fine-grained field-by-field selective disclosure in browser wallets |
+
+### 0.3 Design Visual Assets & HTML Template
+Credentials typically require two visual presentations:
+1. **Wallet Card Display**: Thumbnail styling in the wallet catalog (`background_color`, `text_color`, logo URI).
+2. **Printable Document / Certificate Layout**: The printable document is an **Apache Velocity HTML template** (e.g. [`deploy/ait/AITUniversity-ait-transcript-template.html`](../../deploy/ait/AITUniversity-ait-transcript-template.html) or [`deploy/base/credential-template.html`](../../deploy/base/credential-template.html)):
+   - Defines page geometry (`@page { size: A4 portrait; margin: 10mm; }`).
+   - Uses `#macro(claimValue $claimName)` and `#claimValue("fieldName")` to bind claims.
+   - Embeds `$qrCodeImage` for instant scan-to-verify functionality.
+
+### 0.4 Offline Design Preview (Without Docker)
+Use the built-in offline preview tool in `src/vc-lab` to render and test your Velocity HTML template with sample persona data instantly:
+
+```bash
+# Preview academic transcript template with sample student persona:
+python3 src/vc-lab/preview_template.py \
+  --template deploy/ait/AITUniversity-ait-transcript-template.html \
+  --student st120001 \
+  --out .demo-state/preview.html
+
+# Preview a card template with custom inline claims:
+python3 src/vc-lab/preview_template.py \
+  --template deploy/base/credential-template.html \
+  --claims '{"studentId":"st120001","fullName":"Nara Wattanakul","faculty":"SET"}' \
+  --out .demo-state/preview.html
+```
+
+Open `.demo-state/preview.html` directly in any web browser to inspect typography, page breaks, borders, and margins before starting runtime deployment.
+
+---
+
+## Phase 1: Deploy to the 5 Core Components (Runtime Configuration)
+
+Once the schema, template, and visual assets are designed, deploy them across the **five core components** in natural dependency order:
+
+```
+┌─────────────────────────────────┐
+│ 1. VDR & CDN (Trust :9098/97)   │  ◄── 1. Define schema & visual assets first
+│    contexts/<vc> & assets/<logo>│
+└──────────────┬──────────────────┘
+               │ resolves schema
+               ▼
+┌─────────────────────────────────┐
+│ 2. Inji Certify (Issuer :9091)  │  ◄── 2. Configure credential blueprint & keys
+│    credentials/<vc>.json        │
+└──────────────┬──────────────────┘
+               │ published to
+               ▼
+┌─────────────────────────────────┐
+│ 3. VCGA (Catalog :9099)         │  ◄── 3. Register issuer in wallet catalog
+│    mimoto-issuers-config.json   │
+└──────────────┬──────────────────┘
+               │ discovers issuer
+               ▼
+┌─────────────────────────────────┐              ┌──────────────────────────────┐
+│ 4. Wallet (Inji Web :4004)      │   presents   │ 5. Inji Verify (Verify :8000)│
+│    claims & stores credential   ├─────────────►│    validates signature/schema│
+└─────────────────────────────────┘              └──────────────────────────────┘
+```
 
 | Component | Responsibility | Configuration Artifact | Validation Command |
 |---|---|---|---|
-| **1. Certify** | Issuer engine, signing keys, status lists | `deploy/<inst>/credentials/<vc>.json` | `curl :9091/.well-known/openid-credential-issuer` |
-| **2. VCGA** | Mimoto issuer catalog for wallet discovery | `deploy/<inst>/mimoto-issuers-config.json` | `curl :9099/mimoto-issuers-config.json` |
-| **3. VDR** | JSON-LD schema & context server | `deploy/<inst>/contexts/<vc>/v1.json` | `curl :9098/contexts/<vc>/v1.json` |
-| **4. Wallet** | Inji Web / Mobile holder app | `deploy/base/<template>.html` | `curl :4004/v1/mimoto/issuers/.../configuration` |
+| **1. VDR & CDN** | JSON-LD schema & static brand assets | `deploy/<inst>/contexts/<vc>/v1.json` | `curl :9098/contexts/<vc>/v1.json` |
+| **2. Certify** | Issuer engine, signing keys, status lists | `deploy/<inst>/credentials/<vc>.json` | `curl :9091/.well-known/openid-credential-issuer` |
+| **3. VCGA** | Mimoto issuer catalog for wallet discovery | `deploy/<inst>/mimoto-issuers-config.json` | `curl :9099/mimoto-issuers-config.json` |
+| **4. Wallet** | Digital wallet (Inji Web / Mobile) | Card display properties & template | `curl :4004/v1/mimoto/issuers/.../configuration` |
 | **5. Verify** | Signature & schema verification | `deploy/base/verify-config.json` | `curl :8000/v1/verify/v2/vc-verification` |
 
 ---
 
-## 1. Configure Inji Certify (Issuer Engine)
+## 1. Configure VDR (Schemas) & CDN (Assets)
 
-**Role**: Certify is the cryptographic signing engine. It loads credential configurations from PostgreSQL (`certify.credential_config`), evaluates Apache Velocity templates, and signs credentials using its configured DID (`CERTIFY_DID`).
+**Role**: Before an issuer can sign a credential or a verifier can inspect it, the cryptographic schema and visual branding must exist at permanent, resolvable URIs.
+- **VDR (Port 9098)**: Static Nginx serving W3C JSON-LD `@context` schemas from `deploy/${INSTALLATION}/contexts/`.
+- **CDN (Port 9097)**: Static Nginx serving brand logos and card artwork from `deploy/${INSTALLATION}/assets/`.
 
 ### 1.1 What to Configure
+
+1. **Context Schema**: Create the JSON-LD `@context` file at `deploy/<installation>/contexts/<vc-name>/v1.json`:
+```json
+{
+  "@context": {
+    "@version": 1.1,
+    "@protected": true,
+    "<prefix>": "https://vdr.example.org/contexts/<vc-name>/v1.json#",
+    "<CredentialType>": "<prefix>:<CredentialType>",
+    "field1": "<prefix>:field1",
+    "field2": "<prefix>:field2"
+  }
+}
+```
+
+2. **Brand Assets**: Place your credential logo at `deploy/<installation>/assets/<logo>.png`.
+
+3. **Canonical Domain Architecture (Pattern A)**:
+In production, credentials must **never** use dynamic `.env` replacement for `@context` schemas or assets, as altering context URIs invalidates W3C JSON-LD cryptographic signatures. Always reference permanent canonical FQDNs (for AIT, under `*.dpi.ait.ac.th`):
+- **VDR Schema URI**: `"https://vdr.dpi.ait.ac.th/contexts/<vc-name>/v1.json"`
+- **CDN Asset URI**: `"https://cdn.dpi.ait.ac.th/assets/<logo>.png"`
+
+| Role | Institutional Production Domain | Local Compose Service / Port |
+|---|---|---|
+| **VDR (Schemas)** | `https://vdr.dpi.ait.ac.th` | `vdr` (`http://localhost:9098`) |
+| **CDN (Assets)** | `https://cdn.dpi.ait.ac.th` | `cdn` (`http://localhost:9097`) |
+| **VCGA (Catalog)** | `https://vcga.dpi.ait.ac.th` | `vcga` (`http://localhost:9099`) |
+| **Issuer Engine** | `https://issuer.dpi.ait.ac.th` | `certify-nginx` (`http://localhost:9091`) |
+| **Verifier UI** | `https://verifier.dpi.ait.ac.th` | `verify-ui` (`http://localhost:8000`) |
+| **Web Wallet** | `https://wallet.dpi.ait.ac.th` | `inji-web` (`http://localhost:4004`) |
+
+In local development:
+- **Inside Docker**: `compose.trust.yaml`, `compose.certify.yaml`, `compose.verify.yaml`, and `compose.web-wallet.yaml` define network aliases and `extra_hosts` mapping `*.dpi.ait.ac.th` to `host-gateway`.
+- **On Developer Host**: Add local resolution aliases to `/etc/hosts` if testing with direct FQDNs:
+  ```bash
+  127.0.0.1 vdr.dpi.ait.ac.th cdn.dpi.ait.ac.th vcga.dpi.ait.ac.th issuer.dpi.ait.ac.th verifier.dpi.ait.ac.th wallet.dpi.ait.ac.th
+  ```
+  Or access directly via exposed host ports (`http://localhost:9098` for VDR, `http://localhost:9097` for CDN).
+
+### 1.2 How to Validate VDR and CDN
+
+#### Validate VDR:
+```bash
+curl -s http://localhost:9098/contexts/<vc-name>/v1.json | jq .
+```
+*Expected: Returns HTTP 200 with the valid JSON-LD `@context` document.*
+
+#### Validate CDN:
+```bash
+curl -s -I http://localhost:9097/assets/<logo>.png
+```
+*Expected: Returns HTTP 200 with `Content-Type: image/png` and CORS header `Access-Control-Allow-Origin: *`.*
+
+---
+
+## 2. Configure Inji Certify (Issuer Engine)
+
+**Role**: Certify is the cryptographic signing engine. It loads credential configurations from PostgreSQL (`certify.credential_config`), evaluates templates or claims mappings, and signs credentials using its configured keys.
+
+### 2.1 Format A: W3C JSON-LD (`ldp_vc`)
+
 Create `deploy/<installation>/credentials/<credential-id>.json`:
 
 ```json
@@ -72,7 +214,7 @@ Create `deploy/<installation>/credentials/<credential-id>.json`:
   "credential_type": "<CredentialType>,VerifiableCredential",
   "credential_format": "ldp_vc",
   "context": [
-    "https://vdr.example.org/contexts/<vc-name>/v1.json",
+    "https://vdr.dpi.ait.ac.th/contexts/<vc-name>/v1.json",
     "https://www.w3.org/ns/credentials/v2"
   ],
   "did_url": "did:key:z6MkpPLACEHOLDERreplaceMeViaBootstrapDidRefreshScript1",
@@ -85,7 +227,7 @@ Create `deploy/<installation>/credentials/<credential-id>.json`:
       "name": "Human Friendly Credential Name",
       "locale": "en",
       "logo": {
-        "url": "https://example.org/logo.png",
+        "url": "https://cdn.dpi.ait.ac.th/assets/<logo>.png",
         "alt_text": "Logo"
       },
       "background_color": "#005696",
@@ -108,7 +250,7 @@ Create `deploy/<installation>/credentials/<credential-id>.json`:
   "vc_template": {
     "@context": [
       "https://www.w3.org/ns/credentials/v2",
-      "https://vdr.example.org/contexts/<vc-name>/v1.json",
+      "https://vdr.dpi.ait.ac.th/contexts/<vc-name>/v1.json",
       "https://w3id.org/security/suites/ed25519-2020/v1"
     ],
     "issuer": "${_issuer}",
@@ -131,13 +273,71 @@ Create `deploy/<installation>/credentials/<credential-id>.json`:
 }
 ```
 
-### 1.2 Synchronize to PostgreSQL
+---
+
+### 2.2 Format B: ISO/IEC 18013-5 Mobile Document (`mso_mdoc`)
+
+Create `deploy/<installation>/credentials/<credential-id>-mdoc.json`:
+
+```json
+{
+  "credential_config_key_id": "<credential-id>-mdoc",
+  "status": "active",
+  "scope": "<credential_scope>_mdoc",
+  "credential_format": "mso_mdoc",
+  "doctype": "org.iso.18013.5.1.<doctype>",
+  "key_manager_app_id": "CERTIFY_VC_SIGN_EC_R1",
+  "key_manager_ref_id": "EC_SECP256R1_SIGN",
+  "signature_algo": "ES256",
+  "signature_crypto_suite": "ES256",
+  "cryptographic_binding_methods_supported": [
+    "cose_key"
+  ],
+  "credential_signing_alg_values_supported": [
+    "ES256"
+  ],
+  "proof_types_supported": {
+    "jwt": {
+      "proof_signing_alg_values_supported": ["ES256"]
+    }
+  },
+  "display": [
+    {
+      "name": "Mobile Document Name",
+      "locale": "en",
+      "logo": {
+        "url": "https://cdn.dpi.ait.ac.th/assets/<logo>.png",
+        "alt_text": "Logo"
+      },
+      "background_color": "#005696",
+      "text_color": "#FFFFFF"
+    }
+  ],
+  "display_order": ["field1", "field2"],
+  "mso_mdoc_claims": {
+    "org.iso.18013.5.1.<namespace>": {
+      "field1": {
+        "mandatory": true,
+        "display": [{ "name": "Field 1", "locale": "en" }]
+      },
+      "field2": {
+        "mandatory": false,
+        "display": [{ "name": "Field 2", "locale": "en" }]
+      }
+    }
+  }
+}
+```
+
+---
+
+### 2.3 Synchronize to PostgreSQL
 Apply the credential JSON to Certify's database:
 ```bash
 docker compose -f compose.certify.yaml run --rm template-sync
 ```
 
-### 1.3 How to Validate Inji Certify
+### 2.4 How to Validate Inji Certify
 
 #### Validation Command 1: OpenID4VCI Issuer Discovery
 Query Certify's discovery metadata to ensure the credential is active:
@@ -157,11 +357,11 @@ docker compose -f compose.certify.yaml exec -T database \
 
 ---
 
-## 2. Configure VCGA (Issuers Catalog)
+## 3. Configure VCGA (Issuers Catalog)
 
 **Role**: Verifiable Credentials Global Architecture (VCGA) serves `mimoto-issuers-config.json` on port `9099`. Wallets query this catalog to discover issuers and their OpenID4VCI endpoints.
 
-### 2.1 What to Configure
+### 3.1 What to Configure
 In `deploy/<installation>/mimoto-issuers-config.json`, ensure your issuer is listed and enabled:
 ```json
 {
@@ -185,61 +385,12 @@ In `deploy/<installation>/mimoto-issuers-config.json`, ensure your issuer is lis
 }
 ```
 
-### 2.2 How to Validate VCGA
+### 3.2 How to Validate VCGA
 Query the static VCGA catalog server:
 ```bash
 curl -s http://localhost:9099/mimoto-issuers-config.json | jq '.issuers[] | {issuer_id, wellknown_endpoint, enabled}'
 ```
 *Expected: Returns HTTP 200 with `enabled: "true"` and points to Certify's `.well-known` endpoint.*
-
----
-
-## 3. Configure VDR (Contexts) & CDN (Assets)
-
-In `compose.trust.yaml`, two static services host public trust artifacts:
-1. **VDR (Port 9098)**: Serves W3C JSON-LD `@context` schemas from `deploy/<inst>/contexts/`.
-2. **CDN (Port 9097)**: Serves branding logos and visual card assets from `deploy/<inst>/assets/`.
-
-### 3.1 What to Configure
-
-1. **Context Schema**: Create `deploy/<installation>/contexts/<vc-name>/v1.json`:
-```json
-{
-  "@context": {
-    "@version": 1.1,
-    "@protected": true,
-    "<prefix>": "https://example.org/credentials#",
-    "<CredentialType>": "<prefix>:<CredentialType>",
-    "field1": "<prefix>:field1",
-    "field2": "<prefix>:field2"
-  }
-}
-```
-
-2. **Brand Assets**: Place your credential logo at `deploy/<installation>/assets/<logo>.png`.
-
-3. **Canonical Domain Architecture (Pattern A)**:
-In production, credentials must **never** use dynamic `.env` replacement for `@context` schemas, as altering the context URI breaks W3C JSON-LD cryptographic signatures. Always reference permanent canonical FQDNs (for AIT, under `*.dpi.ait.ac.th`):
-- Context: `"https://vdr.dpi.ait.ac.th/contexts/<vc-name>/v1.json"`
-- Logo: `"https://cdn.dpi.ait.ac.th/assets/<logo>.png"`
-
-In local development:
-- **Docker Compose**: Map domains using `extra_hosts` in `compose.certify.yaml`, `compose.verify.yaml`, and `compose.web-wallet.yaml`, and container network `aliases` in `compose.trust.yaml`.
-- **Developer Host**: Add `/etc/hosts` mappings (`127.0.0.1 vdr.dpi.ait.ac.th cdn.dpi.ait.ac.th`) or test via exposed host ports (`:9098` for VDR, `:9097` for CDN).
-
-### 3.2 How to Validate VDR and CDN
-
-#### Validate VDR:
-```bash
-curl -s http://localhost:9098/contexts/<vc-name>/v1.json | jq .
-```
-*Expected: Returns HTTP 200 with the valid JSON-LD `@context` document.*
-
-#### Validate CDN:
-```bash
-curl -s -I http://localhost:9097/assets/<logo>.png
-```
-*Expected: Returns HTTP 200 with `Content-Type: image/png` and CORS header `Access-Control-Allow-Origin: *`.*
 
 ---
 
@@ -348,21 +499,24 @@ curl -s -X POST "http://localhost:8000/v1/verify/v2/vc-verification" \
 
 ## 6. End-to-End Validation Checklist
 
-Run through these five commands in order to confirm complete readiness:
+Run through these six commands in order to confirm complete readiness:
 
 ```bash
 # 1. VDR Context is served:
 curl -s -f http://localhost:9098/contexts/<vc-name>/v1.json > /dev/null && echo "✅ 1. VDR OK"
 
-# 2. VCGA Catalog is served:
-curl -s -f http://localhost:9099/mimoto-issuers-config.json > /dev/null && echo "✅ 2. VCGA OK"
+# 2. CDN Asset is served:
+curl -s -f http://localhost:9097/assets/<logo>.png > /dev/null && echo "✅ 2. CDN OK"
 
-# 3. Certify recognizes the credential:
-curl -s -f http://localhost:9091/.well-known/openid-credential-issuer | jq -e '.credential_configurations_supported["<credential-id>"]' > /dev/null && echo "✅ 3. Certify OK"
+# 3. VCGA Catalog is served:
+curl -s -f http://localhost:9099/mimoto-issuers-config.json > /dev/null && echo "✅ 3. VCGA OK"
 
-# 4. Wallet proxies the credential:
-curl -s -f http://localhost:4004/v1/mimoto/issuers/<IssuerId>/configuration | jq -e '.credential_configurations_supported["<credential-id>"]' > /dev/null && echo "✅ 4. Wallet OK"
+# 4. Certify recognizes the credential:
+curl -s -f http://localhost:9091/.well-known/openid-credential-issuer | jq -e '.credential_configurations_supported["<credential-id>"]' > /dev/null && echo "✅ 4. Certify OK"
 
-# 5. Verify service is healthy:
-curl -s -f http://localhost:8000/actuator/health > /dev/null && echo "✅ 5. Verify OK"
+# 5. Wallet proxies the credential:
+curl -s -f http://localhost:4004/v1/mimoto/issuers/<IssuerId>/configuration | jq -e '.credential_configurations_supported["<credential-id>"]' > /dev/null && echo "✅ 5. Wallet OK"
+
+# 6. Verify service is healthy:
+curl -s -f http://localhost:8000/actuator/health > /dev/null && echo "✅ 6. Verify OK"
 ```
