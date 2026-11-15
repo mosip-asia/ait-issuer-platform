@@ -45,6 +45,7 @@ This repository houses the **Institutional Verifiable Credential Platform (Issue
 
 Lookup guides for operators, developers, and agents:
 
+- [Day-0 / First Installation & Integration Guide](./guides/day-0-deployment.md): Initial deployment in dev environment, Keycloak SSO integration, and SIS adapter connection.
 - [CI/CD & Deployment Architecture](./deployment.md): Branch promotions (`dev` -> `uat` -> `main`), secrets, and SSH deployment over NetBird.
 - [VC download troubleshooting](./reference/vc-download-troubleshooting.md): Diagnosing issuer lists, session failures, and token errors.
 - [Inji mobile wallet](./reference/inji-mobile-wallet.md): Mobile-specific issuer lists and metadata routing.

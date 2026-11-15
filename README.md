@@ -433,6 +433,7 @@ Target hosts execute `scripts/deploy.sh` over an encrypted NetBird mesh network 
 ## 9. Documentation Index
 
 - [Documentation Overview (`docs/OVERVIEW.md`)](./docs/OVERVIEW.md)
+- [Day-0 / First Installation & Integration Guide (`docs/guides/day-0-deployment.md`)](./docs/guides/day-0-deployment.md)
 - [How to Add a New Verifiable Credential (`docs/guides/how-to-add-vc.md`)](./docs/guides/how-to-add-vc.md)
 - [VC Lab Studio & Template Designer (`src/vc-lab/README.md`)](./src/vc-lab/README.md)
 - [Architecture & Topology (`docs/architecture/vc-stack.md`)](./docs/architecture/vc-stack.md)
