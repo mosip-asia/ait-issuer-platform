@@ -42,7 +42,7 @@ services:
       - ./deploy/${INSTALLATION}/mimoto-issuers-config.json:/home/mosip/mimoto-issuers-config.json
       - ./deploy/base/mimoto-trusted-verifiers.json:/home/mosip/mimoto-trusted-verifiers.json
       - ./deploy/base/credential-template.html:/home/mosip/credential-template.html
-      - ./deploy/${INSTALLATION}/AITUniversity-ait-transcript-template.html:/home/mosip/AITUniversity-ait-transcript-template.html
+      - ./deploy/ait/AITUniversity-ait-transcript-template.html:/home/mosip/AITUniversity-ait-transcript-template.html
       - ./deploy/base/nginx.conf:/etc/nginx/conf.d/default.conf
     restart: unless-stopped
     labels:
