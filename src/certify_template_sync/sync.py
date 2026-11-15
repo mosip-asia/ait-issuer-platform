@@ -81,14 +81,13 @@ def load_credential_configs(creds_dir):
 
     vdr_base = os.getenv("VDR_BASE_URL") or "http://vdr.localhost"
     cdn_base = os.getenv("CDN_BASE_URL") or vdr_base
-    certify_did = os.getenv("CERTIFY_DID")
+    certify_did = os.getenv("CERTIFY_DID") or "did:key:z6MkpPLACEHOLDERreplaceMeViaBootstrapDidRefreshScript1"
 
     substitutions = {
         "VDR_BASE_URL": vdr_base.rstrip("/"),
         "CDN_BASE_URL": cdn_base.rstrip("/"),
+        "CERTIFY_DID": certify_did,
     }
-    if certify_did:
-        substitutions["CERTIFY_DID"] = certify_did
 
     for p in sorted(creds_dir.glob("*.json")):
         with open(p, "r", encoding="utf-8") as f:
@@ -146,7 +145,9 @@ def generate_sql_statement(config):
     cred_format = config.get("credential_format", "ldp_vc")
     doctype = config.get("doctype")
     sd_jwt_vct = config.get("sd_jwt_vct")
-    did_url = config.get("did_url", "did:key:z6MkpPLACEHOLDERreplaceMeViaBootstrapDidRefreshScript1")
+    did_url = config.get("did_url") or "did:key:z6MkpPLACEHOLDERreplaceMeViaBootstrapDidRefreshScript1"
+    if did_url == "${CERTIFY_DID}":
+        did_url = os.getenv("CERTIFY_DID") or "did:key:z6MkpPLACEHOLDERreplaceMeViaBootstrapDidRefreshScript1"
     key_mgr_app = config.get("key_manager_app_id", "CERTIFY_VC_SIGN_ED25519")
     key_mgr_ref = config.get("key_manager_ref_id", "ED25519_SIGN")
     sig_algo = config.get("signature_algo", "EdDSA")
