@@ -98,12 +98,21 @@
       "implicitFlowEnabled": false,
       "fullScopeAllowed": true,
       "redirectUris": [
+        "http://wallet.localhost/redirect",
+        "http://wallet.lan/redirect",
+        "https://wallet.dpi.ait.ac.th/redirect",
         "http://localhost:4004/redirect",
         "io.mosip.residentapp.inji://oauthredirect",
         "*"
       ],
       "webOrigins": [
-        "+"
+        "+",
+        "http://wallet.localhost",
+        "http://wallet.lan",
+        "https://wallet.dpi.ait.ac.th",
+        "http://portal.localhost",
+        "http://portal.lan",
+        "*"
       ],
       "attributes": {
         "jwt.credential.certificate": "MIIDdTCCAl2gAwIBAgIIaC48z0eMMk0wDQYJKoZIhvcNAQEMBQAwaTELMAkGA1UEBhMCVVMxDjAMBgNVBAgTBWxvY2FsMQ4wDAYDVQQHEwVsb2NhbDEOMAwGA1UEChMFbG9jYWwxDTALBgNVBAsTBGluamkxGzAZBgNVBAMTEndhbGxldC1kZW1vLWNsaWVudDAeFw0yNjEwMjIxMTU5MDJaFw0zNjEwMTkxMTU5MDJaMGkxCzAJBgNVBAYTAlVTMQ4wDAYDVQQIEwVsb2NhbDEOMAwGA1UEBxMFbG9jYWwxDjAMBgNVBAoTBWxvY2FsMQ0wCwYDVQQLEwRpbmppMRswGQYDVQQDExJ3YWxsZXQtZGVtby1jbGllbnQwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDsiePzJCTFGfcEaEEk968dxFIZQZQMJJnCR7MjXVpKQVwgBi5vdms3A8bkjkt2zFiCsrLqvS/qrxFlSdGHrGYr2EnyyQwEcgtJMLzJcrR2YgH2/eW6AUVxIG35NWwuK7HujXHbgpP781vjiWSoh/ruWNC6HGoEOkq3lTXfU2VJIaLzgO5vbiFNoadrv+zAlUFCRF0EVCkB2Ow7llOS9yjIAI4SsDLn9PO2qPrTlvZAr1lwi55zgnKcIscJPQlV1tXjinAwhVSnluYMXbKbTopeZkyOfGHYrmuQZjsQ0+Jn9kYslwGrw8TsGWWklwbnpWxf0yTFvhQf07aZCZXcybihAgMBAAGjITAfMB0GA1UdDgQWBBRy4XZVtjhVpLdve5zy4OnZNMuxeTANBgkqhkiG9w0BAQwFAAOCAQEAkn+mrRqNO1azgjJkk1xWW9RCkcl3t/GFP1v13qF20uRV3fFelR+xQc5qmlVBxmrQvcRekZEmuon0pxmctMfOTFg5qM28yoNaooYcV2unW8t4iRmzz2ko+orw/nE12eWQPRMulYBkzCUA9mPFKvQtOstDSOC4OgOOjAg3ROXrXLwV/6BX9ktIHhzzJGIDANWQfxT/bnToWiLpnAiCvOzN7ATfqfVv/LBDtJICgYplmVsVdga3Snh9uwVXw0YQJXRnvwQ3pq5GIf3e1sLxtpdxlZj7uLzaIcQT/QZtD4XwvDbYdZZGUAkoF9BYOJvM41RFNtVIY7kwblSPMvYx6T6CPw==",
@@ -214,12 +223,21 @@
       "implicitFlowEnabled": false,
       "fullScopeAllowed": true,
       "redirectUris": [
+        "http://wallet.localhost/redirect",
+        "http://wallet.lan/redirect",
+        "https://wallet.dpi.ait.ac.th/redirect",
         "http://localhost:4004/redirect",
         "io.mosip.residentapp.inji://oauthredirect",
         "*"
       ],
       "webOrigins": [
-        "+"
+        "+",
+        "http://wallet.localhost",
+        "http://wallet.lan",
+        "https://wallet.dpi.ait.ac.th",
+        "http://portal.localhost",
+        "http://portal.lan",
+        "*"
       ],
       "attributes": {
         "jwt.credential.certificate": "MIIDdTCCAl2gAwIBAgIIaC48z0eMMk0wDQYJKoZIhvcNAQEMBQAwaTELMAkGA1UEBhMCVVMxDjAMBgNVBAgTBWxvY2FsMQ4wDAYDVQQHEwVsb2NhbDEOMAwGA1UEChMFbG9jYWwxDTALBgNVBAsTBGluamkxGzAZBgNVBAMTEndhbGxldC1kZW1vLWNsaWVudDAeFw0yNjEwMjIxMTU5MDJaFw0zNjEwMTkxMTU5MDJaMGkxCzAJBgNVBAYTAlVTMQ4wDAYDVQQIEwVsb2NhbDEOMAwGA1UEBxMFbG9jYWwxDjAMBgNVBAoTBWxvY2FsMQ0wCwYDVQQLEwRpbmppMRswGQYDVQQDExJ3YWxsZXQtZGVtby1jbGllbnQwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDsiePzJCTFGfcEaEEk968dxFIZQZQMJJnCR7MjXVpKQVwgBi5vdms3A8bkjkt2zFiCsrLqvS/qrxFlSdGHrGYr2EnyyQwEcgtJMLzJcrR2YgH2/eW6AUVxIG35NWwuK7HujXHbgpP781vjiWSoh/ruWNC6HGoEOkq3lTXfU2VJIaLzgO5vbiFNoadrv+zAlUFCRF0EVCkB2Ow7llOS9yjIAI4SsDLn9PO2qPrTlvZAr1lwi55zgnKcIscJPQlV1tXjinAwhVSnluYMXbKbTopeZkyOfGHYrmuQZjsQ0+Jn9kYslwGrw8TsGWWklwbnpWxf0yTFvhQf07aZCZXcybihAgMBAAGjITAfMB0GA1UdDgQWBBRy4XZVtjhVpLdve5zy4OnZNMuxeTANBgkqhkiG9w0BAQwFAAOCAQEAkn+mrRqNO1azgjJkk1xWW9RCkcl3t/GFP1v13qF20uRV3fFelR+xQc5qmlVBxmrQvcRekZEmuon0pxmctMfOTFg5qM28yoNaooYcV2unW8t4iRmzz2ko+orw/nE12eWQPRMulYBkzCUA9mPFKvQtOstDSOC4OgOOjAg3ROXrXLwV/6BX9ktIHhzzJGIDANWQfxT/bnToWiLpnAiCvOzN7ATfqfVv/LBDtJICgYplmVsVdga3Snh9uwVXw0YQJXRnvwQ3pq5GIf3e1sLxtpdxlZj7uLzaIcQT/QZtD4XwvDbYdZZGUAkoF9BYOJvM41RFNtVIY7kwblSPMvYx6T6CPw==",

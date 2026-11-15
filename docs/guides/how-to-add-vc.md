@@ -165,36 +165,32 @@ In production, credentials must **never** use dynamic `.env` replacement for `@c
 - **VDR Schema URI**: `"https://vdr.dpi.ait.ac.th/contexts/<vc-name>/v1.json"`
 - **CDN Asset URI**: `"https://cdn.dpi.ait.ac.th/assets/<logo>.png"`
 
-| Role | Institutional Production Domain | Local Clean URL (*.localhost) | Direct Compose Port |
+| Role | Institutional Production Domain | Local Clean URL (*.localhost) | Internal Container Port |
 |---|---|---|---|
-| **VDR (Schemas)** | `https://vdr.dpi.ait.ac.th` | `http://vdr.localhost` | `http://localhost:9098` |
-| **CDN (Assets)** | `https://cdn.dpi.ait.ac.th` | `http://cdn.localhost` | `http://localhost:9097` |
-| **VCGA (Catalog)** | `https://vcga.dpi.ait.ac.th` | `http://vcga.localhost` | `http://localhost:9099` |
-| **Issuer Engine** | `https://issuer.dpi.ait.ac.th` | `http://issuer.localhost` | `http://localhost:9091` |
-| **Verifier UI** | `https://verifier.dpi.ait.ac.th` | `http://verifier.localhost` | `http://localhost:8000` |
-| **Web Wallet** | `https://wallet.dpi.ait.ac.th` | `http://wallet.localhost` | `http://localhost:4004` |
-| **VC Lab Studio** | `https://lab.dpi.ait.ac.th` | `http://lab.localhost` | `http://localhost:4200` |
+| **VDR (Schemas)** | `https://vdr.dpi.ait.ac.th` | `http://vdr.localhost` | `80` |
+| **CDN (Assets)** | `https://cdn.dpi.ait.ac.th` | `http://cdn.localhost` | `80` |
+| **VCGA (Catalog)** | `https://vcga.dpi.ait.ac.th` | `http://vcga.localhost` | `80` |
+| **Issuer Engine** | `https://issuer.dpi.ait.ac.th` | `http://issuer.localhost` | `80` |
+| **Verifier UI** | `https://verifier.dpi.ait.ac.th` | `http://verifier.localhost` | `8000` |
+| **Web Wallet** | `https://wallet.dpi.ait.ac.th` | `http://wallet.localhost` | `3004` |
+| **VC Lab Studio** | `https://lab.dpi.ait.ac.th` | `http://lab.localhost` | `4200` |
 
 In local development:
-- **Zero-Config Ingress (Traefik v3.7)**: All `*.localhost` domains (RFC 6761) resolve natively to `127.0.0.1` on port 80 without modifying `/etc/hosts`.
+- **Zero-Config Domain Ingress (Traefik v3.7)**: All `*.localhost` domains (RFC 6761) resolve natively to `127.0.0.1` on port 80 without modifying `/etc/hosts` or exposing individual host ports.
 - **Inside Docker**: `compose.trust.yaml`, `compose.certify.yaml`, `compose.verify.yaml`, and `compose.web-wallet.yaml` define network aliases and `extra_hosts` mapping `*.dpi.ait.ac.th` to `host-gateway`.
 - **On Developer Host (Optional)**: If you want to use the full `*.dpi.ait.ac.th` production domain names locally on your host machine, add them to `/etc/hosts`:
   ```bash
   127.0.0.1 vdr.dpi.ait.ac.th cdn.dpi.ait.ac.th vcga.dpi.ait.ac.th issuer.dpi.ait.ac.th verifier.dpi.ait.ac.th wallet.dpi.ait.ac.th
   ```
-  Or simply use the native `*.localhost` URLs or exposed host ports.
-
-### 1.2 How to Validate VDR and CDN
-
 #### Validate VDR:
 ```bash
-curl -s http://localhost:9098/contexts/<vc-name>/v1.json | jq .
+curl -s http://vdr.localhost/contexts/<vc-name>/v1.json | jq .
 ```
 *Expected: Returns HTTP 200 with the valid JSON-LD `@context` document.*
 
 #### Validate CDN:
 ```bash
-curl -s -I http://localhost:9097/assets/<logo>.png
+curl -s -I http://cdn.localhost/assets/<logo>.png
 ```
 *Expected: Returns HTTP 200 with `Content-Type: image/png` and CORS header `Access-Control-Allow-Origin: *`.*
 
@@ -344,7 +340,7 @@ docker compose -f compose.certify.yaml run --rm template-sync
 #### Validation Command 1: OpenID4VCI Issuer Discovery
 Query Certify's discovery metadata to ensure the credential is active:
 ```bash
-curl -s http://localhost:9091/.well-known/openid-credential-issuer | jq '.credential_configurations_supported["<credential-id>"]'
+curl -s http://issuer.localhost/.well-known/openid-credential-issuer | jq '.credential_configurations_supported["<credential-id>"]'
 ```
 *Expected: Returns the JSON configuration object with matching format and scope.*
 
@@ -390,7 +386,7 @@ In `deploy/<installation>/mimoto-issuers-config.json`, ensure your issuer is lis
 ### 3.2 How to Validate VCGA
 Query the static VCGA catalog server:
 ```bash
-curl -s http://localhost:9099/mimoto-issuers-config.json | jq '.issuers[] | {issuer_id, wellknown_endpoint, enabled}'
+curl -s http://vcga.localhost/mimoto-issuers-config.json | jq '.issuers[] | {issuer_id, wellknown_endpoint, enabled}'
 ```
 *Expected: Returns HTTP 200 with `enabled: "true"` and points to Certify's `.well-known` endpoint.*
 
@@ -398,7 +394,7 @@ curl -s http://localhost:9099/mimoto-issuers-config.json | jq '.issuers[] | {iss
 
 ## 4. Configure Wallet (Inji Web)
 
-**Role**: Inji Web (port 4004) connects to VCGA, loads the issuer catalog, allows users to request VCs, and displays cards.
+**Role**: Inji Web connects to VCGA, loads the issuer catalog, allows users to request VCs, and displays cards.
 
 ### 4.1 What to Configure
 - **Branding**: Configured in Certify's `deploy/<inst>/credentials/<vc>.json` under `display` (wallet automatically reads this).
@@ -410,14 +406,14 @@ curl -s http://localhost:9099/mimoto-issuers-config.json | jq '.issuers[] | {iss
 #### Validation Command 1: Wallet Issuer Discovery
 Verify that Inji Web can read the issuer from VCGA:
 ```bash
-curl -s http://localhost:4004/v1/mimoto/issuers | jq .
+curl -s http://wallet.localhost/v1/mimoto/issuers | jq .
 ```
 *Expected: Lists your configured issuer.*
 
 #### Validation Command 2: Wallet Credential Catalog Proxy
 Verify that Inji Web proxies Certify's credential configurations:
 ```bash
-curl -s http://localhost:4004/v1/mimoto/issuers/<IssuerId>/configuration | jq '.credential_configurations_supported["<credential-id>"]'
+curl -s http://wallet.localhost/v1/mimoto/issuers/<IssuerId>/configuration | jq '.credential_configurations_supported["<credential-id>"]'
 ```
 *Expected: Returns the credential configuration. If this succeeds, the credential will render in the Inji Web UI catalog.*
 
@@ -480,7 +476,7 @@ Edit `deploy/base/verify-config.json`:
 ### 5.2 How to Validate Inji Verify
 Send a verification request with an issued credential JSON:
 ```bash
-curl -s -X POST "http://localhost:8000/v1/verify/v2/vc-verification" \
+curl -s -X POST "http://verifier.localhost/v1/verify/v2/vc-verification" \
   -H "Content-Type: application/json" \
   -d '{
     "verifiableCredential": "<PASTE_CREDENTIAL_JSON>",
@@ -505,20 +501,20 @@ Run through these six commands in order to confirm complete readiness:
 
 ```bash
 # 1. VDR Context is served:
-curl -s -f http://localhost:9098/contexts/<vc-name>/v1.json > /dev/null && echo "✅ 1. VDR OK"
+curl -s -f http://vdr.localhost/contexts/<vc-name>/v1.json > /dev/null && echo "✅ 1. VDR OK"
 
 # 2. CDN Asset is served:
-curl -s -f http://localhost:9097/assets/<logo>.png > /dev/null && echo "✅ 2. CDN OK"
+curl -s -f http://cdn.localhost/assets/<logo>.png > /dev/null && echo "✅ 2. CDN OK"
 
 # 3. VCGA Catalog is served:
-curl -s -f http://localhost:9099/mimoto-issuers-config.json > /dev/null && echo "✅ 3. VCGA OK"
+curl -s -f http://vcga.localhost/mimoto-issuers-config.json > /dev/null && echo "✅ 3. VCGA OK"
 
 # 4. Certify recognizes the credential:
-curl -s -f http://localhost:9091/.well-known/openid-credential-issuer | jq -e '.credential_configurations_supported["<credential-id>"]' > /dev/null && echo "✅ 4. Certify OK"
+curl -s -f http://issuer.localhost/.well-known/openid-credential-issuer | jq -e '.credential_configurations_supported["<credential-id>"]' > /dev/null && echo "✅ 4. Certify OK"
 
 # 5. Wallet proxies the credential:
-curl -s -f http://localhost:4004/v1/mimoto/issuers/<IssuerId>/configuration | jq -e '.credential_configurations_supported["<credential-id>"]' > /dev/null && echo "✅ 5. Wallet OK"
+curl -s -f http://wallet.localhost/v1/mimoto/issuers/<IssuerId>/configuration | jq -e '.credential_configurations_supported["<credential-id>"]' > /dev/null && echo "✅ 5. Wallet OK"
 
 # 6. Verify service is healthy:
-curl -s -f http://localhost:8000/actuator/health > /dev/null && echo "✅ 6. Verify OK"
+curl -s -f http://verifier.localhost/actuator/health > /dev/null && echo "✅ 6. Verify OK"
 ```

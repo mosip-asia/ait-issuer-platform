@@ -79,8 +79,8 @@ def load_credential_configs(creds_dir):
         print(f"[-] Error: Credentials directory not found: {creds_dir}", file=sys.stderr)
         sys.exit(1)
 
-    vdr_base = os.getenv("VDR_BASE_URL") or f"http://localhost:{os.getenv('VDR_PORT', '9098')}"
-    cdn_base = os.getenv("CDN_BASE_URL") or f"http://localhost:{os.getenv('CDN_PORT', '9097')}"
+    vdr_base = os.getenv("VDR_BASE_URL") or "http://vdr.localhost"
+    cdn_base = os.getenv("CDN_BASE_URL") or "http://cdn.localhost"
     certify_did = os.getenv("CERTIFY_DID")
 
     substitutions = {

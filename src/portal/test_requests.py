@@ -173,7 +173,7 @@ def test_pending_to_approved_via_http() -> None:
     c_reg.post(f"/registrar/requests/{sid}/{DEGREE_A1}/approve", follow_redirects=True)
     after = c_student.get("/student").text
     assert "Claim your" in after
-    assert "http://localhost:4004" in after
+    assert "http://wallet.localhost" in after or "http://localhost:4004" in after
 
 
 def test_reissue_blocked_while_active_vc_exists() -> None:

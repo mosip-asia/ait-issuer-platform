@@ -12,6 +12,8 @@ name: ${COMPOSE_PROJECT_NAME}-web-wallet
 networks:
   wallet-network:
     name: ${COMPOSE_PROJECT_NAME}-wallet-net
+  trust-network:
+    name: ${COMPOSE_PROJECT_NAME}-trust-net
 
 services:
   inji-web:
@@ -25,8 +27,6 @@ services:
       - "verifier.dpi.ait.ac.th:host-gateway"
       - "verifer.dpi.ait.ac.th:host-gateway"
       - "wallet.dpi.ait.ac.th:host-gateway"
-    ports:
-      - "${INJI_WEB_PORT}:3004"
     environment:
       - DEFAULT_LANG=en
       - MIMOTO_URL=${INJI_WEB_URL}/v1/mimoto
@@ -48,3 +48,4 @@ services:
           - inji-web
           - wallet.dpi.ait.ac.th
           - wallet
+      trust-network: {}

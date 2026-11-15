@@ -33,8 +33,6 @@ services:
       - KC_PROXY_HEADERS=xforwarded
       - KC_HTTP_ENABLED=true
       - KC_HTTP_PORT=8080
-    ports:
-      - "${KEYCLOAK_PORT}:8080"
     volumes:
       - ./deploy/${INSTALLATION}/mock/keycloak-realm.json:/opt/keycloak/data/import/realm.json:ro
     labels:
@@ -56,8 +54,6 @@ services:
       dockerfile: src/portal/Dockerfile
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    ports:
-      - "4100:4100"
     environment:
       - AIT_DEMO_DB=/demo/.demo-state/demo_requests.db
       - INJI_WEB_URL=${INJI_WEB_URL}
@@ -86,10 +82,12 @@ services:
       dockerfile: src/gateway/Dockerfile
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    ports:
-      - "8000:8000"
     env_file:
       - ./deploy/${INSTALLATION}/gateway.env
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gateway.rule=Host(`gateway.localhost`) || Host(`gateway.lan`)"
+      - "traefik.http.services.gateway.loadbalancer.server.port=8000"
     restart: unless-stopped
     networks:
       - mock-network
@@ -98,12 +96,14 @@ services:
     build:
       context: .
       dockerfile: mock/adapter/Dockerfile
-    ports:
-      - "8082:8000"
     environment:
       - ADAPTER_CSV=/data/student_identity_data.csv
     volumes:
       - ./deploy/${INSTALLATION}/adapter:/data:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.adapter.rule=Host(`adapter.localhost`) || Host(`adapter.lan`)"
+      - "traefik.http.services.adapter.loadbalancer.server.port=8000"
     restart: unless-stopped
     networks:
       - mock-network

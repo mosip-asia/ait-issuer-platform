@@ -56,10 +56,9 @@ if [ ! -f .env ]; then
   fi
 fi
 
-# Load CERTIFY_PORT if defined in .env
-CERTIFY_PORT="$(grep -E '^CERTIFY_PORT=' .env 2>/dev/null | cut -d '=' -f2 | tr -d ' "\r' || echo "")"
-CERTIFY_PORT="${CERTIFY_PORT:-9091}"
-CERTIFY_URL="http://127.0.0.1:${CERTIFY_PORT}"
+# Determine Certify Base URL (prefer CERTIFY_PUBLIC_BASE_URL, default to http://issuer.localhost)
+CERTIFY_URL="$(grep -E '^CERTIFY_PUBLIC_BASE_URL=' .env 2>/dev/null | cut -d '=' -f2 | tr -d ' "\r' || echo "")"
+CERTIFY_URL="${CERTIFY_URL:-http://issuer.localhost}"
 
 # 2. Ensure plugin JAR is built
 PLUGIN_JAR="src/issuer/target/issuer-data-provider-plugin.jar"

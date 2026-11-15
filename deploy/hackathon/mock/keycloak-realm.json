@@ -153,6 +153,9 @@
       "implicitFlowEnabled": false,
       "clientAuthenticatorType": "client-jwt",
       "redirectUris": [
+        "http://wallet.localhost/redirect",
+        "http://wallet.lan/redirect",
+        "https://wallet.dpi.ait.ac.th/redirect",
         "io.mosip.residentapp.inji://oauthredirect",
         "http://localhost:4004/redirect",
         "*"

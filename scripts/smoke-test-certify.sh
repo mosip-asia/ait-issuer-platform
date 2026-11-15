@@ -31,7 +31,7 @@ YELLOW="\033[1;33m"
 CYAN="\033[0;36m"
 NC="\033[0m"
 
-CERTIFY_URL="${1:-${CERTIFY_PUBLIC_BASE_URL:-http://localhost:9091}}"
+CERTIFY_URL="${1:-${CERTIFY_PUBLIC_BASE_URL:-http://issuer.localhost}}"
 CERTIFY_URL="${CERTIFY_URL%/}" # Strip trailing slash
 
 echo -e "${BLUE}${BOLD}======================================================================${NC}"

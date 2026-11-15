@@ -25,8 +25,6 @@ services:
       context: .
       dockerfile: docker/Dockerfile.vc-lab
     container_name: vc-lab
-    ports:
-      - "${VC_LAB_PORT}:4200"
     environment:
       - INSTALLATION=${INSTALLATION}
       - CREDENTIALS_DIR=/app/credentials
