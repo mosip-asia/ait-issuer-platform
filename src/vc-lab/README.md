@@ -51,29 +51,13 @@ VC Lab empowers credential designers and operators across three primary workflow
 
 ---
 
-## 2. Tools & Utilities
+## 2. In-Memory Velocity Template Engine (`template_engine.py`)
 
-### Offline Velocity Template Preview Tool (`preview_template.py`)
-Renders Velocity credential templates into HTML with mock student data for instant offline browser inspection.
+VC Lab includes a pure-Python Velocity template engine for live rendering in the studio dashboard and REST APIs without requiring Java, Inji Certify, or Docker.
 
-#### CLI Usage:
+### Running Unit Tests:
 ```bash
-# Preview academic transcript template with sample persona:
-python3 src/vc-lab/preview_template.py \
-  --template deploy/ait/AITUniversity-ait-transcript-template.html \
-  --student st120001 \
-  --out .demo-state/preview.html
-
-# Preview a card template with custom inline claims:
-python3 src/vc-lab/preview_template.py \
-  --template deploy/base/credential-template.html \
-  --claims '{"studentId":"st120001","fullName":"Nara Wattanakul","faculty":"SET"}' \
-  --out .demo-state/preview.html
-```
-
-#### Running Unit Tests:
-```bash
-python3 src/vc-lab/test_preview_template.py
+python3 src/vc-lab/test_template_engine.py
 .venv/bin/python src/vc-lab/test_main.py
 ```
 
@@ -83,38 +67,13 @@ python3 src/vc-lab/test_preview_template.py
 
 VC Lab is containerized with [`docker/Dockerfile.vc-lab`](../../docker/Dockerfile.vc-lab) and runs as a service in [`compose.yaml`](../../compose.yaml).
 
-### Docker Compose Service:
-```yaml
-services:
-  vc-lab:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.vc-lab
-    container_name: vc-lab
-    ports:
-      - "${VC_LAB_PORT}:4200"
-    environment:
-      - INSTALLATION=${INSTALLATION}
-      - CREDENTIALS_DIR=/app/credentials
-      - CONTEXTS_DIR=/app/contexts
-      - ASSETS_DIR=/app/assets
-      - TEMPLATES_DIR=/app/templates
-      - BASE_TEMPLATES_DIR=/app/base_templates
-    volumes:
-      - ./deploy/${INSTALLATION}/credentials:/app/credentials:ro
-      - ./deploy/${INSTALLATION}/contexts:/app/contexts:ro
-      - ./deploy/${INSTALLATION}/assets:/app/assets:ro
-      - ./deploy/${INSTALLATION}:/app/templates:ro
-      - ./deploy/base:/app/base_templates:ro
-```
-
 ### Running with Docker:
 ```bash
 # Start the VC Lab studio container:
 docker compose up -d vc-lab
 
 # Access the interactive Web Studio:
-open http://localhost:4200
+open http://lab.localhost
 ```
 
 ---
@@ -125,7 +84,7 @@ open http://localhost:4200
 src/vc-lab/
 ├── README.md                  # Module architecture & developer documentation
 ├── main.py                    # FastAPI Web Studio & REST API server
-├── preview_template.py        # Offline Velocity HTML renderer and previewer
+├── template_engine.py         # In-memory Velocity template parser and QR generator
 ├── test_main.py               # Unit tests for FastAPI studio endpoints
-└── test_preview_template.py   # Unit test suite verifying offline rendering
+└── test_template_engine.py    # Unit test suite verifying template rendering
 ```

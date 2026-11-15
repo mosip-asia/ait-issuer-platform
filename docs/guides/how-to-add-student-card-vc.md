@@ -78,33 +78,12 @@ Unlike academic transcripts which are primarily inspected in desktop PDF viewers
 
 ### 0.4 Visual Credential Studio & Offline Preview (VC Lab)
 
-Test and preview the Student ID card visual presentation before touching databases or containers:
+Test and preview the Student ID card visual presentation in the browser before touching databases or containers:
 
-#### Method A: Interactive Web Studio Dashboard
-When the stack is running, open the live VC Lab studio:
+Open the live VC Lab studio:
 - **Studio Dashboard:** [http://lab.localhost](http://lab.localhost)
 - Browse the `student-id` schema context and inspect card presentation attributes.
-- Render dynamic QR codes and simulate mobile card layouts with sample student data.
-
-#### Method B: Standalone CLI Preview (Zero External Dependencies)
-Preview and test the card Velocity template completely offline:
-
-```bash
-uv run vc-lab-preview \
-  --template deploy/base/credential-template.html \
-  --claims '{
-    "studentId": "st120001",
-    "fullName": "Nara Wattanakul",
-    "faculty": "School of Engineering and Technology",
-    "academicProgram": "Computer Science",
-    "studentStatus": "ACTIVE",
-    "issueDate": "2024-08-01",
-    "expiryDate": "2026-07-31"
-  }' \
-  --out .demo-state/student-id-preview.html
-```
-
-Open `.demo-state/student-id-preview.html` in your web browser to verify typography, colors, and layout symmetry.
+- Render dynamic QR codes and simulate mobile card layouts live in the browser with sample student data.
 
 ---
 

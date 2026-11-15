@@ -26,7 +26,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src" / "vc-lab"))
 sys.path.insert(0, str(REPO_ROOT / "mock" / "adapter"))
 
-import preview_template as pt  # noqa: E402
+import template_engine as pt  # noqa: E402
 
 app = FastAPI(
     title="VC Lab Studio",

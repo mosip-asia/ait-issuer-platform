@@ -1,18 +1,12 @@
-"""Offline HTML & Velocity Template Preview Tool for Verifiable Credentials.
+"""In-memory Velocity template rendering engine for VC Lab.
 
 Part of the vc-lab module.
-Enables credential designers and developers to design and preview Velocity HTML
-credential templates (e.g. certificates, transcripts, cards) offline with sample
-student data, without needing to run Inji Certify, Mimoto, or Keycloak.
-
-Usage:
-    python3 src/vc-lab/preview_template.py --template deploy/ait/AITUniversity-ait-transcript-template.html
-    python3 src/vc-lab/preview_template.py --template deploy/base/credential-template.html --student st120001
+Provides template parsing, macro stripping, condition evaluation, and mock asset
+generation for live in-memory rendering in the VC Lab web studio and API.
 """
 
 from __future__ import annotations
 
-import argparse
 import base64
 import html
 import json
@@ -24,19 +18,11 @@ import zlib
 from pathlib import Path
 from typing import Any, Optional
 
-try:
-    import typer
-    from typing import Annotated
-    HAS_TYPER = True
-except ImportError:
-    HAS_TYPER = False
-
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "mock" / "adapter"))
 from ait_courses import enrich_ait_transcript_subject  # noqa: E402
 
 STUDENTS_JSON = REPO_ROOT / "tests" / "fixtures" / "students.json"
-DEFAULT_OUT = REPO_ROOT / ".demo-state" / "preview.html"
 CDN_BASE_URL = (os.environ.get("CDN_BASE_URL") or "http://cdn.localhost").rstrip("/")
 DEFAULT_LOGO = f"{CDN_BASE_URL}/assets/AIT_globe.png"
 
@@ -241,7 +227,7 @@ def render_velocity_template(
     context: dict[str, Any],
     claims: dict[str, Any],
 ) -> str:
-    """Render a Velocity template with claims and context dictionary."""
+    """Render a Velocity template with claims and context dictionary in memory."""
     # 1. Strip comments
     tmpl = re.sub(r"##.*$", "", template_text, flags=re.MULTILINE)
     tmpl = re.sub(r"#\*.*?\*#", "", tmpl, flags=re.DOTALL)
@@ -301,171 +287,3 @@ def render_velocity_template(
             tmpl = tmpl.replace(f"${{{k}}}", str(v))
 
     return tmpl
-
-
-def render_template_to_file(
-    template_path: Path,
-    out_path: Path,
-    claims: dict[str, Any],
-    context: Optional[dict[str, Any]] = None,
-) -> Path:
-    """Render a Velocity HTML template to an output file."""
-    if not template_path.exists():
-        raise FileNotFoundError(f"Template not found at {template_path}")
-
-    tmpl_text = template_path.read_text(encoding="utf-8")
-    ctx = {
-        "titleName": "Asian Institute of Technology Credential",
-        "logoUrl": DEFAULT_LOGO,
-        "qrCodeImage": generate_mock_qr_png_base64(),
-        "textColor": "#000000",
-        "backgroundColor": "#FFFFFF",
-        "credentialValidity": -1,
-        **(context or {}),
-    }
-
-    rendered = render_velocity_template(tmpl_text, ctx, claims)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(rendered, encoding="utf-8")
-    return out_path
-
-
-# ------------------------------------------------------------------------------
-# Typer CLI Definition (when typer is available)
-# ------------------------------------------------------------------------------
-if HAS_TYPER:
-    preview_template_app = typer.Typer(
-        name="preview-template",
-        help="Preview Velocity HTML credential templates offline with sample data.",
-        no_args_is_help=False,
-    )
-
-    @preview_template_app.callback(invoke_without_command=True)
-    def preview_template_cmd(
-        ctx: typer.Context,
-        template: Annotated[
-            Path,
-            typer.Option("--template", "-t", help="Path to Velocity HTML template file"),
-        ] = REPO_ROOT / "deploy" / "ait" / "AITUniversity-ait-transcript-template.html",
-        student: Annotated[
-            str,
-            typer.Option("--student", "-s", help="Student persona ID from students.json"),
-        ] = "st120001",
-        degree: Annotated[
-            Optional[str],
-            typer.Option("--degree", "-d", help="Specific degree ID (e.g. meng-cs)"),
-        ] = None,
-        data_file: Annotated[
-            Optional[Path],
-            typer.Option("--data", help="Path to custom JSON claims file"),
-        ] = None,
-        claims_json: Annotated[
-            Optional[str],
-            typer.Option("--claims", help="Inline JSON string with claims"),
-        ] = None,
-        out: Annotated[
-            Path,
-            typer.Option("--out", "-o", help="Output path for rendered HTML"),
-        ] = DEFAULT_OUT,
-        title: Annotated[
-            str,
-            typer.Option("--title", help="Credential title"),
-        ] = "Asian Institute of Technology Credential",
-        logo: Annotated[
-            str,
-            typer.Option("--logo", help="Logo URL"),
-        ] = DEFAULT_LOGO,
-        text_color: Annotated[
-            str,
-            typer.Option("--text-color", help="Card text color"),
-        ] = "#000000",
-        bg_color: Annotated[
-            str,
-            typer.Option("--bg-color", help="Card background color"),
-        ] = "#FFFFFF",
-        open_browser: Annotated[
-            bool,
-            typer.Option("--open", help="Open rendered HTML in web browser"),
-        ] = False,
-    ) -> None:
-        """Render a Velocity credential template with sample data to HTML."""
-        if ctx.invoked_subcommand is not None:
-            return
-
-        if data_file:
-            claims = json.loads(data_file.read_text(encoding="utf-8"))
-        elif claims_json:
-            claims = json.loads(claims_json)
-        else:
-            claims = load_student_claims(student_id=student, degree_id=degree)
-
-        context = {
-            "titleName": title,
-            "logoUrl": logo,
-            "textColor": text_color,
-            "backgroundColor": bg_color,
-        }
-
-        out_file = render_template_to_file(template, out, claims, context)
-        typer.echo(f"Rendered credential template to: {out_file}")
-
-        if open_browser:
-            import webbrowser
-            webbrowser.open(out_file.as_uri())
-
-
-def main() -> None:
-    if HAS_TYPER and len(sys.argv) > 1 and sys.argv[1] not in ("-h", "--help"):
-        typer.run(preview_template_cmd)
-        return
-
-    # Standard library argparse fallback
-    parser = argparse.ArgumentParser(description="Preview Velocity HTML credential templates offline.")
-    parser.add_argument(
-        "--template", "-t",
-        type=Path,
-        default=REPO_ROOT / "deploy" / "ait" / "AITUniversity-ait-transcript-template.html",
-        help="Path to Velocity HTML template file",
-    )
-    parser.add_argument(
-        "--student", "-s",
-        type=str,
-        default="st120001",
-        help="Student persona ID from students.json",
-    )
-    parser.add_argument("--degree", "-d", type=str, default=None, help="Specific degree ID")
-    parser.add_argument("--data", type=Path, default=None, help="Path to custom JSON claims file")
-    parser.add_argument("--claims", type=str, default=None, help="Inline JSON string with claims")
-    parser.add_argument("--out", "-o", type=Path, default=DEFAULT_OUT, help="Output path for rendered HTML")
-    parser.add_argument("--title", type=str, default="Asian Institute of Technology Credential", help="Credential title")
-    parser.add_argument("--logo", type=str, default=DEFAULT_LOGO, help="Logo URL")
-    parser.add_argument("--text-color", type=str, default="#000000", help="Card text color")
-    parser.add_argument("--bg-color", type=str, default="#FFFFFF", help="Card background color")
-    parser.add_argument("--open", action="store_true", help="Open rendered HTML in web browser")
-
-    args = parser.parse_args()
-
-    if args.data:
-        claims = json.loads(args.data.read_text(encoding="utf-8"))
-    elif args.claims:
-        claims = json.loads(args.claims)
-    else:
-        claims = load_student_claims(student_id=args.student, degree_id=args.degree)
-
-    context = {
-        "titleName": args.title,
-        "logoUrl": args.logo,
-        "textColor": args.text_color,
-        "backgroundColor": args.bg_color,
-    }
-
-    out_file = render_template_to_file(args.template, args.out, claims, context)
-    print(f"Rendered credential template to: {out_file}")
-
-    if args.open:
-        import webbrowser
-        webbrowser.open(out_file.as_uri())
-
-
-if __name__ == "__main__":
-    main()
