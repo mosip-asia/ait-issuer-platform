@@ -434,7 +434,6 @@ Target hosts execute `scripts/deploy.sh` over an encrypted NetBird mesh network 
 
 - [Documentation Overview (`docs/OVERVIEW.md`)](./docs/OVERVIEW.md)
 - [How to Add a New Verifiable Credential (`docs/guides/how-to-add-vc.md`)](./docs/guides/how-to-add-vc.md)
-- [How to Add Student ID Card VC (`docs/guides/how-to-add-student-card-vc.md`)](./docs/guides/how-to-add-student-card-vc.md)
 - [VC Lab Studio & Template Designer (`src/vc-lab/README.md`)](./src/vc-lab/README.md)
 - [Architecture & Topology (`docs/architecture/vc-stack.md`)](./docs/architecture/vc-stack.md)
 - [ADR 0001: Approval Gate Beside the Data Path](./docs/adr/0001-approval-gate-beside-the-data-path.md)
