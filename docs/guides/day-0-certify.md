@@ -1,6 +1,6 @@
 ---
 title: "Stage 1: Inji Certify Day-0 Deployment Guide"
-description: "Step-by-step operational runbook for deploying Inji Certify (the Issuer engine), configuring tenant templates and SQL seeds, connecting to the upstream SIS Adapter, and verifying OpenID4VCI discovery."
+description: "Step-by-step operational runbook for deploying Inji Certify (the Issuer engine), configuring tenant templates and SQL seeds, deriving the did:key from the keystore, discovering the Keycloak JWKS endpoint, connecting to the upstream SIS Adapter, and verifying OpenID4VCI discovery."
 tags:
   - guide
   - deployment
@@ -8,6 +8,8 @@ tags:
   - issuer
   - sis-adapter
   - openid4vci
+  - did-key
+  - jwks
 ---
 
 # Stage 1: Inji Certify Day-0 Deployment Guide
@@ -22,19 +24,22 @@ flowchart LR
         DB[(PostgreSQL<br>inji_certify)]
         Sync["Template Sync<br>(GitOps Sync)"]
         VDR["VDR Registry<br>(vdr.dpi.ait.ac.th)"]
+        Keystore["PKCS12 Keystore<br>(local.p12 / HSM)"]
         Certify --- Plugin
         Certify --- DB
+        Certify --- Keystore
         Sync --> DB
     end
 
     subgraph Upstream["Upstream Infrastructure"]
-        JWKS["Keycloak JWKS<br>(/protocol/openid-connect/certs)"]
+        JWKS["Keycloak JWKS<br>(AUTH_SERVER_JWKS_URL)"]
         Adapter["SIS Data Adapter<br>(GET /student/{sub}/transcript)"]
     end
 
     Certify -->|"1. Read-only JWKS Fetch"| JWKS
     Plugin -->|"2. Query Student Record"| Adapter
     Certify -->|"3. Resolve Context Schemas"| VDR
+    Certify -.->|"4. Expose Public DID Doc"| DID[".well-known/did.json<br>(did:key:z6Mkp...)"]
 ```
 
 > [!IMPORTANT]
@@ -64,7 +69,7 @@ deploy/ait/certify/
 1. **`credentials/*.json` (Velocity Templates)**:
    Contains the W3C credential schema, scope, and the `vc_template` Velocity template string that Certify populates when signing credentials.
 2. **`certify-installation.properties`**:
-   Configures Certify's `IssuerDataProviderPlugin`, specifying the `CERTIFY_RECORD_URL`, timeouts, and allowed audiences.
+   Configures Certify's `IssuerDataProviderPlugin`, specifying the `CERTIFY_RECORD_URL`, timeouts, allowed audiences, and `did-url`.
 3. **`certify_seed.sql`**:
    Contains the SQL statements used to initialize or refresh the database. (Also synchronized automatically on boot by `template-sync`).
 
@@ -116,25 +121,105 @@ GET /student/{sub}/transcript
 
 ---
 
-## 3. Environment Configuration (`.env`)
+## 3. Cryptographic Identity & Keystore Configuration (`did:key`)
 
-Configure the following variables in `.env` for Certify Day-0 deployment:
+### A. What is `did:key`?
+`did:key` is a W3C Decentralized Identifier method where the cryptographic public key is encoded directly inside the identifier string itself:
+- Format: `did:key:z6Mkp...` (for Ed25519 signing keys).
+- The `z` prefix indicates Multibase Base58btc encoding, and the bytes encode the Ed25519 public key multicodec (`0xed01` prefix followed by the 32-byte public key).
+- **Why this matters**: Any verifier worldwide can verify credentials issued by `did:key` completely offline without querying a blockchain or external server.
+
+### B. Keystore Configuration
+Certify loads its Ed25519 private key from the keystore mounted into `/home/inji/CERTIFY_PKCS12/local.p12`:
+- Keystore file: `deploy/<tenant>/private_key/CERTIFY_PKCS12/local.p12`
+- Configurable environment variables:
+  ```ini
+  KEYSTORE_TYPE=PKCS12
+  KEYSTORE_PASS=local
+  ```
+  *(For production environments using a Hardware Security Module, `KEYSTORE_TYPE=PKCS11` is used).*
+
+### C. How to Configure `CERTIFY_DID`
+On startup, Inji Certify loads the keystore and exposes its live public DID document at `GET /.well-known/did.json`:
+
+1. Start the Certify stack with default credentials.
+2. Query the live DID document from Certify:
+   ```bash
+   curl -sf https://issuer.dpi.ait.ac.th/.well-known/did.json | jq -r .id
+   # or locally via port 9091:
+   curl -sf http://localhost:9091/.well-known/did.json | jq -r .id
+   ```
+   *Example Output:*
+   ```text
+   did:key:z6MkphmKx3m71Yw4NqPvxM9tX5b8cK3L2rV7u8s9T1w2Z3a4
+   ```
+3. Copy this string and set it in `.env`:
+   ```ini
+   CERTIFY_DID=did:key:z6MkphmKx3m71Yw4NqPvxM9tX5b8cK3L2rV7u8s9T1w2Z3a4
+   ```
+
+### D. How `CERTIFY_DID` is Applied
+Once set in `.env`:
+- **`template-sync`**: Reads `${CERTIFY_DID}` and automatically injects it into every credential configuration in the database (`credential_config.did_url`).
+- **`certify-installation.properties`**: Reads `mosip.certify.data-provider-plugin.did-url=${CERTIFY_DID}` and stamps it as the `issuer.id` inside every signed Verifiable Credential.
+
+---
+
+## 4. Token Verification Endpoint (`AUTH_SERVER_JWKS_URL`)
+
+### A. What is `AUTH_SERVER_JWKS_URL`?
+Inji Certify is an **OAuth 2.0 Resource Server**. When a student requests a credential, their wallet presents a JWT Bearer access token issued by campus Keycloak:
+- The token is signed using Keycloak's private key and carries a Key ID (`kid`) in its header.
+- Certify needs Keycloak's public keys to verify that the token is genuine, has not expired, and has not been tampered with.
+- Keycloak publishes its public keys at its **JSON Web Key Set (JWKS)** endpoint.
+
+### B. How to Discover `AUTH_SERVER_JWKS_URL`
+You can discover the exact JWKS endpoint using standard OpenID Connect discovery:
+```bash
+curl -sf https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev/.well-known/openid-configuration | jq -r .jwks_uri
+```
+*Expected Output:*
+```text
+https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev/protocol/openid-connect/certs
+```
+
+### C. How to Configure in `.env`
+Set the discovered URL in `.env`:
+```ini
+AUTH_SERVER_ISSUER=https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev
+AUTH_SERVER_JWKS_URL=https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev/protocol/openid-connect/certs
+AUTH_SERVER_WALLET_CLIENT_ID=wallet-demo
+```
+
+### D. How Certify Validates Incoming Access Tokens
+When the wallet sends `POST /v1/certify/issuance/credential` with `Authorization: Bearer <token>`:
+1. Certify downloads Keycloak's public keys from `AUTH_SERVER_JWKS_URL` (keys are cached automatically in memory).
+2. Certify matches the token's `kid` against the public keys and verifies the cryptographic signature (e.g. RS256).
+3. Certify validates that `token.iss == AUTH_SERVER_ISSUER`.
+4. Certify validates that `token.aud` contains `AUTH_SERVER_WALLET_CLIENT_ID`.
+5. Certify extracts `sub` (the student ID) and calls `IssuerDataProviderPlugin`.
+
+If the signature fails, or if `iss` does not match, Certify immediately returns HTTP 401 (`invalid_access_token`).
+
+---
+
+## 5. Complete `.env` Reference for Certify Day-0
 
 ```ini
 # ==============================================================================
-# Inji Certify Day-0 Configuration
+# Inji Certify Day-0 Configuration (.env)
 # ==============================================================================
 COMPOSE_PROJECT_NAME=vc-stack
 INSTALLATION=ait
 
-# Domain Ingress (Dev Host FQDNs)
+# Edge Ingress & Domains
 CERTIFY_PUBLIC_BASE_URL=https://issuer.dpi.ait.ac.th
 VDR_BASE_URL=https://vdr.dpi.ait.ac.th
 
 # Cryptographic Identity & Keystore
 CERTIFY_DID=did:key:z6MkpYourActualIssuerDidKeyHere
 KEYSTORE_TYPE=PKCS12
-KEYSTORE_PASS=your-keystore-password
+KEYSTORE_PASS=local
 
 # Upstream SIS Data Adapter (NetBird VPN or campus network)
 CERTIFY_RECORD_URL=http://ait-itserv-dev-vm.netbird.selfhosted:8000/student/{sub}/transcript
@@ -143,7 +228,7 @@ CERTIFY_RECORD_URL=http://ait-itserv-dev-vm.netbird.selfhosted:8000/student/{sub
 MOSIP_CERTIFY_GATEWAY_ENABLED=false
 MOSIP_CERTIFY_GATEWAY_URL=NO GATEWAY
 
-# Token Verification (Public Keycloak coordinates)
+# Token Verification (Campus Keycloak - oauth-dev)
 AUTH_SERVER_ISSUER=https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev
 AUTH_SERVER_JWKS_URL=https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev/protocol/openid-connect/certs
 AUTH_SERVER_WALLET_CLIENT_ID=wallet-demo
@@ -151,10 +236,10 @@ AUTH_SERVER_WALLET_CLIENT_ID=wallet-demo
 
 ---
 
-## 4. Step-by-Step Day-0 Execution Runbook
+## 6. Step-by-Step Day-0 Execution Runbook
 
-### Step 1: Pre-flight Verification
-Ensure the Docker host has network connectivity to both the campus Keycloak JWKS and the SIS Adapter:
+### Step 1: Pre-flight Network Verification
+Ensure the deployment host has network reachability to both the campus Keycloak JWKS and the SIS Adapter:
 ```bash
 # Verify Keycloak JWKS is reachable
 curl -sf https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev/protocol/openid-connect/certs | jq .
@@ -171,12 +256,24 @@ docker compose -f compose.certify-build.yaml run --rm plugin-builder
 Confirm that `src/issuer/target/issuer-data-provider-plugin.jar` is created.
 
 ### Step 3: Launch Certify & Trust Services
-Bring up the Certify engine, PostgreSQL, template-sync, VDR, and Traefik ingress:
+Bring up the Certify engine, PostgreSQL database, template-sync, VDR, and Traefik ingress:
 ```bash
 docker compose -f compose.certify.yaml -f compose.trust.yaml -f compose.traefik.yaml up -d
 ```
 
-### Step 4: Verify Service Health
+### Step 4: Extract the Live `did:key` and Bind to `.env`
+Query Certify's DID document to retrieve the live `did:key`:
+```bash
+LIVE_DID=$(curl -sf https://issuer.dpi.ait.ac.th/.well-known/did.json | jq -r .id)
+echo "Live Issuer DID: $LIVE_DID"
+```
+If this differs from what is in `.env`, update `CERTIFY_DID` in `.env` and restart template-sync:
+```bash
+sed -i "s|^CERTIFY_DID=.*|CERTIFY_DID=$LIVE_DID|" .env
+docker compose -f compose.certify.yaml restart template-sync service
+```
+
+### Step 5: Verify Service Health
 1. **Check OpenID4VCI Issuer Discovery Endpoint**:
    ```bash
    curl -sf https://issuer.dpi.ait.ac.th/.well-known/openid-credential-issuer | jq .
@@ -199,12 +296,13 @@ docker compose -f compose.certify.yaml -f compose.trust.yaml -f compose.traefik.
 
 ---
 
-## 5. Troubleshooting Matrix
+## 7. Troubleshooting Matrix
 
 | Symptom | Root Cause | Fix |
 |---|---|---|
 | **Discovery endpoint returns 404** | Certify container still booting or failed DB connection | Check `docker compose logs database` and `docker compose logs template-sync`. |
-| **`invalid_access_token`** | Certify cannot fetch Keycloak public keys | Verify `AUTH_SERVER_JWKS_URL` in `.env` is reachable from within Docker. |
+| **`invalid_access_token`** | Certify cannot reach Keycloak or `iss` mismatch | Verify `AUTH_SERVER_JWKS_URL` in `.env` is reachable from within Docker and matches token `iss`. |
 | **`no_record` on issuance** | Student ID not found in SIS Adapter | Verify the student ID exists: `curl http://.../student/{sub}/transcript`. |
 | **`adapter_error` on issuance** | SIS Adapter response violates OpenAPI schema | Validate JSON response matches [`docs/contracts/adapter-openapi.yaml`](../contracts/adapter-openapi.yaml). |
 | **Template Sync failed** | Database was not ready or credentials JSON syntax error | Check `docker compose logs template-sync`. Verify JSON files in `deploy/ait/certify/credentials/`. |
+| **Signature verification fails** | Verifier cannot resolve `did:key` or schema mismatch | Ensure `CERTIFY_DID` in `.env` matches the key loaded in Certify's keystore. |
