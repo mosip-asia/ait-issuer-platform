@@ -45,7 +45,10 @@ This repository houses the **Institutional Verifiable Credential Platform (Issue
 
 Lookup guides for operators, developers, and agents:
 
-- [Day-0 / First Installation & Integration Guide](./guides/day-0-deployment.md): Initial deployment in dev environment, Keycloak SSO integration, and SIS adapter connection.
+- [Day-0 Deployment Roadmap & Architecture Strategy](./guides/day-0-deployment.md): Master strategy across the 3 modular deployment stages.
+  - [Stage 1: Inji Certify Day-0 Deployment Guide](./guides/day-0-certify.md): Core issuer engine, tenant templates/SQL, and SIS adapter connection.
+  - [Stage 2: Inji Web Wallet Day-0 Deployment Guide](./guides/day-0-wallet.md): Holder wallet UI, Keycloak OAuth client configuration, and VCGA catalog.
+  - [Stage 3: Inji Verify Day-0 Deployment Guide](./guides/day-0-verify.md): Branded verifier UI, verification rules, and VDR schema trust.
 - [CI/CD & Deployment Architecture](./deployment.md): Branch promotions (`dev` -> `uat` -> `main`), secrets, and SSH deployment over NetBird.
 - [VC download troubleshooting](./reference/vc-download-troubleshooting.md): Diagnosing issuer lists, session failures, and token errors.
 - [Inji mobile wallet](./reference/inji-mobile-wallet.md): Mobile-specific issuer lists and metadata routing.

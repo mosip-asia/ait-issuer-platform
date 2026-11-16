@@ -159,7 +159,7 @@ if [ -n "$DISCOVERY_RESP" ]; then
   else
     echo -e "  ${YELLOW}${BOLD}Zero VCs currently loaded.${NC}"
     echo -e "  ${YELLOW}Notice: The Certify engine is ready and healthy, but waiting for credential configurations${NC}"
-    echo -e "  ${YELLOW}to be synchronized via template-sync (deploy/<installation>/credentials/).${NC}"
+    echo -e "  ${YELLOW}to be synchronized via template-sync (deploy/<installation>/certify/credentials/).${NC}"
   fi
 else
   echo -e "  ${RED}✗${NC} OpenID4VCI discovery endpoint failed at ${DISCOVERY_URL}" >&2

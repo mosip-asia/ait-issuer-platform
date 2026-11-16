@@ -271,7 +271,8 @@ def template_claims() -> dict[str, set[str]]:
     import base64
 
     found = {}
-    for seed in (REPO_ROOT / "deploy").glob("*/certify_seed.sql"):
+    seeds = list((REPO_ROOT / "deploy").glob("*/certify/certify_seed.sql")) or list((REPO_ROOT / "deploy").glob("*/certify_seed.sql"))
+    for seed in seeds:
         for row in seed.read_text(encoding="utf-8").split("INSERT INTO certify.credential_config")[1:]:
             (scope,) = re.findall(r"'([a-z_]+_vc_ldp)'", row)
             (template,) = re.findall(r"'(ewo[A-Za-z0-9+/=]+)'", row)
@@ -505,7 +506,10 @@ def test_the_transcript_record_is_the_credential_schemas_subject_less_the_holder
 def test_the_handovers_privacy_section_names_every_claim_the_ait_ledger_indexes() -> None:
     """Certify logs every value its ledger indexes (LedgerUtils, at INFO), so the list on the handover's "Certify also
     logs it" line (docs/project/issuer-v0.1/sis-adapter-handover.md) is the ait Installation's indexed mappings."""
-    properties = (REPO_ROOT / "deploy" / "ait" / "certify-installation.properties").read_text(encoding="utf-8")
+    prop_path = REPO_ROOT / "deploy" / "ait" / "certify" / "certify-installation.properties"
+    if not prop_path.is_file():
+        prop_path = REPO_ROOT / "deploy" / "ait" / "certify-installation.properties"
+    properties = prop_path.read_text(encoding="utf-8")
     indexed = set(re.findall(r"^mosip\.certify\.indexed-mappings\.(\w+)=", properties, re.M))
     page = (REPO_ROOT / "docs" / "project" / "issuer-v0.1" / "sis-adapter-handover.md").read_text(encoding="utf-8")
     line = next(line for line in page.splitlines() if line.startswith("- **Certify also logs it, and more.**"))

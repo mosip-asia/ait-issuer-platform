@@ -44,15 +44,19 @@ def find_credentials_dir(custom_path=None):
     candidates = [
         Path("/app/config/credentials"),
         Path("/config"),
+        repo_root / "deploy" / installation / "certify" / "credentials",
+        Path.cwd() / "deploy" / installation / "certify" / "credentials",
         repo_root / "deploy" / installation / "credentials",
         Path.cwd() / "deploy" / installation / "credentials",
+        repo_root / "deploy" / "ait" / "certify" / "credentials",
+        Path.cwd() / "deploy" / "ait" / "certify" / "credentials",
         repo_root / "deploy" / "ait" / "credentials",
         Path.cwd() / "deploy" / "ait" / "credentials",
     ]
     for c in candidates:
         if c.exists():
             return c
-    return repo_root / "deploy" / installation / "credentials"
+    return repo_root / "deploy" / installation / "certify" / "credentials"
 
 
 def find_seed_sql_path():
@@ -63,14 +67,17 @@ def find_seed_sql_path():
     here = Path(__file__).resolve().parent
     repo_root = here.parent.parent
     candidates = [
+        repo_root / "deploy" / installation / "certify" / "certify_seed.sql",
+        Path.cwd() / "deploy" / installation / "certify" / "certify_seed.sql",
         repo_root / "deploy" / installation / "certify_seed.sql",
         Path.cwd() / "deploy" / installation / "certify_seed.sql",
+        repo_root / "deploy" / "ait" / "certify" / "certify_seed.sql",
         repo_root / "deploy" / "ait" / "certify_seed.sql",
     ]
     for c in candidates:
         if c.exists():
             return c
-    return repo_root / "deploy" / installation / "certify_seed.sql"
+    return repo_root / "deploy" / installation / "certify" / "certify_seed.sql"
 
 
 def load_credential_configs(creds_dir):
