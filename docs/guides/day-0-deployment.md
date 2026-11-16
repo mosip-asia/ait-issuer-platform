@@ -49,17 +49,17 @@ flowchart TD
         Adapter["SIS Data Adapter<br>(ait-itserv-dev-vm.netbird.selfhosted:8000)"]
     end
 
-    Wallet -->|1. Get Issuers Catalog| VCGA
-    Wallet -->|2. Authorize Student| Keycloak
-    Keycloak -->>|3. Access Token with sub=st120001| Wallet
-    Wallet -->|4. Request VC with Bearer Token| Certify
-    Certify -->|5. Verify Token Signature via JWKS| Keycloak
-    Certify -->|6. Optional: Policy Gate| Gateway
-    Gateway -->|GET /student/{sub}/eligibility| Adapter
-    Certify -->|7. Query Academic Data<br>GET /student/{sub}/transcript| Adapter
-    Certify -->>|8. Sign & Return W3C VC| Wallet
-    Wallet -->|Present Credential| Verifier
-    Verifier -->|Fetch Schemas & Contexts| VDR
+    Wallet -->|"1. Get Issuers Catalog"| VCGA
+    Wallet -->|"2. Authorize Student"| Keycloak
+    Keycloak -.->|"3. Access Token with sub=st120001"| Wallet
+    Wallet -->|"4. Request VC with Bearer Token"| Certify
+    Certify -->|"5. Verify Token Signature via JWKS"| Keycloak
+    Certify -->|"6. Optional: Policy Gate"| Gateway
+    Gateway -->|"GET /student/{sub}/eligibility"| Adapter
+    Certify -->|"7. Query Academic Data (GET /student/{sub}/transcript)"| Adapter
+    Certify -.->|"8. Sign & Return W3C VC"| Wallet
+    Wallet -->|"Present Credential"| Verifier
+    Verifier -->|"Fetch Schemas & Contexts"| VDR
 ```
 
 ### Component Summary
