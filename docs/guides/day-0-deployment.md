@@ -146,7 +146,7 @@ AUTH_SERVER_WALLET_CLIENT_ID=wallet-demo
 ```
 
 ### C. VCGA Catalog Synchronization
-Inji Web reads [`deploy/ait/vcga/issuers.json`](file:///mnt/pool-1/home/akraradets/projects/mosip-asia/ait-transcript/deploy/ait/vcga/issuers.json) to locate the token endpoint:
+Inji Web reads [`deploy/ait/vcga/issuers.json`](../../deploy/ait/vcga/issuers.json) to locate the token endpoint:
 - Run the parameterization script to sync the file with your `.env`:
   ```bash
   python3 src/tools/render_mimoto_issuers_config.py
@@ -160,7 +160,7 @@ Inji Web reads [`deploy/ait/vcga/issuers.json`](file:///mnt/pool-1/home/akrarade
 The SIS Adapter is the university's REST service that provides student academic records and eligibility status.
 
 ### A. API Specification
-The adapter must implement the contract defined in [`docs/contracts/adapter-openapi.yaml`](file:///mnt/pool-1/home/akraradets/projects/mosip-asia/ait-transcript/docs/contracts/adapter-openapi.yaml):
+The adapter must implement the contract defined in [`docs/contracts/adapter-openapi.yaml`](../contracts/adapter-openapi.yaml):
 
 #### 1. `GET /student/{sub}/transcript` (Mandatory)
 - **Role**: Called by Certify's `IssuerDataProviderPlugin` to populate credential claims.
@@ -381,6 +381,6 @@ docker compose up -d
 |---|---|---|---|
 | **`invalid_access_token`** | Certify returns 401 during issuance | 1. Token expired<br>2. JWKS URI unreachable<br>3. `iss` mismatch | Verify `AUTH_SERVER_JWKS_URL` is accessible from the container and matches `AUTH_SERVER_ISSUER`. |
 | **`no_record`** | Certify returns 404 during issuance | 1. Token `sub` is not student ID<br>2. Student ID missing in SIS | Verify Keycloak has `sub-from-username` mapper active. Check adapter: `curl http://.../student/{sub}/transcript`. |
-| **`adapter_error`** | Certify returns 502 / internal error | 1. SIS Adapter payload schema invalid<br>2. Timeout reaching adapter | Validate adapter JSON against [`docs/contracts/adapter-openapi.yaml`](file:///mnt/pool-1/home/akraradets/projects/mosip-asia/ait-transcript/docs/contracts/adapter-openapi.yaml). |
+| **`adapter_error`** | Certify returns 502 / internal error | 1. SIS Adapter payload schema invalid<br>2. Timeout reaching adapter | Validate adapter JSON against [`docs/contracts/adapter-openapi.yaml`](../contracts/adapter-openapi.yaml). |
 | **Wallet CORS Error** | Browser reports CORS error on token exchange | Keycloak `Web Origins` missing wallet domain | Add `https://wallet.dpi.ait.ac.th` (or `+`) to Keycloak client `Web Origins`. |
 | **Template Sync Fails** | Certify container fails on startup | Template sync container failed DB connection | Check database health: `docker compose logs database`. |
