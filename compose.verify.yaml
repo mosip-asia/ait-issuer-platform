@@ -38,7 +38,7 @@ services:
       - ./deploy/base/verify-config.json:/usr/share/nginx/html/assets/config.json:ro
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.verify.rule=Host(`verifier.localhost`) || Host(`verify.localhost`) || Host(`verifier.lan`) || Host(`verifier.dpi.ait.ac.th`) || Host(`verifer.dpi.ait.ac.th`) || Host(`verifier-dev.ait-vc.dpi.ait.ac.th`)"
+      - "traefik.http.routers.verify.rule=${TRAEFIK_VERIFY_RULE:-Host(`verifier.localhost`)}"
       - "traefik.http.services.verify.loadbalancer.server.port=8000"
     depends_on:
       - service

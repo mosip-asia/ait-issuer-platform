@@ -20,7 +20,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.dashboard.rule=Host(`traefik.localhost`) || Host(`traefik.lan`)"
+      - "traefik.http.routers.dashboard.rule=${TRAEFIK_DASHBOARD_RULE:-Host(`traefik.localhost`) || Host(`traefik.lan`)}"
       - "traefik.http.routers.dashboard.service=api@internal"
     networks:
       - certify-network

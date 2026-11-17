@@ -27,7 +27,7 @@ services:
       - ./deploy/base/vdr/templates:/usr/share/nginx/html/base-templates:ro
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.vdr.rule=Host(`vdr.localhost`) || Host(`vdr.lan`) || Host(`vdr.dpi.ait.ac.th`) || Host(`vdr.ait.ac.th`) || Host(`vdr-dev.ait-vc.dpi.ait.ac.th`)"
+      - "traefik.http.routers.vdr.rule=${TRAEFIK_VDR_RULE:-Host(`vdr.localhost`)}"
       - "traefik.http.services.vdr.loadbalancer.server.port=80"
     networks:
       trust-network:
@@ -46,7 +46,7 @@ services:
       - ./deploy/base/vcga:/usr/share/nginx/html/base-vcga:ro
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.vcga.rule=Host(`vcga.localhost`) || Host(`vcga.lan`) || Host(`vcga.dpi.ait.ac.th`) || Host(`vcga.ait.ac.th`) || Host(`vcga-dev.ait-vc.dpi.ait.ac.th`)"
+      - "traefik.http.routers.vcga.rule=${TRAEFIK_VCGA_RULE:-Host(`vcga.localhost`)}"
       - "traefik.http.services.vcga.loadbalancer.server.port=80"
     networks:
       trust-network:

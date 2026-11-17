@@ -38,7 +38,7 @@ services:
       - ./deploy/${INSTALLATION}/mock/keycloak-realm.json:/opt/keycloak/data/import/realm.json:ro
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.auth.rule=Host(`auth.localhost`) || Host(`auth.lan`) || Host(`auth.dpi.ait.ac.th`)"
+      - "traefik.http.routers.auth.rule=${TRAEFIK_AUTH_RULE:-Host(`auth.localhost`) || Host(`auth.lan`) || Host(`auth.dpi.ait.ac.th`)}"
       - "traefik.http.services.auth.loadbalancer.server.port=8080"
     restart: unless-stopped
     networks:
@@ -75,7 +75,7 @@ services:
       - ./tests/fixtures:/demo/tests/fixtures:ro
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.portal.rule=Host(`portal.localhost`) || Host(`portal.lan`) || Host(`portal.dpi.ait.ac.th`)"
+      - "traefik.http.routers.portal.rule=${TRAEFIK_PORTAL_RULE:-Host(`portal.localhost`) || Host(`portal.lan`) || Host(`portal.dpi.ait.ac.th`)}"
       - "traefik.http.services.portal.loadbalancer.server.port=4100"
     networks:
       - mock-network
@@ -97,7 +97,7 @@ services:
       - ./deploy/${INSTALLATION}/gateway.env
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.gateway.rule=Host(`gateway.localhost`) || Host(`gateway.lan`)"
+      - "traefik.http.routers.gateway.rule=${TRAEFIK_GATEWAY_RULE:-Host(`gateway.localhost`) || Host(`gateway.lan`)}"
       - "traefik.http.services.gateway.loadbalancer.server.port=8000"
     restart: unless-stopped
     networks:
@@ -113,7 +113,7 @@ services:
       - ./deploy/${INSTALLATION}/adapter:/data:ro
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.adapter.rule=Host(`adapter.localhost`) || Host(`adapter.lan`)"
+      - "traefik.http.routers.adapter.rule=${TRAEFIK_ADAPTER_RULE:-Host(`adapter.localhost`) || Host(`adapter.lan`)}"
       - "traefik.http.services.adapter.loadbalancer.server.port=8000"
     restart: unless-stopped
     networks:
