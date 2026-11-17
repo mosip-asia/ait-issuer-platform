@@ -42,7 +42,7 @@ Configure three environments in GitHub (**Settings > Environments**): `dev`, `ua
 | `SSH_PRIVATE_KEY` | Secret | Environment | SSH private key to authenticate as `deploy` user against deployment server |
 | `SERVER_HOST` | Variable | Environment | Target server NetBird mesh hostname (e.g. `issuer-dev-vm.netbird.selfhosted`, `issuer-uat-vm.netbird.selfhosted`) |
 | `SERVER_USER` | Variable | Environment | Target server SSH user (`deploy`) |
-| `SERVER_PROJECT_DIR` | Variable | Environment | Target directory on host (e.g. `/opt/ait-transcript`) |
+| `SERVER_PROJECT_DIR` | Variable | Environment | Target directory on host (e.g. `/opt/ait-issuer-platform`) |
 | `NETBIRD_MANAGEMENT_URL` | Variable | Repo / Env | *(Optional)* Self-hosted NetBird management URL |
 
 ---

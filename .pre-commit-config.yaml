@@ -1,4 +1,4 @@
-# Pre-commit hook configuration for ait-transcript
+# Pre-commit hook configuration for ait-issuer-platform
 # Install hooks locally: uv run pre-commit install (or pre-commit install)
 # Run manually:         uv run pre-commit run --all-files
 

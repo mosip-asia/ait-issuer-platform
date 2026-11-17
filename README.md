@@ -177,7 +177,7 @@ You do not need Keycloak or a wallet to test Certify endpoints:
 ## 4. Repository Layout & Module Architecture
 
 ```
-ait-transcript/
+ait-issuer-platform/
 ├── scripts/                               # AUTOMATION & PIPELINES
 │   ├── deploy.sh                          # Deploy or update platform compose stack
 │   ├── release.sh                         # Build and release artifacts/images

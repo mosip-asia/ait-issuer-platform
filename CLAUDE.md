@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Operational guidelines, architectural invariants, and command cheat sheet for developers and AI agents working in `mosip-asia/ait-transcript`.
+Operational guidelines, architectural invariants, and command cheat sheet for developers and AI agents working in `mosip-asia/ait-issuer-platform`.
 
 ## 1. What This Repository Is
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Release and promotion helper: the SAME file across mosip-asia repositories
-# (ait-oauth-adapter, ait-sis-adapter, ait-transcript). Each repository's own checks
+# (ait-oauth-adapter, ait-sis-adapter, ait-issuer-platform). Each repository's own checks
 # (tests, realm files, compose configuration...) live in scripts/release-checks.sh,
 # which defines run_release_checks.
 #

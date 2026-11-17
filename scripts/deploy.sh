@@ -42,7 +42,7 @@ for arg in "$@"; do
   fi
 done
 
-log_info "Starting deployment of ait-transcript (installation: ${INSTALLATION})..."
+log_info "Starting deployment of ait-issuer-platform (installation: ${INSTALLATION})..."
 export INSTALLATION
 
 # 1. Ensure .env exists with required defaults
@@ -119,4 +119,4 @@ echo ""
 echo -e "${GREEN}${BOLD}Stack status:${NC}"
 docker compose ps
 echo ""
-echo -e "${GREEN}${BOLD}✅ Deployment of ait-transcript completed successfully!${NC}"
+echo -e "${GREEN}${BOLD}✅ Deployment of ait-issuer-platform completed successfully!${NC}"

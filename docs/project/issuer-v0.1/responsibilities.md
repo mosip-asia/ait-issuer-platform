@@ -4,7 +4,7 @@ Status: agreed on 2026-10-19, updated on 2026-10-20. Owner: Thas. What Thas, the
 
 ## 1. Role
 
-Thas owns the **Issuer platform**: one product, one codebase in `mosip-asia/ait-transcript`, deployed as two **installations** that differ only in configuration: AIT's academic transcript service and the sandbox hackathon. It plugs into other people's components under published standards: any OpenID4VCI wallet can claim from it, any organisation's records can feed it through an Adapter under the adapter contract, and any standards-conformant verifier can check what it issues. The Checklist and the VC Lab inside it promise no interoperability.
+Thas owns the **Issuer platform**: one product, one codebase in `mosip-asia/ait-issuer-platform`, deployed as two **installations** that differ only in configuration: AIT's academic transcript service and the sandbox hackathon. It plugs into other people's components under published standards: any OpenID4VCI wallet can claim from it, any organisation's records can feed it through an Adapter under the adapter contract, and any standards-conformant verifier can check what it issues. The Checklist and the VC Lab inside it promise no interoperability.
 
 ## 2. Who owns what
 
