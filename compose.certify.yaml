@@ -49,12 +49,6 @@ services:
       - "auth.localhost:host-gateway"
       - "adapter.localhost:host-gateway"
       - "gateway.localhost:host-gateway"
-      - "vdr.dpi.ait.ac.th:host-gateway"
-      - "vcga.dpi.ait.ac.th:host-gateway"
-      - "issuer.dpi.ait.ac.th:host-gateway"
-      - "verifier.dpi.ait.ac.th:host-gateway"
-      - "verifer.dpi.ait.ac.th:host-gateway"
-      - "wallet.dpi.ait.ac.th:host-gateway"
     environment:
       - active_profile_env=default, installation
       - AUTH_SERVER_ISSUER=${AUTH_SERVER_ISSUER}
