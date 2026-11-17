@@ -171,6 +171,8 @@ jobs:
               sudo chown -R "$(id -u):$(id -g)" "$TARGET_DIR"
               git -C "$TARGET_DIR" init -q
               git -C "$TARGET_DIR" remote add origin "$AUTH_REPO"
+              git -C "$TARGET_DIR" config core.sparseCheckout true
+              git -C "$TARGET_DIR" sparse-checkout set --cone deploy scripts docker
             fi
 
             cd "$TARGET_DIR"
@@ -183,6 +185,10 @@ jobs:
               STABLE_REV="$(git rev-parse -q --verify HEAD 2>/dev/null || true)"
             fi
             echo "Last verified deployment on this host: ${STABLE_REV:-none (first deployment)}"
+
+            # Enable sparse-checkout so only runtime deployment files exist on the server
+            git config core.sparseCheckout true
+            git sparse-checkout set --cone deploy scripts docker
 
             echo "Checking out ${{ github.ref_name }} (${{ github.sha }})..."
             git checkout -q -f ${{ github.sha }}

@@ -12,6 +12,11 @@ step() { echo; echo "== $*"; }
 step "data guard"
 bash scripts/check-data-guard.sh
 
+if [ -f .env ]; then
+  step "environment configuration check"
+  bash scripts/check-env.sh .env .env.example
+fi
+
 step "release checks"
 # shellcheck source=/dev/null
 source scripts/release-checks.sh

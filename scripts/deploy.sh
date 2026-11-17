@@ -31,33 +31,59 @@ cd "$ROOT_DIR"
 
 INSTALLATION="${1:-${INSTALLATION:-ait}}"
 # If first argument is a flag, keep default installation 'ait'
-if [ "$INSTALLATION" = "--wipe" ] || [ "$INSTALLATION" = "wipe" ] || [ "$INSTALLATION" = "--build" ] || [ "$INSTALLATION" = "build" ]; then
+if [ "$INSTALLATION" = "--wipe" ] || [ "$INSTALLATION" = "wipe" ] || [ "$INSTALLATION" = "--build" ] || [ "$INSTALLATION" = "build" ] || [ "$INSTALLATION" = "--init-env" ] || [ "$INSTALLATION" = "--sparse" ]; then
   INSTALLATION="ait"
 fi
 
 WIPE_FLAG=false
 BUILD_FLAG=false
+INIT_ENV_FLAG=false
+SPARSE_FLAG=false
 for arg in "$@"; do
   if [ "$arg" = "--wipe" ] || [ "$arg" = "wipe" ]; then
     WIPE_FLAG=true
   elif [ "$arg" = "--build" ] || [ "$arg" = "build" ]; then
     BUILD_FLAG=true
+  elif [ "$arg" = "--init-env" ] || [ "$arg" = "init-env" ]; then
+    INIT_ENV_FLAG=true
+  elif [ "$arg" = "--sparse" ] || [ "$arg" = "sparse" ]; then
+    SPARSE_FLAG=true
   fi
 done
 
 log_info "Starting deployment of ait-issuer-platform (installation: ${INSTALLATION})..."
 export INSTALLATION
 
-# 1. Ensure .env exists with required defaults
-if [ ! -f .env ]; then
-  if [ -f .env.example ]; then
-    log_warn "No .env file found. Creating from .env.example..."
-    cp .env.example .env
-  else
-    log_err "Missing .env and .env.example file. Aborting."
-    exit 1
+# 0. Sparse checkout (keep server minimal: only deploy, scripts, docker)
+if [ "$SPARSE_FLAG" = true ] || [ "${SPARSE_CHECKOUT:-false}" = "true" ]; then
+  if [ -d .git ] && command -v git >/dev/null 2>&1; then
+    log_info "Configuring git sparse-checkout (deploy, scripts, docker)..."
+    git config core.sparseCheckout true
+    git sparse-checkout set --cone deploy scripts docker 2>/dev/null || true
   fi
 fi
+
+# 1. Verify .env is set and up-to-date against .env.example
+if [ "$INIT_ENV_FLAG" = true ] && [ ! -f .env ]; then
+  if [ -f .env.example ]; then
+    log_warn "Creating .env from .env.example (--init-env requested)..."
+    cp .env.example .env
+  fi
+fi
+
+if [ ! -f .env ]; then
+  log_err "No .env file found! Deployment requires an environment configuration."
+  log_info "Please create .env from .env.example and configure environment settings:"
+  echo "    cp .env.example .env"
+  exit 1
+fi
+
+log_info "Checking environment configuration against .env.example..."
+if ! bash scripts/check-env.sh; then
+  log_err ".env configuration check failed. Update .env before deploying."
+  exit 1
+fi
+log_ok "Environment configuration is verified and up-to-date."
 
 # Determine Certify Base URL (prefer CERTIFY_PUBLIC_BASE_URL, default to http://issuer.localhost)
 CERTIFY_URL="$(grep -E '^CERTIFY_PUBLIC_BASE_URL=' .env 2>/dev/null | cut -d '=' -f2 | tr -d ' "\r' || echo "")"
