@@ -198,10 +198,10 @@ jobs:
             TAG="$(git describe --tags --exact-match 2>/dev/null || echo '${{ github.ref_name }}')"
             export IMAGE_TAG="${TAG:-latest}"
 
-            echo "Running deployment for installation '$INSTALLATION'..."
-            DEPLOY_CMD="bash scripts/deploy.sh $INSTALLATION"
+            echo "Running deployment for installation '$INSTALLATION' (tag: $IMAGE_TAG)..."
+            DEPLOY_CMD="bash scripts/deploy.sh $INSTALLATION --tag $IMAGE_TAG"
             if [ "$WIPE_FLAG" = "true" ]; then
-              DEPLOY_CMD="bash scripts/deploy.sh $INSTALLATION --wipe"
+              DEPLOY_CMD="bash scripts/deploy.sh $INSTALLATION --tag $IMAGE_TAG --wipe"
             fi
 
             if ! eval "$DEPLOY_CMD"; then

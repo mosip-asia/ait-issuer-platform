@@ -3,11 +3,12 @@
 # Deploy or update the AIT Issuer Platform Compose stack on the host.
 # ==============================================================================
 # Usage:
-#   ./scripts/deploy.sh [installation] [--wipe]
+#   ./scripts/deploy.sh [installation] [--tag <tag>] [--wipe] [--build] [--sparse]
 #
 # Examples:
 #   ./scripts/deploy.sh
 #   ./scripts/deploy.sh ait
+#   ./scripts/deploy.sh ait --tag v0.0.6
 #   ./scripts/deploy.sh ait --wipe
 #   ./scripts/deploy.sh hackathon
 # ==============================================================================
@@ -29,26 +30,60 @@ log_err() { echo -e "${RED}${BOLD}[ERROR]${NC} $*" >&2; }
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "$ROOT_DIR"
 
-INSTALLATION="${1:-${INSTALLATION:-ait}}"
-# If first argument is a flag, keep default installation 'ait'
-if [ "$INSTALLATION" = "--wipe" ] || [ "$INSTALLATION" = "wipe" ] || [ "$INSTALLATION" = "--build" ] || [ "$INSTALLATION" = "build" ] || [ "$INSTALLATION" = "--init-env" ] || [ "$INSTALLATION" = "--sparse" ]; then
-  INSTALLATION="ait"
-fi
+update_env_var() {
+  local file="$1"
+  local key="$2"
+  local val="$3"
 
+  if grep -E "^[[:space:]]*${key}=" "$file" >/dev/null 2>&1; then
+    local tmp
+    tmp="$(mktemp)"
+    sed -E "s|^[[:space:]]*${key}=.*|${key}=${val}|" "$file" > "$tmp"
+    cat "$tmp" > "$file"
+    rm -f "$tmp"
+  else
+    echo "${key}=${val}" >> "$file"
+  fi
+}
+
+INSTALLATION="${INSTALLATION:-ait}"
 WIPE_FLAG=false
 BUILD_FLAG=false
 INIT_ENV_FLAG=false
 SPARSE_FLAG=false
-for arg in "$@"; do
-  if [ "$arg" = "--wipe" ] || [ "$arg" = "wipe" ]; then
-    WIPE_FLAG=true
-  elif [ "$arg" = "--build" ] || [ "$arg" = "build" ]; then
-    BUILD_FLAG=true
-  elif [ "$arg" = "--init-env" ] || [ "$arg" = "init-env" ]; then
-    INIT_ENV_FLAG=true
-  elif [ "$arg" = "--sparse" ] || [ "$arg" = "sparse" ]; then
-    SPARSE_FLAG=true
-  fi
+DEPLOY_TAG="${IMAGE_TAG:-}"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --wipe|wipe)
+      WIPE_FLAG=true
+      shift
+      ;;
+    --build|build)
+      BUILD_FLAG=true
+      shift
+      ;;
+    --init-env|init-env)
+      INIT_ENV_FLAG=true
+      shift
+      ;;
+    --sparse|sparse)
+      SPARSE_FLAG=true
+      shift
+      ;;
+    --tag)
+      DEPLOY_TAG="$2"
+      shift 2
+      ;;
+    -*)
+      log_err "Unknown option: $1"
+      exit 1
+      ;;
+    *)
+      INSTALLATION="$1"
+      shift
+      ;;
+  esac
 done
 
 log_info "Starting deployment of ait-issuer-platform (installation: ${INSTALLATION})..."
@@ -85,11 +120,28 @@ if ! bash scripts/check-env.sh; then
 fi
 log_ok "Environment configuration is verified and up-to-date."
 
+# 2. Synchronize deployment tag with .env
+if [ -z "$DEPLOY_TAG" ]; then
+  if [ -d .git ] && command -v git >/dev/null 2>&1; then
+    DEPLOY_TAG="$(git describe --tags --exact-match 2>/dev/null || true)"
+  fi
+fi
+
+if [ -n "$DEPLOY_TAG" ]; then
+  log_info "Updating IMAGE_TAG in .env to match deployment tag '${DEPLOY_TAG}'..."
+  update_env_var ".env" "IMAGE_TAG" "$DEPLOY_TAG"
+  export IMAGE_TAG="$DEPLOY_TAG"
+else
+  CURRENT_TAG="$(grep -E '^IMAGE_TAG=' .env 2>/dev/null | cut -d '=' -f2 | tr -d ' "\r' || echo "latest")"
+  export IMAGE_TAG="${CURRENT_TAG:-latest}"
+  log_info "Using existing IMAGE_TAG '${IMAGE_TAG}' from .env."
+fi
+
 # Determine Certify Base URL (prefer CERTIFY_PUBLIC_BASE_URL, default to http://issuer.localhost)
 CERTIFY_URL="$(grep -E '^CERTIFY_PUBLIC_BASE_URL=' .env 2>/dev/null | cut -d '=' -f2 | tr -d ' "\r' || echo "")"
 CERTIFY_URL="${CERTIFY_URL:-http://issuer.localhost}"
 
-# 2. Pull pre-built images or build locally
+# 3. Pull pre-built images or build locally
 if [ "$BUILD_FLAG" = true ]; then
   log_info "Building images locally (--build specified)..."
   bash scripts/build.sh
@@ -102,7 +154,7 @@ else
   fi
 fi
 
-# 3. Tear down existing stack
+# 4. Tear down existing stack
 log_info "Tearing down existing stack..."
 if [ "$WIPE_FLAG" = true ]; then
   log_warn "Wiping database and volumes (--wipe specified)..."
@@ -111,11 +163,11 @@ else
   docker compose down --remove-orphans
 fi
 
-# 4. Start fresh stack
+# 5. Start fresh stack
 log_info "Starting compose services..."
 docker compose up -d --remove-orphans
 
-# 5. Wait for Inji Certify to initialize
+# 6. Wait for Inji Certify to initialize
 log_info "Waiting for Inji Certify issuer engine to initialize at ${CERTIFY_URL}..."
 TIMEOUT=90
 ELAPSED=0
