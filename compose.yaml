@@ -41,5 +41,5 @@ services:
       - ./deploy/base/vdr/templates:/app/base_templates:ro
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.vclab.rule=${TRAEFIK_VCLAB_RULE:-Host(`lab.localhost`)}"
+      - "traefik.http.routers.vclab.rule=${TRAEFIK_VCLAB_RULE}"
       - "traefik.http.services.vclab.loadbalancer.server.port=4200"

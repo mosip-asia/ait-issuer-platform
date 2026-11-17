@@ -44,7 +44,7 @@ services:
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.wallet.rule=${TRAEFIK_WALLET_RULE:-Host(`wallet.localhost`)}"
+      - "traefik.http.routers.wallet.rule=${TRAEFIK_WALLET_RULE}"
       - "traefik.http.services.wallet.loadbalancer.server.port=3004"
     networks:
       wallet-network:
