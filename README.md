@@ -445,3 +445,18 @@ Target hosts execute `scripts/deploy.sh` over an encrypted NetBird mesh network 
 - [Inji Certify Standalone Deployment (`deploy/README.md`)](./deploy/README.md)
 - [Gateway Workflow Engine (`src/gateway/README.md`)](./src/gateway/README.md)
 - [Verifier Custom Theme & Overlay (`src/verifier/README.md`)](./src/verifier/README.md)
+
+---
+
+## 10. Standards Compliance & Architecture Roadmap (TODO)
+
+Tracked architectural enhancements for future upstream alignment and standards compliance:
+
+| Area | Current Implementation | Standards Target | Action / Tracking |
+|:---|:---|:---|:---|
+| **W3C Cryptosuite** | CCG `Ed25519Signature2020` with VCDM 2.0 context | **W3C Data Integrity 1.0** (`eddsa-rdfc-2022` / `eddsa-jcs-2022`) | Upgrade proof suite when upstream MOSIP Inji Certify ships Data Integrity 1.0 support. |
+| **Course Data Model** | `@type: @json` opaque JSON literal | **Semantic Linked Data** (W3C Edu-VC / Schema.org `Course`) | Model courses, grades, and credits as typed RDF entities rather than unindexed JSON blobs. |
+| **OpenID4VCI Nonces** | Stand-in Keycloak hardcoded `c_nonce` mapper (`local-cnonce`) | **Dynamic Credential Issuer Nonces** | Implement dynamic single-use `c_nonce` challenge-response via OpenID4VCI Credential / Nonce endpoint. |
+| **Multi-Credential Routing** | Single static `record-url` per Certify instance | **Scope-Aware Dynamic Routing** | Pass requested credential `scope` to Adapter so multiple credentials (e.g. Student ID vs. Transcript) route to dedicated REST endpoints. |
+| **Canonical Domain** | `https://ait.example/` in schema and context | **Production University Domain** | Migrate placeholder `ait.example` IRIs to canonical `https://credentials.ait.ac.th/` or `https://vdr.dpi.ait.ac.th/`. |
+
