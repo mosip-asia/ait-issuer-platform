@@ -40,6 +40,7 @@ on:
 permissions:
   contents: read
   packages: read
+  actions: read
 
 jobs:
   resolve:
@@ -114,6 +115,29 @@ jobs:
           docker compose -f compose.yaml -f compose.verify.yaml config --quiet
           docker compose -f compose.yaml -f compose.mock.yaml config --quiet
           rm -f .env
+
+      - name: ⏳ Wait for CI & Build Completion
+        if: needs.resolve.outputs.environment == 'dev'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Checking status of '🧪 CI & Build' workflow for commit ${{ github.sha }}..."
+          RUN_ID=""
+          for i in $(seq 1 30); do
+            RUN_ID=$(gh run list --workflow "ci.yml" --commit "${{ github.sha }}" --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
+            if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
+              break
+            fi
+            sleep 3
+          done
+
+          if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
+            echo "Found CI workflow run: $RUN_ID. Watching until completion..."
+            gh run watch "$RUN_ID" --exit-status
+            echo "✅ CI & Build finished successfully."
+          else
+            echo "⚠️ Could not locate CI workflow for commit ${{ github.sha }} within 90s; continuing..."
+          fi
 
       - name: 🌐 Connect to NetBird VPN Mesh
         uses: mosip-asia/actions/netbird-connect@v1
