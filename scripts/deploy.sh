@@ -69,7 +69,11 @@ if [ "$BUILD_FLAG" = true ]; then
   bash scripts/build.sh
 else
   log_info "Pulling pre-built images from container registry..."
-  docker compose pull --quiet || log_warn "Pull completed with warnings (continuing with cached images if present)..."
+  docker compose pull --quiet --ignore-pull-failures || log_warn "Pull completed with warnings (continuing with cached images if present)..."
+  if ! docker image inspect certify-template-sync:local >/dev/null 2>&1; then
+    log_info "Building local helper services (template-sync)..."
+    docker compose build template-sync --quiet || true
+  fi
 fi
 
 # 3. Tear down existing stack
