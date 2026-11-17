@@ -9,6 +9,7 @@
 #   --tag <tag>           Image tag (default: git tag/commit or 'latest')
 #   --registry <registry> Container registry (default: ghcr.io/mosip-asia)
 #   --push                Push built images to the container registry
+#   --force               Force rebuild even if source files did not change
 #   --jar-only            Only build the Inji Certify SPI plugin JAR
 #   --images-only         Only build Docker images (assumes JAR is built)
 #   --no-cache            Pass --no-cache to docker build
@@ -18,6 +19,7 @@
 #   ./scripts/build.sh
 #   ./scripts/build.sh --tag v0.2.0 --push
 #   ./scripts/build.sh --jar-only
+#   ./scripts/build.sh --force --push
 # ==============================================================================
 set -euo pipefail
 
@@ -41,6 +43,7 @@ cd "$ROOT_DIR"
 REGISTRY="${CONTAINER_REGISTRY:-ghcr.io/mosip-asia}"
 TAG="${IMAGE_TAG:-}"
 PUSH=false
+FORCE_BUILD=false
 JAR_ONLY=false
 IMAGES_ONLY=false
 NO_CACHE=""
@@ -70,6 +73,10 @@ while [[ $# -gt 0 ]]; do
       PUSH=true
       shift
       ;;
+    --force)
+      FORCE_BUILD=true
+      shift
+      ;;
     --jar-only)
       JAR_ONLY=true
       shift
@@ -93,10 +100,18 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Find previous release tag for change detection if available
+PREV_TAG=""
+if [ -n "$TAG" ] && [ "$FORCE_BUILD" = false ]; then
+  PREV_TAG="$(git tag --list 'v*' --sort=-v:refname 2>/dev/null | grep -v "^${TAG}\$" | head -n 1 || true)"
+fi
+
 log_info "Build configuration:"
 echo "  Registry:    $REGISTRY"
 echo "  Image Tag:   $TAG"
+echo "  Previous:    ${PREV_TAG:-none (full build)}"
 echo "  Push:        $PUSH"
+echo "  Force build: $FORCE_BUILD"
 echo "  Target dir:  $ROOT_DIR"
 
 # ==============================================================================
@@ -114,7 +129,7 @@ build_jar() {
 
   local jar="src/issuer/target/issuer-data-provider-plugin.jar"
   if [ -f "$jar" ]; then
-    log_ok "Plugin JAR built successfully: $jar ($(du -h "$jar" | cut -f1))"
+    log_ok "Plugin JAR ready: $jar ($(du -h "$jar" | cut -f1))"
   else
     log_err "Plugin JAR not found at $jar after build!"
     exit 1
@@ -131,7 +146,7 @@ if [ "$JAR_ONLY" = true ]; then
 fi
 
 # ==============================================================================
-# 2. Build Docker Images
+# 2. Build or Fast-Retag Docker Images
 # ==============================================================================
 build_image() {
   local image_name="$1"
@@ -163,18 +178,54 @@ build_image() {
   fi
 }
 
-log_info "Starting Docker image builds..."
+build_or_retag_image() {
+  local image_name="$1"
+  local dockerfile="$2"
+  local context="${3:-.}"
+  shift 3
+  local watch_paths=("$@")
 
-# 1. Inji Certify with pre-baked plugin
-build_image "ait-certify" "docker/Dockerfile.certify" "."
+  local full_tag="${REGISTRY}/${image_name}:${TAG}"
+  local latest_tag="${REGISTRY}/${image_name}:latest"
 
-# 2. Verifier UI
-build_image "ait-verify-ui" "src/verifier/Dockerfile" "."
+  # Fast-retag optimization:
+  # If pushing, not forced, tag is not 'latest', and previous release tag exists
+  if [ "$PUSH" = true ] && [ "$FORCE_BUILD" = false ] && [ "$TAG" != "latest" ] && [ -n "$PREV_TAG" ]; then
+    local changed=""
+    if [ "${#watch_paths[@]}" -gt 0 ]; then
+      changed="$(git diff --name-only "$PREV_TAG" HEAD -- "${watch_paths[@]}" 2>/dev/null || true)"
+    fi
 
-# 3. VC Lab
-build_image "ait-vc-lab" "docker/Dockerfile.vc-lab" "."
+    if [ -z "$changed" ]; then
+      log_info "Checking if ${latest_tag} exists on remote registry for fast-retagging..."
+      if docker buildx imagetools inspect "$latest_tag" >/dev/null 2>&1; then
+        log_ok "No source changes in (${watch_paths[*]}) since ${PREV_TAG}."
+        log_info "Fast-retagging remote ${latest_tag} -> ${full_tag}..."
+        docker buildx imagetools create --tag "$full_tag" "$latest_tag"
+        log_ok "⚡ Retagged ${image_name}:${TAG} without rebuilding!"
+        return 0
+      else
+        log_warn "Remote ${latest_tag} not found on registry. Performing full build..."
+      fi
+    else
+      log_info "Detected changes in (${watch_paths[*]}) since ${PREV_TAG}:"
+      echo "$changed" | sed 's/^/    • /'
+    fi
+  fi
 
-log_ok "All Docker images built successfully!"
-if [ "$PUSH" = true ]; then
-  log_ok "All Docker images pushed to ${REGISTRY}!"
-fi
+  # Normal build path
+  build_image "$image_name" "$dockerfile" "$context"
+}
+
+log_info "Processing Docker images..."
+
+# 1. Inji Certify with pre-baked plugin (watched: src/issuer and Dockerfile.certify)
+build_or_retag_image "ait-certify" "docker/Dockerfile.certify" "." "src/issuer" "docker/Dockerfile.certify"
+
+# 2. Verifier UI (watched: src/verifier)
+build_or_retag_image "ait-verify-ui" "src/verifier/Dockerfile" "." "src/verifier"
+
+# 3. VC Lab (watched: src/vc-lab and Dockerfile.vc-lab)
+build_or_retag_image "ait-vc-lab" "docker/Dockerfile.vc-lab" "." "src/vc-lab" "docker/Dockerfile.vc-lab"
+
+log_ok "All Docker images ready!"

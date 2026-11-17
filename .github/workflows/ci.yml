@@ -12,6 +12,10 @@ on:
         description: "Push Docker images to GHCR"
         type: boolean
         default: true
+      force_build:
+        description: "Force rebuild of Docker images even if unchanged"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -24,6 +28,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -70,6 +76,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Java 21
         uses: actions/setup-java@v4
@@ -98,6 +106,9 @@ jobs:
           PUSH_ARGS=""
           if [ "${{ github.event_name }}" = "push" ] || [ "${{ inputs.push }}" = "true" ]; then
             PUSH_ARGS="--push"
+          fi
+          if [ "${{ inputs.force_build }}" = "true" ]; then
+            PUSH_ARGS="$PUSH_ARGS --force"
           fi
           bash scripts/build.sh --tag "$TAG" $PUSH_ARGS
 
