@@ -32,6 +32,9 @@ services:
       - "verifier.dpi.ait.ac.th:host-gateway"
       - "verifer.dpi.ait.ac.th:host-gateway"
       - "wallet.dpi.ait.ac.th:host-gateway"
+      - "issuer-dev.ait-vc.dpi.ait.ac.th:host-gateway"
+      - "verifier-dev.ait-vc.dpi.ait.ac.th:host-gateway"
+      - "wallet-dev.ait-vc.dpi.ait.ac.th:host-gateway"
     environment:
       - DEFAULT_LANG=en
       - MIMOTO_URL=${INJI_WEB_URL}/v1/mimoto
@@ -41,7 +44,7 @@ services:
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.wallet.rule=Host(`wallet.localhost`) || Host(`wallet.lan`) || Host(`wallet.dpi.ait.ac.th`)"
+      - "traefik.http.routers.wallet.rule=Host(`wallet.localhost`) || Host(`wallet.lan`) || Host(`wallet.dpi.ait.ac.th`) || Host(`wallet-dev.ait-vc.dpi.ait.ac.th`)"
       - "traefik.http.services.wallet.loadbalancer.server.port=3004"
     networks:
       wallet-network:
@@ -49,4 +52,5 @@ services:
           - inji-web
           - wallet.dpi.ait.ac.th
           - wallet
+          - wallet-dev.ait-vc.dpi.ait.ac.th
       trust-network: {}

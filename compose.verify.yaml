@@ -38,7 +38,7 @@ services:
       - ./deploy/base/verify-config.json:/usr/share/nginx/html/assets/config.json:ro
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.verify.rule=Host(`verifier.localhost`) || Host(`verify.localhost`) || Host(`verifier.lan`) || Host(`verifier.dpi.ait.ac.th`) || Host(`verifer.dpi.ait.ac.th`)"
+      - "traefik.http.routers.verify.rule=Host(`verifier.localhost`) || Host(`verify.localhost`) || Host(`verifier.lan`) || Host(`verifier.dpi.ait.ac.th`) || Host(`verifer.dpi.ait.ac.th`) || Host(`verifier-dev.ait-vc.dpi.ait.ac.th`)"
       - "traefik.http.services.verify.loadbalancer.server.port=8000"
     depends_on:
       - service
@@ -48,6 +48,7 @@ services:
           - verify-ui
           - verifier.dpi.ait.ac.th
           - verifer.dpi.ait.ac.th
+          - verifier-dev.ait-vc.dpi.ait.ac.th
 
   service:
     image: injistack/inji-verify-service:0.17.0
@@ -66,6 +67,9 @@ services:
       - "verifier.dpi.ait.ac.th:host-gateway"
       - "verifer.dpi.ait.ac.th:host-gateway"
       - "wallet.dpi.ait.ac.th:host-gateway"
+      - "issuer-dev.ait-vc.dpi.ait.ac.th:host-gateway"
+      - "verifier-dev.ait-vc.dpi.ait.ac.th:host-gateway"
+      - "wallet-dev.ait-vc.dpi.ait.ac.th:host-gateway"
     environment:
       - active_profile_env=default
       - DATABASE_HOST=database

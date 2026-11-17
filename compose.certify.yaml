@@ -55,6 +55,9 @@ services:
       - "verifier.dpi.ait.ac.th:host-gateway"
       - "verifer.dpi.ait.ac.th:host-gateway"
       - "wallet.dpi.ait.ac.th:host-gateway"
+      - "issuer-dev.ait-vc.dpi.ait.ac.th:host-gateway"
+      - "verifier-dev.ait-vc.dpi.ait.ac.th:host-gateway"
+      - "wallet-dev.ait-vc.dpi.ait.ac.th:host-gateway"
     environment:
       - active_profile_env=default, installation
       - AUTH_SERVER_ISSUER=${AUTH_SERVER_ISSUER}
@@ -94,7 +97,7 @@ services:
       - ./deploy/${INSTALLATION}/certify/vp_request_config.json:/config/server/vp_request_config.json:ro
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.certify.rule=Host(`issuer.localhost`) || Host(`issuer.lan`) || Host(`issuer.dpi.ait.ac.th`)"
+      - "traefik.http.routers.certify.rule=Host(`issuer.localhost`) || Host(`issuer.lan`) || Host(`issuer.dpi.ait.ac.th`) || Host(`issuer-dev.ait-vc.dpi.ait.ac.th`)"
       - "traefik.http.services.certify.loadbalancer.server.port=80"
     depends_on:
       - service
@@ -103,6 +106,7 @@ services:
         aliases:
           - certify-nginx
           - issuer.dpi.ait.ac.th
+          - issuer-dev.ait-vc.dpi.ait.ac.th
           - issuer
 
   template-sync:
