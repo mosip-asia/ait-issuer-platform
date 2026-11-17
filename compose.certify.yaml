@@ -109,7 +109,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.template-sync
-    image: ghcr.io/mosip-asia/certify-template-sync:${IMAGE_TAG:-latest}
+    image: ghcr.io/mosip-asia/ait-certify-template-sync:${IMAGE_TAG:-latest}
     restart: "no"
     depends_on:
       database:

@@ -169,13 +169,13 @@ log_info "Starting Docker image builds..."
 build_image "ait-certify" "docker/Dockerfile.certify" "."
 
 # 2. Certify Template-sync
-build_image "certify-template-sync" "docker/Dockerfile.template-sync" "."
+build_image "ait-certify-template-sync" "docker/Dockerfile.template-sync" "."
 
 # 3. Verifier UI
-build_image "verify-ui" "src/verifier/Dockerfile" "."
+build_image "ait-verify-ui" "src/verifier/Dockerfile" "."
 
 # 4. VC Lab
-build_image "vc-lab" "docker/Dockerfile.vc-lab" "."
+build_image "ait-vc-lab" "docker/Dockerfile.vc-lab" "."
 
 log_ok "All Docker images built successfully!"
 if [ "$PUSH" = true ]; then

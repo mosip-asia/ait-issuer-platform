@@ -20,7 +20,7 @@ services:
     build:
       context: .
       dockerfile: src/verifier/Dockerfile
-    image: ghcr.io/mosip-asia/verify-ui:${IMAGE_TAG:-latest}
+    image: ghcr.io/mosip-asia/ait-verify-ui:${IMAGE_TAG:-latest}
     environment:
       - DEFAULT_TITLE=${VERIFIER_TITLE}
       - DEFAULT_THEME=ait_theme
