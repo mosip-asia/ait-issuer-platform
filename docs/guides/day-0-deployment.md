@@ -123,12 +123,14 @@ CERTIFY_RECORD_URL=http://ait-itserv-dev-vm.netbird.selfhosted:8000/student/{sub
 MOSIP_CERTIFY_GATEWAY_ENABLED=false
 MOSIP_CERTIFY_GATEWAY_URL=NO GATEWAY
 
-# Authorization Server (Campus Keycloak - oauth-dev)
+# Inji Certify (OAuth Resource Server - Token Verification)
 AUTH_SERVER_ISSUER=https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev
 AUTH_SERVER_JWKS_URL=https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev/protocol/openid-connect/certs
+
+# Inji Web Wallet / Mimoto (OAuth Client - Stage 2 only)
 AUTH_SERVER_TOKEN_ENDPOINT=https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev/protocol/openid-connect/token
 AUTH_SERVER_PUBLIC_URL=https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev
-AUTH_SERVER_WALLET_CLIENT_ID=wallet-demo  # Primary client for Inji Web Wallet (Certify accepts any wallet via credential endpoint audience)
+AUTH_SERVER_WALLET_CLIENT_ID=wallet-demo  # Used only by Web Wallet (Mimoto) to initiate Keycloak login
 
 # Inji Verify Configuration
 VERIFIER_TITLE=AIT Credential Verifier

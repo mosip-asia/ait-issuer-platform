@@ -56,7 +56,6 @@ services:
       - active_profile_env=default, installation
       - AUTH_SERVER_ISSUER=${AUTH_SERVER_ISSUER}
       - AUTH_SERVER_JWKS_URL=${AUTH_SERVER_JWKS_URL}
-      - AUTH_SERVER_WALLET_CLIENT_ID=${AUTH_SERVER_WALLET_CLIENT_ID}
       - CERTIFY_DID=${CERTIFY_DID}
       - CERTIFY_RECORD_URL=${CERTIFY_RECORD_URL}
       - container_user=mosip

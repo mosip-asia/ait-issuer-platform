@@ -141,7 +141,6 @@ def test_certify_trusts_the_configured_server() -> None:
             assert props["mosip.certify.authn.jwk-set-uri"] == want["AUTH_SERVER_JWKS_URL"], (name, props)
             audiences = re.findall(r"'([^']*)'", props["mosip.certify.authn.allowed-audiences"])
             assert audiences == [
-                want["AUTH_SERVER_WALLET_CLIENT_ID"],
                 "http://certify-nginx:80/v1/certify/issuance/credential",
                 "http://certify-nginx/v1/certify/issuance/credential",
                 f"{CERTIFY_DOMAIN}/v1/certify/issuance/credential",

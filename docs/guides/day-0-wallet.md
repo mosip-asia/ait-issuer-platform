@@ -79,8 +79,9 @@ Configure these three protocol mappers on the `wallet-demo` client:
    - **Mapper Type**: `Audience`
    - **Included Custom Audience**: `https://issuer.dpi.ait.ac.th/v1/certify/issuance/credential`
    - **Add to Access Token**: `true`
-   - *(Recommended: Maps the audience to Certify's credential endpoint. This allows Certify to accept tokens from **any** wallet client—Inji Web, AI4DPI Mobile Wallet, or third-party wallets—without changing Certify or `.env`).*
-   - *(Alternative: If mapping `audience-self`, set `Included Client Audience` to `wallet-demo`, which Certify also accepts via `AUTH_SERVER_WALLET_CLIENT_ID`).*
+   - *(Standard OpenID4VCI design: Maps the audience directly to Certify's credential endpoint. Inji Certify acts purely as an OAuth Resource Server and accepts valid tokens from **any** wallet client—Inji Web, AI4DPI Mobile Wallet, or third-party wallets—without requiring client IDs in Certify configuration).*
+
+   *(Note: In Keycloak, you can attach this Audience Mapper either directly to the wallet client, or globally to the `ait_transcript_vc_ldp` client scope so all wallets requesting this scope automatically target Certify).*
 
 3. **`client_id-hardcoded`** (Hardcoded Claim Mapper):
    - **Mapper Type**: `Hardcoded claim`
