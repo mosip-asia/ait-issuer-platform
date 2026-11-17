@@ -240,7 +240,8 @@ KEYSTORE_TYPE=PKCS12
 KEYSTORE_PASS=local
 
 # Upstream SIS Data Adapter (NetBird VPN or campus network)
-CERTIFY_RECORD_URL=http://ait-itserv-dev-vm.netbird.selfhosted:8000/student/{sub}/transcript
+# For Day-0 Student ID deployment, point to the student-id endpoint:
+CERTIFY_RECORD_URL=http://ait-itserv-dev-vm.netbird.selfhosted:8000/student/{sub}/student-id
 
 # Approval Gate (Keep disabled for Day-0 to test direct adapter data retrieval first)
 MOSIP_CERTIFY_GATEWAY_ENABLED=false
@@ -262,7 +263,7 @@ Ensure the deployment host has network reachability to both the campus Keycloak 
 curl -sf https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev/protocol/openid-connect/certs | jq .
 
 # Verify SIS Adapter is reachable from the host (e.g. over NetBird VPN)
-curl -sf http://ait-itserv-dev-vm.netbird.selfhosted:8000/student/st120001/transcript | jq .
+curl -sf http://ait-itserv-dev-vm.netbird.selfhosted:8000/student/st120001/student-id | jq .
 ```
 
 ### Step 2: Compile the Certify SPI Plugin JAR
@@ -298,11 +299,11 @@ docker compose -f compose.certify.yaml restart template-sync service
    *Expected Output*: Returns JSON containing:
    - `"credential_issuer": "https://issuer.dpi.ait.ac.th"`
    - `"authorization_servers": ["https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev"]`
-   - `"credentials_supported"` containing `AitTranscriptCredential`.
+   - `"credentials_supported"` containing `StudentIdCredential` and `AitTranscriptCredential`.
 
 2. **Check VDR Context Schema Resolution**:
    ```bash
-   curl -sf https://vdr.dpi.ait.ac.th/contexts/ait-transcript/v1.json | jq .
+   curl -sf https://vdr.dpi.ait.ac.th/contexts/student-id/v1.json | jq .
    ```
 
 3. **Check Certify Container Logs**:

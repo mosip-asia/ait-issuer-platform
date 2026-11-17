@@ -47,6 +47,7 @@ def student_id(sub: str) -> dict:
     return {
         "studentId": row.get("registrationNo", ""),
         "fullName": row.get("fullName", ""),
+        "affiliation": "Student",
         "faculty": row.get("faculty", ""),
         "academicProgram": row.get("academicProgram", ""),
         "studentStatus": "Active",

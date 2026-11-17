@@ -287,7 +287,7 @@ def test_every_record_schema_lists_exactly_the_claims_its_template_substitutes()
     substitutes, every one required, a string but `courses`, and no reserved or trace key."""
     contract = load_contract()
     claims = template_claims()
-    assert set(claims) == {"ait_transcript_vc_ldp", "developer_passport_vc_ldp", "achievement_certificate_vc_ldp"}
+    assert set(claims) == {"ait_transcript_vc_ldp", "developer_passport_vc_ldp", "achievement_certificate_vc_ldp", "ait_student_id_vc_ldp"}
     assert sorted(s.get("x-scope") for s in record_schemas(contract)) == sorted(claims)
     for scope, names in claims.items():
         schema = record_schema(contract, scope)
@@ -306,6 +306,7 @@ def test_the_contract_mode_passes_against_the_mock() -> None:
         get = host_get(csv_path)
         for sub in ("st120001", "st120006"):  # st120006: the SIS test student, so issuer-dev can gate it
             check_contract(get, TRANSCRIPT_URL, sub, "ait_transcript_vc_ldp")
+        check_contract(get, "/student/{sub}/student-id", "st120001", "ait_student_id_vc_ldp")
         check_contract(get, TRANSCRIPT_URL, "st120001", "openid ait_transcript_vc_ldp")  # the scope claim, whole
         assert get("/student/st120006/eligibility") == (200, {
             "holds": [], "conferralStatus": "Conferred", "balance": "0.00"})  # eligible: it passes every check

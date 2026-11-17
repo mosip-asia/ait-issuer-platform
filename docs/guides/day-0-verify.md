@@ -75,7 +75,7 @@ The verifier UI reads `deploy/base/verify-config.json` to determine which creden
     {
       "logo": "/assets/cert.png",
       "name": "AIT Student ID",
-      "type": "AitStudentIdCredential",
+      "type": "StudentIdCredential",
       "clientIdScheme": "did",
       "definition": {
         "purpose": "Verify the holder's AIT student ID card credential.",
@@ -86,7 +86,7 @@ The verifier UI reads `deploy/base/verify-config.json` to determine which creden
             "format": { "ldp_vc": { "proof_type": ["Ed25519Signature2020"] } },
             "constraints": {
               "fields": [
-                { "path": ["$.type"], "filter": { "type": "object", "pattern": "AitStudentIdCredential" } }
+                { "path": ["$.type"], "filter": { "type": "object", "pattern": "StudentIdCredential|AitIdCredential|AitStudentIdCredential" } }
               ]
             }
           }
@@ -103,9 +103,28 @@ The verifier UI reads `deploy/base/verify-config.json` to determine which creden
       "dateGraduation",
       "faculty"
     ],
+    "StudentIdCredentialRenderOrder": [
+      "studentId",
+      "fullName",
+      "affiliation",
+      "faculty",
+      "academicProgram",
+      "studentStatus",
+      "expiryDate"
+    ],
+    "AitIdCredentialRenderOrder": [
+      "studentId",
+      "fullName",
+      "affiliation",
+      "faculty",
+      "academicProgram",
+      "studentStatus",
+      "expiryDate"
+    ],
     "AitStudentIdCredentialRenderOrder": [
       "studentId",
       "fullName",
+      "affiliation",
       "faculty",
       "academicProgram",
       "studentStatus",

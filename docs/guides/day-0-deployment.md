@@ -117,7 +117,8 @@ KEYSTORE_TYPE=PKCS12
 KEYSTORE_PASS=your-keystore-password
 
 # Upstream SIS Data Adapter (NetBird VPN or campus network)
-CERTIFY_RECORD_URL=http://ait-itserv-dev-vm.netbird.selfhosted:8000/student/{sub}/transcript
+# For Day-0 Student ID deployment, point to the student-id endpoint:
+CERTIFY_RECORD_URL=http://ait-itserv-dev-vm.netbird.selfhosted:8000/student/{sub}/student-id
 
 # Approval Gate (Keep disabled for Day-0 to test direct adapter data retrieval first)
 MOSIP_CERTIFY_GATEWAY_ENABLED=false

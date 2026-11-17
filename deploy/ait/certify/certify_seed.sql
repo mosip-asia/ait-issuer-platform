@@ -5,6 +5,69 @@
 -- ==============================================================================
 \c inji_certify postgres
 
+-- Credential: ait-student-id
+INSERT INTO certify.credential_config (
+    credential_config_key_id, config_id, status, vc_template, doctype, sd_jwt_vct, context,
+    credential_type, credential_format, did_url, key_manager_app_id, key_manager_ref_id,
+    signature_algo, signature_crypto_suite, sd_claim, display, display_order, scope,
+    cryptographic_binding_methods_supported, credential_signing_alg_values_supported,
+    proof_types_supported, credential_subject, mso_mdoc_claims, plugin_configurations,
+    credential_status_purpose, qr_settings, qr_signature_algo, cr_dtimes, upd_dtimes
+) VALUES (
+    'ait-student-id',
+    gen_random_uuid()::VARCHAR(255),
+    'active',
+    'ewogICJAY29udGV4dCI6IFsKICAgICJodHRwczovL3d3dy53My5vcmcvbnMvY3JlZGVudGlhbHMvdjIiLAogICAgImh0dHA6Ly92ZHIubG9jYWxob3N0L2NvbnRleHRzL3N0dWRlbnQtaWQvdjEuanNvbiIsCiAgICAiaHR0cHM6Ly93M2lkLm9yZy9zZWN1cml0eS9zdWl0ZXMvZWQyNTUxOS0yMDIwL3YxIgogIF0sCiAgImlzc3VlciI6ICIke19pc3N1ZXJ9IiwKICAidHlwZSI6IFsKICAgICJWZXJpZmlhYmxlQ3JlZGVudGlhbCIsCiAgICAiU3R1ZGVudElkQ3JlZGVudGlhbCIsCiAgICAiQWl0SWRDcmVkZW50aWFsIgogIF0sCiAgInZhbGlkRnJvbSI6ICIke3ZhbGlkRnJvbX0iLAogICJ2YWxpZFVudGlsIjogIiR7dmFsaWRVbnRpbH0iLAogICJjcmVkZW50aWFsU3RhdHVzIjogewogICAgImlkIjogIiR7Y3JlZGVudGlhbFN0YXR1cy5pZH0iLAogICAgInR5cGUiOiAiJHtjcmVkZW50aWFsU3RhdHVzLnR5cGV9IiwKICAgICJzdGF0dXNQdXJwb3NlIjogIiR7Y3JlZGVudGlhbFN0YXR1cy5zdGF0dXNQdXJwb3NlfSIsCiAgICAic3RhdHVzTGlzdEluZGV4IjogIiR7Y3JlZGVudGlhbFN0YXR1cy5zdGF0dXNMaXN0SW5kZXh9IiwKICAgICJzdGF0dXNMaXN0Q3JlZGVudGlhbCI6ICIke2NyZWRlbnRpYWxTdGF0dXMuc3RhdHVzTGlzdENyZWRlbnRpYWx9IgogIH0sCiAgImNyZWRlbnRpYWxTdWJqZWN0IjogewogICAgImlkIjogIiR7X2hvbGRlcklkfSIsCiAgICAic3R1ZGVudElkIjogIiR7c3R1ZGVudElkfSIsCiAgICAiZnVsbE5hbWUiOiAiJHtmdWxsTmFtZX0iLAogICAgImFmZmlsaWF0aW9uIjogIiR7YWZmaWxpYXRpb259IiwKICAgICJmYWN1bHR5IjogIiR7ZmFjdWx0eX0iLAogICAgImFjYWRlbWljUHJvZ3JhbSI6ICIke2FjYWRlbWljUHJvZ3JhbX0iLAogICAgInN0dWRlbnRTdGF0dXMiOiAiJHtzdHVkZW50U3RhdHVzfSIsCiAgICAiaXNzdWVEYXRlIjogIiR7aXNzdWVEYXRlfSIsCiAgICAiZXhwaXJ5RGF0ZSI6ICIke2V4cGlyeURhdGV9IgogIH0KfQ==',
+    NULL,
+    NULL,
+    'http://vdr.localhost/contexts/student-id/v1.json,https://www.w3.org/ns/credentials/v2',
+    'StudentIdCredential,AitIdCredential,VerifiableCredential',
+    'ldp_vc',
+    'did:key:z6MkpPLACEHOLDERreplaceMeViaBootstrapDidRefreshScript1',
+    'CERTIFY_VC_SIGN_ED25519',
+    'ED25519_SIGN',
+    'EdDSA',
+    'Ed25519Signature2020',
+    NULL,
+    '[{"name": "AIT Student ID Card", "locale": "en", "logo": {"url": "http://vdr.localhost/assets/AIT_globe.png", "alt_text": "AIT Logo"}, "background_color": "#005696", "text_color": "#FFFFFF"}]'::JSONB,
+    ARRAY['studentId', 'fullName', 'affiliation', 'faculty', 'academicProgram', 'studentStatus', 'expiryDate']::TEXT[],
+    'ait_student_id_vc_ldp',
+    ARRAY['did:jwk', 'did:key']::TEXT[],
+    ARRAY['Ed25519Signature2020']::TEXT[],
+    '{"jwt": {"proof_signing_alg_values_supported": ["RS256", "ES256"]}}'::JSONB,
+    '{"studentId": {"display": [{"name": "Student ID", "locale": "en"}]}, "fullName": {"display": [{"name": "Full Name", "locale": "en"}]}, "affiliation": {"display": [{"name": "Affiliation", "locale": "en"}]}, "faculty": {"display": [{"name": "Faculty / School", "locale": "en"}]}, "academicProgram": {"display": [{"name": "Academic Program", "locale": "en"}]}, "studentStatus": {"display": [{"name": "Status", "locale": "en"}]}, "issueDate": {"display": [{"name": "Issue Date", "locale": "en"}]}, "expiryDate": {"display": [{"name": "Expiry Date", "locale": "en"}]}}'::JSONB,
+    NULL,
+    NULL,
+    ARRAY['revocation']::TEXT[],
+    NULL,
+    'EdDSA',
+    NOW(),
+    NULL
+)
+ON CONFLICT (credential_config_key_id) DO UPDATE SET
+    vc_template = EXCLUDED.vc_template,
+    doctype = EXCLUDED.doctype,
+    sd_jwt_vct = EXCLUDED.sd_jwt_vct,
+    context = EXCLUDED.context,
+    credential_type = EXCLUDED.credential_type,
+    credential_format = EXCLUDED.credential_format,
+    did_url = EXCLUDED.did_url,
+    signature_algo = EXCLUDED.signature_algo,
+    signature_crypto_suite = EXCLUDED.signature_crypto_suite,
+    display = EXCLUDED.display,
+    display_order = EXCLUDED.display_order,
+    scope = EXCLUDED.scope,
+    cryptographic_binding_methods_supported = EXCLUDED.cryptographic_binding_methods_supported,
+    credential_signing_alg_values_supported = EXCLUDED.credential_signing_alg_values_supported,
+    proof_types_supported = EXCLUDED.proof_types_supported,
+    credential_subject = EXCLUDED.credential_subject,
+    mso_mdoc_claims = EXCLUDED.mso_mdoc_claims,
+    plugin_configurations = EXCLUDED.plugin_configurations,
+    credential_status_purpose = EXCLUDED.credential_status_purpose,
+    qr_settings = EXCLUDED.qr_settings,
+    qr_signature_algo = EXCLUDED.qr_signature_algo,
+    upd_dtimes = NOW();
+
 -- Credential: ait-transcript
 INSERT INTO certify.credential_config (
     credential_config_key_id, config_id, status, vc_template, doctype, sd_jwt_vct, context,
