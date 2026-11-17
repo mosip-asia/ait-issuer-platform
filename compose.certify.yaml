@@ -55,9 +55,6 @@ services:
       - "verifier.dpi.ait.ac.th:host-gateway"
       - "verifer.dpi.ait.ac.th:host-gateway"
       - "wallet.dpi.ait.ac.th:host-gateway"
-      - "issuer-dev.ait-vc.dpi.ait.ac.th:host-gateway"
-      - "verifier-dev.ait-vc.dpi.ait.ac.th:host-gateway"
-      - "wallet-dev.ait-vc.dpi.ait.ac.th:host-gateway"
     environment:
       - active_profile_env=default, installation
       - AUTH_SERVER_ISSUER=${AUTH_SERVER_ISSUER}
@@ -105,8 +102,6 @@ services:
       certify-network:
         aliases:
           - certify-nginx
-          - issuer.dpi.ait.ac.th
-          - issuer-dev.ait-vc.dpi.ait.ac.th
           - issuer
 
   template-sync:

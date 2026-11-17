@@ -46,9 +46,7 @@ services:
       verifier-network:
         aliases:
           - verify-ui
-          - verifier.dpi.ait.ac.th
-          - verifer.dpi.ait.ac.th
-          - verifier-dev.ait-vc.dpi.ait.ac.th
+          - verifier
 
   service:
     image: injistack/inji-verify-service:0.17.0
@@ -67,9 +65,6 @@ services:
       - "verifier.dpi.ait.ac.th:host-gateway"
       - "verifer.dpi.ait.ac.th:host-gateway"
       - "wallet.dpi.ait.ac.th:host-gateway"
-      - "issuer-dev.ait-vc.dpi.ait.ac.th:host-gateway"
-      - "verifier-dev.ait-vc.dpi.ait.ac.th:host-gateway"
-      - "wallet-dev.ait-vc.dpi.ait.ac.th:host-gateway"
     environment:
       - active_profile_env=default
       - DATABASE_HOST=database

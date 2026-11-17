@@ -32,10 +32,7 @@ services:
     networks:
       trust-network:
         aliases:
-          - vdr.dpi.ait.ac.th
-          - vdr.ait.ac.th
           - vdr
-          - vdr-dev.ait-vc.dpi.ait.ac.th
 
   vcga:
     image: nginx:stable
@@ -51,7 +48,4 @@ services:
     networks:
       trust-network:
         aliases:
-          - vcga.dpi.ait.ac.th
-          - vcga.ait.ac.th
           - vcga
-          - vcga-dev.ait-vc.dpi.ait.ac.th
