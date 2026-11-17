@@ -1,79 +1,99 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Operational guidelines, architectural invariants, and command cheat sheet for developers and AI agents working in `mosip-asia/ait-transcript`.
 
-## What this repository is
+## 1. What This Repository Is
 
-The Issuer: a credential issuer built on pinned upstream Inji images. A wallet asks Inji Certify for a credential; Certify's Data-provider plugin (`plugin/`) reads the student's record from an Adapter (`adapter/` is the mock one) and, with the gate on, first asks the Gateway (`gateway/`), the optional Approval gate, which runs the credential type's Checklist on the Adapter's eligibility attributes; Certify signs the record's claims (W3C VCDM 2.0, JSON-LD, Ed25519Signature2020). Why the gate sits beside the data path: `docs/adr/0001-approval-gate-beside-the-data-path.md`. Around it, a demo stack runs the whole journey locally: the Portal (`portal/`, the demo app), Keycloak, Mimoto, Inji Web and Inji Verify, revocation included.
+The **Institutional Verifiable Credential Platform** is built on pinned upstream MOSIP Inji components to issue W3C VCDM 2.0 Verifiable Credentials (JSON-LD with Ed25519Signature2020) via OpenID4VCI.
 
-An **Installation** (`deploy/<name>/`) is one issuing deployment's settings: `ait` issues the AIT transcript, `hackathon` the Developer Passport and the Achievement. Terms are in `CONTEXT.md`. What the Issuer must become is in `docs/project/issuer-v0.1/`; the configuration contract there is checked against the Compose files, and `spec-part-2.md` is planned work, not code.
+- **Issuer (Inji Certify)**: Signs credentials populated from university SIS data via an SPI Data-provider plugin (`src/issuer/`).
+- **Approval Gate (Gateway)**: Sits *beside* the data path (`docs/adr/0001-approval-gate-beside-the-data-path.md`) to evaluate eligibility checklists (no holds, conferral status, zero balance) for academic transcripts (Phase 2).
+- **Wallets**: Compliant holder wallets (Inji Web Wallet `:4004` and AI4DPI Mobile Wallet) claim VCs using OpenID4VCI.
+- **Trust Registry & Verifier**: Static VDR schema context server (`deploy/<tenant>/vdr/contexts/`), VCGA issuer catalog (`deploy/<tenant>/vcga/`), and decentralized Inji Verify service & custom UI (`src/verifier/`).
+- **Installations (`deploy/<tenant>/`)**: Multi-tenant isolation for `ait` (University Credentials) and `hackathon` (Developer Passport & Achievement Certificate).
 
-- **Web Wallet.** End-to-end credential claiming is demonstrated via the Inji Web Wallet container.
+---
 
-## Commands
+## 2. Core Invariants & Architecture Rules
 
-- Standard automation scripts in `scripts/`:
-  - `./scripts/deploy.sh [installation] [--wipe]`: Builds plugin JAR if needed and brings up the Issuer Platform stack.
-  - `./scripts/smoke-test.sh [certify_url] [student_id] [config_id]`: Post-deployment OpenID4VCI issuance smoke test.
-  - `./scripts/release.sh`: Build and publish Docker images and release artifacts.
-- Tests are plain Python scripts:
-  - `python3 tests/test_installations.py`
-  - `python3 tests/test_authorization_server.py`
-  - `python3 tests/test_inji_web_vc_readiness.py`
-  - `python3 src/verifier/test_verifier.py`
-  - `python3 src/tools/test_generate_csv.py`
-  - `python3 src/tools/test_render_mimoto_issuers_config.py`
-  - `.venv/bin/python tests/test_issue_and_verify.py`
-  - `.venv/bin/python src/adapter/test_adapter.py`
-  - `.venv/bin/python src/gateway/tests/test_evaluations.py`
-- Compose manifests:
-  - `compose.yaml`: Root orchestrator including certify, verify, web-wallet, and trust.
-  - `compose.certify.yaml`: Core Inji Certify Issuer Engine, Certify Nginx (:80), internal PostgreSQL, template-sync.
-  - `compose.verify.yaml`: Custom branded Verifier (`src/verifier` on port 8000), Inji Verify service (:9095), and PostgreSQL.
-  - `compose.web-wallet.yaml`: Inji Web Wallet UI (port 4004).
-  - `compose.trust.yaml`: Trust registry containing VDR context server (:9098) and static VCGA issuer metadata (:9099).
-  - `compose.mock.yaml`: Stand-in mock services with Keycloak (port 9080), mock adapter (:8082), demo app (:4100), and gateway (:8000).
-  - `compose.certify-build.yaml`: Compiler container for the SPI plugin JAR (`plugin-builder`).
+1. **OpenID4VCI Resource Server Decoupling:**
+   - Inji Certify is an **OAuth 2.0 Resource Server**, NOT a client. It must NEVER configure, expect, or check `AUTH_SERVER_WALLET_CLIENT_ID`.
+   - Certify validates bearer access tokens against Keycloak public JWKS (`AUTH_SERVER_JWKS_URL`) using resource indicator audience validation (`https://<issuer-domain>/v1/certify/issuance/credential`).
+   - Wallets are OAuth clients registered in Keycloak with standard PKCE and redirect URIs.
 
-Deployment is manual: push, then run the `Deploy` workflow for a commit. A commit that changes an Installation's `certify_seed.sql` needs `wipe=true`, which also renews the signing key and `did:key`.
+2. **Day-0 Phased Rollout (Student ID First):**
+   - Day-0 deployment in dev environments is scoped strictly to the **Student ID Card** (`StudentIdCredential`, `AitIdCredential`) querying `GET /student/{sub}/student-id` with Gateway checklist gate disabled (`MOSIP_CERTIFY_GATEWAY_ENABLED=false`).
+   - Academic Transcript (`AitTranscriptCredential`) with Gateway checklist gates is deferred to Phase 2.
 
-## Architecture
+3. **Multi-Role Campus Identity & W3C Multi-Typing:**
+   - All campus roles (Students, Faculty, Staff) share a single LDAP directory and Keycloak realm (`ait-dev`).
+   - Role scoping is enforced by the SIS Adapter (returns 404 for non-students, causing Certify to fail closed with `no_record`).
+   - Credentials use W3C VCDM 2.0 dual typing: `["VerifiableCredential", "StudentIdCredential", "AitIdCredential"]` with `"affiliation": "Student"`.
 
-- **Data.** `tests/fixtures/students.json` is the source of truth for the mock personas; `src/tools/generate_csv.py` can regenerate `deploy/ait/adapter/student_identity_data.csv` from it. Identity is per degree: a student with two degrees is two rows and two Keycloak users. Both `ait` and `hackathon` adapter CSVs are committed.
-- **Data flow.** The token's `sub` and `scope` go from Certify to the plugin, which asks the Gateway's `POST /evaluations` (`{sub, scope}`) when the gate is on, then reads the record at its record URL with `{sub}` filled in (`GET /student/{sub}/transcript`); the Gateway reads only its eligibility URL (`GET /student/{sub}/eligibility`). Both URLs are whole settings the deployment owns. `docs/contracts/adapter-openapi.yaml` is the contract (a record schema and an eligibility schema per scope, by `x-scope`) and, with `docs/schemas/ait-transcript-credential.v2.schema.json`, a master file: a test holds the transcript record to that schema's subject. `docs/project/issuer-v0.1/contracts.md` section 2 explains it. The Adapter serves values verbatim; the plugin is the only escaper.
-- **Mock Adapter** (`mock/adapter/`). The mock, column-driven, reads the CSV on every request and keys a row by its `id`, the `sub`: `/student/{sub}/transcript` serves the record to both Installations' Certify, the scope picking its schema.
-- **Gateway** (`src/gateway/`, optional). `POST /evaluations`, the read-only Checklist evaluation (`{sub, scope}`, reads only `GATEWAY_ELIGIBILITY_URL`).
-- **Data-provider plugin** (`src/issuer/`, Java 21). `IssuerDataProviderPlugin` asks the Gateway's `POST /evaluations` about the token's `sub` when `mosip.certify.gateway.enabled=true`, reads the record at `mosip.certify.adapter.record-url` with `{sub}` filled in. Compiled against `certify-integration-api:0.14.0`.
-- **Verifier** (`src/verifier/`). Custom branded Inji Verify UI overlay with institutional theme CSS variables and custom SVG logo.
-- **Registrar approval.** The Portal shows the claim link only after a registrar approves.
-- **Contexts**: the JSON-LD contexts in `deploy/<tenant>/contexts/` are served by `vdr`.
-- **Revocation** is one Certify status API call from the Portal; Certify re-signs the status list about every 60 seconds (`docs/concepts/vc-revocation.md`).
+4. **Cryptographic Binding Standards:**
+   - All credential definitions and database seeds must include `"did:key"` alongside `"did:jwk"` in `cryptographic_binding_methods_supported` for Thailand ETDA and mobile wallet compliance.
 
-`bootstrap.sh` is idempotent and does what Compose cannot: `.env`, the network, Mimoto's keystore, bring-up order, the did:key refresh after a wipe, the context refresh, and validation.
+5. **Approval Gate Beside the Data Path (ADR 0001):**
+   - When enabled (Phase 2), the Gateway evaluates the Checklist (`no_holds`, `conferred`, `zero_balance`) via `GET /student/{sub}/eligibility`.
+   - The Gateway **never** proxies or intercepts credential record data. Refusal fails closed (`checklist_failed`, `no_record`, `gateway_error`).
 
-## Things that bite
+6. **Canonical API Contracts:**
+   - [`docs/contracts/adapter-openapi.yaml`](docs/contracts/adapter-openapi.yaml) is the master contract defining `/student/{sub}/student-id`, `/student/{sub}/transcript`, and `/student/{sub}/eligibility`.
+   - `tests/test_adapter.py` holds Certify templates, database seeds, and adapter responses equal against this OpenAPI specification.
 
-Read before touching the stack:
+7. **Multi-Tenant Directory Layout (`deploy/<tenant>/`):**
+   - Certify configuration is isolated under `deploy/<tenant>/certify/` (`certify-installation.properties`, `certify_seed.sql`, `credentials/*.json`).
+   - Trust registry assets reside under `deploy/<tenant>/vdr/` and `deploy/<tenant>/vcga/`.
 
-- `docs/architecture/vc-stack.md`: Keycloak's browser URL is `localhost:9080` but its token issuer is `http://keycloak:8080`; realm changes need a recreate; the nginx containers resolve upstreams at start, so recreating `keycloak-server` or `certify` needs the proxies restarted (`run-demo.sh` does).
-- `docs/reference/vc-download-troubleshooting.md`: the four layered failures behind an empty issuer list, a login page that does not load, or "session is not valid".
-- `docs/concepts/transcript-credential.md` and `docs/concepts/vc-revocation.md`: their "Gotchas" sections.
-- Mount the plugin jar as a single file, never `additional_jars/` as a directory, which would hide the four bundled jars.
-- Never `sed -i` a bind-mounted file: Docker Desktop keeps mounting the replaced file, so the next restart fails. Use `sed_in_place` in `bootstrap.sh`.
-- Certify runs as root and writes `vc-stack/data/` as root; remove it from a container.
+8. **Plugin Build & Mount:**
+   - Source code is at `src/issuer/` (Java 21).
+   - Built via `docker compose -f compose.certify-build.yaml run --rm plugin-builder` to `src/issuer/target/issuer-data-provider-plugin.jar`.
+   - Mount as a single file into `/home/inji/additional_jars/issuer-data-provider-plugin.jar`. Never mount the directory over `additional_jars/`.
 
-## Repository rules
+---
 
-- `*.sh` files are LF (`.gitattributes`); other text files are CRLF in a Windows checkout.
-- Generated and environment files stay git-ignored: `vc-stack/.env`, `vc-stack/certs/`, `vc-stack/data/`, `vc-stack/plugins/`, `src/issuer/target/`, `.demo-state/`. No jar is committed.
-- `AGENTS.md`, `PLAN.md` and `docs/log.md` at the root are local-only and git-ignored.
+## 3. Standard Verification & Test Commands
 
-## Docs
+Run the host test suite without Docker containers:
+```bash
+python3 src/tools/test_generate_csv.py
+python3 src/tools/test_render_mimoto_issuers_config.py
+python3 src/verifier/test_verifier.py
+python3 tests/test_installations.py
+python3 tests/test_authorization_server.py
+python3 tests/test_inji_web_vc_readiness.py
+.venv/bin/python tests/test_issue_and_verify.py
+.venv/bin/python tests/test_adapter.py
+.venv/bin/python tests/test_courses.py
+.venv/bin/python src/gateway/tests/test_evaluations.py
+bash scripts/check-data-guard.sh
+```
 
-`docs/OVERVIEW.md` is the index: what to read first, then `docs/reference/` (lookup pages agents and operators use, not reading material). A page named `*.stale.md` with "(stale)" in its title was written by someone else and no longer holds; leave it, do not cite it as current. Retired pages are not kept; OVERVIEW names the commit to recover them from. Add a page only when no existing page can take the content, and list it in OVERVIEW.
+---
 
-## Agent skills
+## 4. Compose Manifests & Deployment Guides
 
-- **Issue tracker**: local Markdown outside this repo; never GitHub Issues. See `docs/agents/issue-tracker.md`.
-- **Triage labels**: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`, as a `Status:` line.
-- **Domain docs**: one context, `CONTEXT.md`; decisions in `docs/adr/`.
+### Compose Files:
+- `compose.yaml`: Master compose orchestrator.
+- `compose.certify.yaml`: Core Inji Certify engine, PostgreSQL, template-sync.
+- `compose.certify-build.yaml`: Containerized Maven build for `IssuerDataProviderPlugin.java`.
+- `compose.web-wallet.yaml`: Inji Web Wallet UI.
+- `compose.verify.yaml`: Inji Verify UI and verification backend.
+- `compose.trust.yaml`: VDR schema context registry and VCGA issuer catalog.
+- `compose.traefik.yaml`: Ingress router for local/dev domain routing.
+
+### Day-0 Deployment Guides:
+- **Roadmap**: [`docs/guides/day-0-deployment.md`](docs/guides/day-0-deployment.md)
+- **Stage 1 (Issuer Engine)**: [`docs/guides/day-0-certify.md`](docs/guides/day-0-certify.md)
+- **Stage 2 (Holder Wallet)**: [`docs/guides/day-0-wallet.md`](docs/guides/day-0-wallet.md)
+- **Stage 3 (Credential Verifier)**: [`docs/guides/day-0-verify.md`](docs/guides/day-0-verify.md)
+
+---
+
+## 5. Repository Hygiene & Conventions
+
+- **Line Endings:** All `.sh` files must use LF line endings (`.gitattributes`).
+- **Git Hygiene:** Never commit `.env`, CSV files, generated templates, or JARs.
+- **Local Files:** `AGENTS.md`, `PLAN.md`, and `docs/log.md` at the repository root are local-only and git-ignored.
+- **In-place Edits in WSL/Linux:** Never use `sed -i` on bind-mounted files (preserves Docker Desktop inode bindings).
+- **Issue Tracking:** Do not create or comment on GitHub Issues; track issues locally or via PRs.
