@@ -19,10 +19,10 @@ This guide covers the **initial (Day-0) deployment of Inji Certify**, the core c
 ```mermaid
 flowchart LR
     subgraph CertifyStack["Inji Certify Stack (Docker Compose)"]
-        Certify["Inji Certify Engine<br>(issuer.dpi.ait.ac.th)"]
-        Plugin["IssuerDataProviderPlugin<br>(Java 21 SPI)"]
+        Certify["Inji Certify Engine<br>(ghcr.io/mosip-asia/ait-certify)"]
+        Plugin["IssuerDataProviderPlugin<br>(Pre-baked in container JAR)"]
         DB[(PostgreSQL<br>inji_certify)]
-        Sync["Template Sync<br>(GitOps Sync)"]
+        Sync["Template Sync<br>(certify-template-sync:local)"]
         VDR["VDR Registry<br>(vdr.dpi.ait.ac.th)"]
         Keystore["PKCS12 Keystore<br>(local.p12 / HSM)"]
         Certify --- Plugin
@@ -219,6 +219,7 @@ During issuance, Certify extracts the holder's public key from the OpenID4VCI pr
 # ==============================================================================
 COMPOSE_PROJECT_NAME=vc-stack
 INSTALLATION=ait
+IMAGE_TAG=latest
 
 # Edge Ingress & Domains
 CERTIFY_PUBLIC_BASE_URL=https://issuer.dpi.ait.ac.th
@@ -246,25 +247,42 @@ AUTH_SERVER_JWKS_URL=https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev/p
 
 ## 6. Step-by-Step Day-0 Execution Runbook
 
-### Step 1: Pre-flight Network Verification
-Ensure the deployment host has network reachability to both the campus Keycloak JWKS and the SIS Adapter:
-```bash
-# Verify Keycloak JWKS is reachable
-curl -sf https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev/protocol/openid-connect/certs | jq .
+### Step 1: Pre-flight Network & Config Verification
+1. Ensure the deployment host has network reachability to both campus Keycloak JWKS and the SIS Adapter:
+   ```bash
+   # Verify Keycloak JWKS is reachable
+   curl -sf https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev/protocol/openid-connect/certs | jq .
 
-# Verify SIS Adapter is reachable from the host (e.g. over NetBird VPN)
-curl -sf http://ait-itserv-dev-vm.netbird.selfhosted:8000/student/st120001/student-id | jq .
-```
+   # Verify SIS Adapter is reachable from the host (e.g. over NetBird VPN)
+   curl -sf http://ait-itserv-dev-vm.netbird.selfhosted:8000/student/st120001/student-id | jq .
+   ```
 
-### Step 2: Compile the Certify SPI Plugin JAR
-Compile the Java 21 `IssuerDataProviderPlugin`:
-```bash
-docker compose -f compose.certify-build.yaml run --rm plugin-builder
-```
-Confirm that `src/issuer/target/issuer-data-provider-plugin.jar` is created.
+2. Validate environment configuration integrity:
+   ```bash
+   # Verify all required .env variables exist and are non-empty
+   bash scripts/check-env.sh
+   ```
+
+### Step 2: Container Image Resolution (Pre-baked vs Local Plugin Build)
+- **Standard / Server Deployment (GHCR)**:
+  The `IssuerDataProviderPlugin` SPI is pre-compiled and baked directly into `ghcr.io/mosip-asia/ait-certify:${IMAGE_TAG}` at `/home/inji/additional_jars/issuer-data-provider-plugin.jar`. No Maven toolchain or local JAR compilation is needed on the deployment server.
+
+- **Local Developer Iteration (Optional)**:
+  If actively modifying plugin Java source code in `src/issuer/`:
+  ```bash
+  # Build plugin JAR and container image locally
+  ./scripts/build.sh
+  # Or compile JAR only via containerized builder
+  docker compose -f compose.certify-build.yaml run --rm plugin-builder
+  ```
 
 ### Step 3: Launch Certify & Trust Services
-Bring up the Certify engine, PostgreSQL database, template-sync, VDR, and Traefik ingress:
+You can deploy using the automated deployment runner:
+```bash
+# Automated deployment (pulls images, validates .env, updates tags, and starts containers)
+./scripts/deploy.sh
+```
+Or start the containers manually via Docker Compose:
 ```bash
 docker compose -f compose.certify.yaml -f compose.trust.yaml -f compose.traefik.yaml up -d
 ```
@@ -275,9 +293,13 @@ Query Certify's DID document to retrieve the live `did:key`:
 LIVE_DID=$(curl -sf https://issuer.dpi.ait.ac.th/.well-known/did.json | jq -r .id)
 echo "Live Issuer DID: $LIVE_DID"
 ```
-If this differs from what is in `.env`, update `CERTIFY_DID` in `.env` and restart template-sync:
+
+If this differs from what is in `.env`, update `CERTIFY_DID` in `.env`.
+> [!WARNING]
+> **Never use `sed -i` on bind-mounted files!** Docker Desktop bind-mounts track inode numbers; `sed -i` replaces the inode, causing running containers to see stale configuration. Always rewrite in-place:
 ```bash
-sed -i "s|^CERTIFY_DID=.*|CERTIFY_DID=$LIVE_DID|" .env
+tmp=$(mktemp)
+awk -v did="$LIVE_DID" -F= 'BEGIN{OFS="="} $1=="CERTIFY_DID"{$2=did} {print}' .env > "$tmp" && cat "$tmp" > .env && rm -f "$tmp"
 docker compose -f compose.certify.yaml restart template-sync service
 ```
 
@@ -301,6 +323,11 @@ docker compose -f compose.certify.yaml restart template-sync service
    docker compose logs -f service
    ```
    Ensure Certify initializes without errors and reports `Started InjiCertifyApplication`.
+
+4. **Run Comprehensive Host Validation Suite**:
+   ```bash
+   bash scripts/check.sh
+   ```
 
 ---
 

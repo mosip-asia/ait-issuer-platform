@@ -144,6 +144,7 @@ Configure the following variables in `.env` for Inji Verify:
 # ==============================================================================
 # Inji Verify Day-0 Configuration
 # ==============================================================================
+IMAGE_TAG=latest
 VERIFIER_TITLE=AIT Credential Verifier
 INJI_VERIFY_PUBLIC_BASE_URL=https://verifier.dpi.ait.ac.th
 INJI_VERIFY_DID_URI=did:web:localhost%3A9095:v1:verify
@@ -151,6 +152,9 @@ INJI_VERIFY_DID_PUBLIC_KEY_URI=did:web:localhost%3A9095:v1:verify#key-0
 INJI_VERIFY_REDIRECT_URI=https://verifier.dpi.ait.ac.th
 VDR_BASE_URL=https://vdr.dpi.ait.ac.th
 ```
+
+> [!NOTE]
+> The branded Inji Verify UI is packaged and published to GitHub Container Registry as `ghcr.io/mosip-asia/ait-verify-ui:${IMAGE_TAG}`. It is pulled automatically during deployment without requiring a local Node.js build on the server.
 
 ---
 

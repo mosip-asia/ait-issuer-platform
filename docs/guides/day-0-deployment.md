@@ -120,6 +120,37 @@ deploy/ait/
 
 ---
 
+## Deployment Automation, Container Images & Sparse Checkout
+
+### 1. Pre-baked Container Images from GHCR
+To ensure reproducible deployments and keep build toolchains off production VMs, application components are built in CI and published to GitHub Container Registry (GHCR):
+- **`ghcr.io/mosip-asia/ait-certify:${IMAGE_TAG}`**: Inji Certify 0.14 with the Java 21 `IssuerDataProviderPlugin` pre-baked at `/home/inji/additional_jars/issuer-data-provider-plugin.jar`. No host JAR compilation or bind-mounting is required at runtime.
+- **`ghcr.io/mosip-asia/ait-verify-ui:${IMAGE_TAG}`**: Branded Inji Verify web interface.
+- **`ghcr.io/mosip-asia/ait-vc-lab:${IMAGE_TAG}`**: Credential lab and verification playground.
+- **`certify-template-sync:local`**: Lightweight Python service built locally on demand to apply database seeds and synchronize credential templates.
+
+CI builds and publishes these images via `scripts/build.sh --tag <tag> --push`. If code has not changed between tags, `build.sh` fast-retags existing GHCR images using `docker buildx imagetools create` without re-uploading layers.
+
+### 2. Git Sparse-Checkout on Deployment Servers
+Deployment hosts only require compose manifests, tenant assets, and deployment scripts. Source trees (`src/`, `tests/`) and developer documentation are excluded using Git sparse-checkout:
+```bash
+git clone --filter=blob:none --sparse https://github.com/mosip-asia/ait-issuer-platform.git .
+git sparse-checkout set --cone deploy scripts docker
+```
+This is also automated when passing `--sparse` to `scripts/deploy.sh` or via the automated CD workflow (`.github/workflows/cd.yml`).
+
+### 3. Automated Deployment & Pre-flight Validation
+The unified deployment script `scripts/deploy.sh` streamlines provisioning:
+```bash
+# Deploy with a specific image tag and validate configuration
+./scripts/deploy.sh --tag v0.0.6
+```
+- **`.env` Validation**: Runs `scripts/check-env.sh` to ensure all keys defined in `.env.example` are present and critical endpoints are non-empty.
+- **Tag Synchronization**: Safely updates `IMAGE_TAG=<tag>` inside `.env` using inode-preserving stream writes (preventing stale Docker bind mounts).
+- **Service Pull & Startup**: Pulls tagged GHCR images and starts services using Docker Compose.
+
+---
+
 ## Consolidated `.env` Reference for Dev Environment
 
 ```ini
@@ -128,6 +159,7 @@ deploy/ait/
 # ==============================================================================
 COMPOSE_PROJECT_NAME=vc-stack
 INSTALLATION=ait
+IMAGE_TAG=latest
 
 # Edge Ingress Domains
 CERTIFY_PUBLIC_BASE_URL=https://issuer.dpi.ait.ac.th
