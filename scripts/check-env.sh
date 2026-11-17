@@ -88,6 +88,14 @@ is_critical() {
 for key in "${EXAMPLE_KEYS[@]}"; do
   # Check if key is declared in target .env
   if ! grep -E "^[[:space:]]*${key}=" "$ENV_FILE" >/dev/null 2>&1; then
+    # Accept TENANT as a valid equivalent for INSTALLATION
+    if [ "$key" = "INSTALLATION" ] && grep -E "^[[:space:]]*TENANT=" "$ENV_FILE" >/dev/null 2>&1; then
+      val="$(grep -E "^[[:space:]]*TENANT=" "$ENV_FILE" | head -n 1 | cut -d '=' -f2- | tr -d ' "\r\n')"
+      if [ -z "$val" ]; then
+        empty_critical_keys+=("TENANT")
+      fi
+      continue
+    fi
     missing_keys+=("$key")
     continue
   fi

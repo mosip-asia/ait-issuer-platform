@@ -46,7 +46,8 @@ update_env_var() {
   fi
 }
 
-INSTALLATION="${INSTALLATION:-ait}"
+INSTALLATION="${INSTALLATION:-${TENANT:-ait}}"
+TENANT="${TENANT:-$INSTALLATION}"
 WIPE_FLAG=false
 BUILD_FLAG=false
 INIT_ENV_FLAG=false
@@ -75,26 +76,38 @@ while [[ $# -gt 0 ]]; do
       DEPLOY_TAG="$2"
       shift 2
       ;;
+    --tenant)
+      INSTALLATION="$2"
+      TENANT="$2"
+      shift 2
+      ;;
+    --installation)
+      INSTALLATION="$2"
+      TENANT="$2"
+      shift 2
+      ;;
     -*)
       log_err "Unknown option: $1"
       exit 1
       ;;
     *)
       INSTALLATION="$1"
+      TENANT="$1"
       shift
       ;;
   esac
 done
 
-log_info "Starting deployment of ait-issuer-platform (installation: ${INSTALLATION})..."
+log_info "Starting deployment of ait-issuer-platform (tenant: ${INSTALLATION})..."
 export INSTALLATION
+export TENANT
 
-# 0. Sparse checkout (keep server minimal: only deploy, scripts, docker)
+# 0. Sparse checkout (keep server minimal: only deploy/${INSTALLATION}, deploy/base, scripts, docker)
 if [ "$SPARSE_FLAG" = true ] || [ "${SPARSE_CHECKOUT:-false}" = "true" ]; then
   if [ -d .git ] && command -v git >/dev/null 2>&1; then
-    log_info "Configuring git sparse-checkout (deploy, scripts, docker)..."
+    log_info "Configuring git sparse-checkout (deploy/${INSTALLATION}, deploy/base, scripts, docker)..."
     git config core.sparseCheckout true
-    git sparse-checkout set --cone deploy scripts docker 2>/dev/null || true
+    git sparse-checkout set --cone "deploy/${INSTALLATION}" deploy/base scripts docker 2>/dev/null || true
   fi
 fi
 
@@ -120,7 +133,7 @@ if ! bash scripts/check-env.sh; then
 fi
 log_ok "Environment configuration is verified and up-to-date."
 
-# 2. Synchronize deployment tag with .env
+# 2. Synchronize deployment tag and tenant with .env
 if [ -z "$DEPLOY_TAG" ]; then
   if [ -d .git ] && command -v git >/dev/null 2>&1; then
     DEPLOY_TAG="$(git describe --tags --exact-match 2>/dev/null || true)"
@@ -135,6 +148,12 @@ else
   CURRENT_TAG="$(grep -E '^IMAGE_TAG=' .env 2>/dev/null | cut -d '=' -f2 | tr -d ' "\r' || echo "latest")"
   export IMAGE_TAG="${CURRENT_TAG:-latest}"
   log_info "Using existing IMAGE_TAG '${IMAGE_TAG}' from .env."
+fi
+
+# Synchronize INSTALLATION and optional TENANT with .env
+update_env_var ".env" "INSTALLATION" "$INSTALLATION"
+if grep -E "^[[:space:]]*TENANT=" .env >/dev/null 2>&1; then
+  update_env_var ".env" "TENANT" "$INSTALLATION"
 fi
 
 # Determine Certify Base URL (prefer CERTIFY_PUBLIC_BASE_URL, default to http://issuer.localhost)
@@ -190,7 +209,12 @@ fi
 
 # 7. Run post-deployment issuance smoke test
 log_info "Running post-deployment issuance smoke test..."
-if ! bash scripts/smoke-test.sh "${CERTIFY_URL}"; then
+if [ "$INSTALLATION" = "hackathon" ]; then
+  SMOKE_CMD="bash scripts/smoke-test.sh ${CERTIFY_URL} hack-2026-0001 developer-passport"
+else
+  SMOKE_CMD="bash scripts/smoke-test.sh ${CERTIFY_URL}"
+fi
+if ! eval "$SMOKE_CMD"; then
   log_err "Post-deployment smoke test failed. Recent logs:"
   docker compose logs --tail 50 service
   exit 1

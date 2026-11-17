@@ -25,7 +25,7 @@ on:
           - uat
           - production
       installation:
-        description: "Installation to deploy (deploy/<name>/)"
+        description: "Installation / Tenant to deploy (deploy/<name>/)"
         type: choice
         required: true
         default: ait
@@ -49,6 +49,7 @@ jobs:
     outputs:
       environment: ${{ steps.map.outputs.environment }}
       installation: ${{ steps.map.outputs.installation }}
+      tenant: ${{ steps.map.outputs.tenant }}
       wipe: ${{ steps.map.outputs.wipe }}
     steps:
       - name: Map the event to an environment
@@ -57,7 +58,8 @@ jobs:
           EVENT: ${{ github.event_name }}
           REF: ${{ github.ref }}
           CHOICE: ${{ inputs.environment }}
-          INSTALLATION_INPUT: ${{ inputs.installation || 'ait' }}
+          INPUT_INSTALLATION: ${{ inputs.installation }}
+          REPO_TENANT: ${{ vars.TENANT }}
           WIPE_INPUT: ${{ inputs.wipe || false }}
         run: |
           case "$EVENT:$REF" in
@@ -72,10 +74,16 @@ jobs:
             dev:refs/tags/v*|uat:refs/heads/uat|production:refs/heads/main) ;;
             *) echo "::error::Environment '$TARGET' deploys only from its own ref (dev: a v* tag, uat: branch uat, production: branch main), not from '$REF'."; exit 1 ;;
           esac
+          if [ "$EVENT" = "workflow_dispatch" ] && [ -n "$INPUT_INSTALLATION" ]; then
+            TENANT_RESOLVED="$INPUT_INSTALLATION"
+          else
+            TENANT_RESOLVED="${REPO_TENANT:-${INPUT_INSTALLATION:-ait}}"
+          fi
           echo "environment=$TARGET" >> "$GITHUB_OUTPUT"
-          echo "installation=$INSTALLATION_INPUT" >> "$GITHUB_OUTPUT"
+          echo "installation=$TENANT_RESOLVED" >> "$GITHUB_OUTPUT"
+          echo "tenant=$TENANT_RESOLVED" >> "$GITHUB_OUTPUT"
           echo "wipe=$WIPE_INPUT" >> "$GITHUB_OUTPUT"
-          echo "Target environment: **$TARGET** (installation: \`$INSTALLATION_INPUT\`, from \`$REF\`, commit \`${GITHUB_SHA::7}\`)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Target environment: **$TARGET** (tenant: \`$TENANT_RESOLVED\`, from \`$REF\`, commit \`${GITHUB_SHA::7}\`)" >> "$GITHUB_STEP_SUMMARY"
 
   deploy:
     name: 🚀 Deploy to ${{ needs.resolve.outputs.environment }}
@@ -161,7 +169,8 @@ jobs:
             set -e
             AUTH_REPO="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
             TARGET_DIR="${{ vars.SERVER_PROJECT_DIR }}"
-            INSTALLATION="${{ needs.resolve.outputs.installation }}"
+            TENANT="${{ vars.TENANT || needs.resolve.outputs.tenant || needs.resolve.outputs.installation || 'ait' }}"
+            INSTALLATION="$TENANT"
             WIPE_FLAG="${{ needs.resolve.outputs.wipe }}"
 
             # First deployment: initialize directory if missing
@@ -172,7 +181,7 @@ jobs:
               git -C "$TARGET_DIR" init -q
               git -C "$TARGET_DIR" remote add origin "$AUTH_REPO"
               git -C "$TARGET_DIR" config core.sparseCheckout true
-              git -C "$TARGET_DIR" sparse-checkout set --cone deploy scripts docker
+              git -C "$TARGET_DIR" sparse-checkout set --cone "deploy/${TENANT}" deploy/base scripts docker
             fi
 
             cd "$TARGET_DIR"
@@ -186,9 +195,9 @@ jobs:
             fi
             echo "Last verified deployment on this host: ${STABLE_REV:-none (first deployment)}"
 
-            # Enable sparse-checkout so only runtime deployment files exist on the server
+            # Enable sparse-checkout so only runtime deployment files for target tenant exist on the server
             git config core.sparseCheckout true
-            git sparse-checkout set --cone deploy scripts docker
+            git sparse-checkout set --cone "deploy/${TENANT}" deploy/base scripts docker
 
             echo "Checking out ${{ github.ref_name }} (${{ github.sha }})..."
             git checkout -q -f ${{ github.sha }}
@@ -198,10 +207,10 @@ jobs:
             TAG="$(git describe --tags --exact-match 2>/dev/null || echo '${{ github.ref_name }}')"
             export IMAGE_TAG="${TAG:-latest}"
 
-            echo "Running deployment for installation '$INSTALLATION' (tag: $IMAGE_TAG)..."
-            DEPLOY_CMD="bash scripts/deploy.sh $INSTALLATION --tag $IMAGE_TAG"
+            echo "Running deployment for tenant '$TENANT' (tag: $IMAGE_TAG)..."
+            DEPLOY_CMD="bash scripts/deploy.sh $TENANT --tag $IMAGE_TAG"
             if [ "$WIPE_FLAG" = "true" ]; then
-              DEPLOY_CMD="bash scripts/deploy.sh $INSTALLATION --tag $IMAGE_TAG --wipe"
+              DEPLOY_CMD="bash scripts/deploy.sh $TENANT --tag $IMAGE_TAG --wipe"
             fi
 
             if ! eval "$DEPLOY_CMD"; then
@@ -215,7 +224,7 @@ jobs:
               echo "Rolling back to the last verified deployment: ${STABLE_REV}"
               echo "=========================================================="
               git checkout -q -f "${STABLE_REV}"
-              bash scripts/deploy.sh "$INSTALLATION"
+              bash scripts/deploy.sh "$TENANT"
               echo "✅ Rollback to ${STABLE_REV} complete. Server restored to last verified deployment."
               echo "Failing workflow per Fail Forward policy."
               exit 1

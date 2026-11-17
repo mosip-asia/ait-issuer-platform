@@ -131,22 +131,23 @@ To ensure reproducible deployments and keep build toolchains off production VMs,
 
 CI builds and publishes these images via `scripts/build.sh --tag <tag> --push`. If code has not changed between tags, `build.sh` fast-retags existing GHCR images using `docker buildx imagetools create` without re-uploading layers.
 
-### 2. Git Sparse-Checkout on Deployment Servers
-Deployment hosts only require compose manifests, tenant assets, and deployment scripts. Source trees (`src/`, `tests/`) and developer documentation are excluded using Git sparse-checkout:
+### 2. Tenant Isolation & Git Sparse-Checkout
+Deployment hosts only require compose manifests, deployment scripts, shared base assets (`deploy/base/`), and the specific tenant assets for that deployment (`deploy/${TENANT}/`). Other tenant directories (e.g. `deploy/hackathon/` on an `ait` server) and source code trees (`src/`, `tests/`) are excluded using Git sparse-checkout:
 ```bash
+# Sparse checkout scoped strictly to the target tenant (e.g. TENANT=ait)
 git clone --filter=blob:none --sparse https://github.com/mosip-asia/ait-issuer-platform.git .
-git sparse-checkout set --cone deploy scripts docker
+git sparse-checkout set --cone "deploy/${TENANT:-ait}" deploy/base scripts docker
 ```
-This is also automated when passing `--sparse` to `scripts/deploy.sh` or via the automated CD workflow (`.github/workflows/cd.yml`).
+In automated CI/CD (`.github/workflows/cd.yml`), the deployment runner reads `TENANT` from the GitHub repository variable (`vars.TENANT`), ensuring each environment host only receives its own tenant files.
 
 ### 3. Automated Deployment & Pre-flight Validation
 The unified deployment script `scripts/deploy.sh` streamlines provisioning:
 ```bash
-# Deploy with a specific image tag and validate configuration
-./scripts/deploy.sh --tag v0.0.6
+# Deploy with a specific image tag and tenant
+./scripts/deploy.sh ait --tag v0.0.6
 ```
-- **`.env` Validation**: Runs `scripts/check-env.sh` to ensure all keys defined in `.env.example` are present and critical endpoints are non-empty.
-- **Tag Synchronization**: Safely updates `IMAGE_TAG=<tag>` inside `.env` using inode-preserving stream writes (preventing stale Docker bind mounts).
+- **`.env` Validation**: Runs `scripts/check-env.sh` to ensure all keys defined in `.env.example` are present and critical endpoints are non-empty. Accepts either `INSTALLATION` or `TENANT`.
+- **Tag & Tenant Synchronization**: Safely updates `IMAGE_TAG=<tag>` and `INSTALLATION=<tenant>` inside `.env` using inode-preserving stream writes (preventing stale Docker bind mounts).
 - **Service Pull & Startup**: Pulls tagged GHCR images and starts services using Docker Compose.
 
 ---
