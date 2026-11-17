@@ -24,6 +24,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.vc-lab
+    image: ghcr.io/mosip-asia/vc-lab:${IMAGE_TAG:-latest}
     container_name: vc-lab
     environment:
       - INSTALLATION=${INSTALLATION}

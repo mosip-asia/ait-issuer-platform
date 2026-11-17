@@ -34,7 +34,10 @@ services:
       - certify-network
 
   service:
-    image: injistack/inji-certify-with-plugins:0.14.0
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.certify
+    image: ${CERTIFY_IMAGE:-ghcr.io/mosip-asia/ait-certify:${IMAGE_TAG:-latest}}
     user: root
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -69,12 +72,6 @@ services:
       - SPRING_CONFIG_LOCATION=/home/mosip/config/
       - SPRING_CONFIG_NAME=certify
     volumes:
-      - type: bind
-        source: ./src/issuer/target/issuer-data-provider-plugin.jar
-        target: /home/inji/additional_jars/issuer-data-provider-plugin.jar
-        read_only: true
-        bind:
-          create_host_path: false
       - ./deploy/base/certify-default.properties:/home/mosip/config/certify-default.properties
       - ./deploy/${INSTALLATION}/certify/certify-installation.properties:/home/mosip/config/certify-installation.properties
       - ./deploy/${INSTALLATION}/private_key/CERTIFY_PKCS12:/home/inji/CERTIFY_PKCS12
@@ -112,7 +109,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.template-sync
-    image: ghcr.io/mosip-asia/certify-template-sync:local
+    image: ghcr.io/mosip-asia/certify-template-sync:${IMAGE_TAG:-latest}
     restart: "no"
     depends_on:
       database:

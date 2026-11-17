@@ -45,10 +45,10 @@ The **Institutional Verifiable Credential Platform** is built on pinned upstream
    - Certify configuration is isolated under `deploy/<tenant>/certify/` (`certify-installation.properties`, `certify_seed.sql`, `credentials/*.json`).
    - Trust registry assets reside under `deploy/<tenant>/vdr/` and `deploy/<tenant>/vcga/`.
 
-8. **Plugin Build & Mount:**
+8. **Plugin Build & Packaging:**
    - Source code is at `src/issuer/` (Java 21).
-   - Built via `docker compose -f compose.certify-build.yaml run --rm plugin-builder` to `src/issuer/target/issuer-data-provider-plugin.jar`.
-   - Mount as a single file into `/home/inji/additional_jars/issuer-data-provider-plugin.jar`. Never mount the directory over `additional_jars/`.
+   - Built and packaged via `scripts/build.sh` (or `docker compose -f compose.certify-build.yaml run --rm plugin-builder` to `src/issuer/target/issuer-data-provider-plugin.jar`).
+   - Baked into the pre-built `ghcr.io/mosip-asia/ait-certify` container image into `/home/inji/additional_jars/issuer-data-provider-plugin.jar` (or mounted as a single file via `compose.override.yaml` for rapid local iteration). Never mount a directory over `additional_jars/`.
 
 ---
 

@@ -42,23 +42,34 @@ For rapid local iteration without rebuilding Docker images or requiring host Mav
 
 1. **Compile using the compiler container:**
    ```bash
-   docker compose -f compose.certify-build.yaml run --rm plugin-builder
+   ./scripts/build.sh --jar-only
    ```
    *(Or using host Maven if installed: `mvn -f src/issuer/pom.xml package -DskipTests`)*
 
-2. **Start or reload Inji Certify:**
+2. **Mount the JAR locally via `compose.override.yaml`:**
+   ```yaml
+   services:
+     service:
+       volumes:
+         - ./src/issuer/target/issuer-data-provider-plugin.jar:/home/inji/additional_jars/issuer-data-provider-plugin.jar:ro
+   ```
+
+3. **Start or reload Inji Certify:**
    ```bash
    docker compose up -d
    # Or reload after code changes:
-   docker compose restart certify
+   docker compose restart service
    ```
-   The root `compose.yaml` mounts `./src/issuer/target/issuer-data-provider-plugin.jar` directly into `/home/inji/additional_jars/issuer-data-provider-plugin.jar`.
 
 ---
 
 ### Loop 3: Multi-Stage Release Build
-To package a standalone, production-ready container image without volume mounts:
+To package all standalone, production-ready container images and push them:
 ```bash
-docker build -t ghcr.io/mosip-asia/ait-certify:latest -f docker/Dockerfile.certify .
+# Build all images locally
+./scripts/build.sh
+
+# Or build and push to GHCR:
+./scripts/build.sh --tag v0.2.0 --push
 ```
-`docker/Dockerfile.certify` is a 2-stage Dockerfile that builds the JAR in stage 1 and bakes it into `injistack/inji-certify-with-plugins:0.14.0` in stage 2.
+`docker/Dockerfile.certify` is a 2-stage Dockerfile that builds the JAR in stage 1 and bakes it into `injistack/inji-certify-with-plugins:0.14.0` in stage 2 without requiring host mounts in production.

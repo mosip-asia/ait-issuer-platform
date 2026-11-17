@@ -39,6 +39,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   resolve:
@@ -161,6 +162,11 @@ jobs:
 
             echo "Checking out ${{ github.ref_name }} (${{ github.sha }})..."
             git checkout -q -f ${{ github.sha }}
+
+            # Authenticate to GHCR using ephemeral workflow token to pull pre-built images
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin >/dev/null 2>&1 || true
+            TAG="$(git describe --tags --exact-match 2>/dev/null || echo '${{ github.ref_name }}')"
+            export IMAGE_TAG="${TAG:-latest}"
 
             echo "Running deployment for installation '$INSTALLATION'..."
             DEPLOY_CMD="bash scripts/deploy.sh $INSTALLATION"

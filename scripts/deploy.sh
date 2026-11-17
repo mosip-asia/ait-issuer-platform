@@ -30,15 +30,18 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "$ROOT_DIR"
 
 INSTALLATION="${1:-${INSTALLATION:-ait}}"
-# If first argument is --wipe, keep default installation 'ait'
-if [ "$INSTALLATION" = "--wipe" ] || [ "$INSTALLATION" = "wipe" ]; then
+# If first argument is a flag, keep default installation 'ait'
+if [ "$INSTALLATION" = "--wipe" ] || [ "$INSTALLATION" = "wipe" ] || [ "$INSTALLATION" = "--build" ] || [ "$INSTALLATION" = "build" ]; then
   INSTALLATION="ait"
 fi
 
 WIPE_FLAG=false
+BUILD_FLAG=false
 for arg in "$@"; do
   if [ "$arg" = "--wipe" ] || [ "$arg" = "wipe" ]; then
     WIPE_FLAG=true
+  elif [ "$arg" = "--build" ] || [ "$arg" = "build" ]; then
+    BUILD_FLAG=true
   fi
 done
 
@@ -60,11 +63,13 @@ fi
 CERTIFY_URL="$(grep -E '^CERTIFY_PUBLIC_BASE_URL=' .env 2>/dev/null | cut -d '=' -f2 | tr -d ' "\r' || echo "")"
 CERTIFY_URL="${CERTIFY_URL:-http://issuer.localhost}"
 
-# 2. Ensure plugin JAR is built
-PLUGIN_JAR="src/issuer/target/issuer-data-provider-plugin.jar"
-if [ ! -f "$PLUGIN_JAR" ]; then
-  log_info "Building Inji Certify DataProviderPlugin JAR via compiler container..."
-  docker compose -f compose.certify-build.yaml run --rm plugin-builder
+# 2. Pull pre-built images or build locally
+if [ "$BUILD_FLAG" = true ]; then
+  log_info "Building images locally (--build specified)..."
+  bash scripts/build.sh
+else
+  log_info "Pulling pre-built images from container registry..."
+  docker compose pull --quiet || log_warn "Pull completed with warnings (continuing with cached images if present)..."
 fi
 
 # 3. Tear down existing stack
@@ -76,15 +81,11 @@ else
   docker compose down --remove-orphans
 fi
 
-# 4. Build local services (template-sync, etc.)
-log_info "Building local services (template-sync, verifier, etc.)..."
-docker compose build --quiet
-
-# 5. Start fresh stack
+# 4. Start fresh stack
 log_info "Starting compose services..."
 docker compose up -d --remove-orphans
 
-# 6. Wait for Inji Certify to initialize
+# 5. Wait for Inji Certify to initialize
 log_info "Waiting for Inji Certify issuer engine to initialize at ${CERTIFY_URL}..."
 TIMEOUT=90
 ELAPSED=0
