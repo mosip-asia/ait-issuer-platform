@@ -128,7 +128,7 @@ AUTH_SERVER_ISSUER=https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev
 AUTH_SERVER_JWKS_URL=https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev/protocol/openid-connect/certs
 AUTH_SERVER_TOKEN_ENDPOINT=https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev/protocol/openid-connect/token
 AUTH_SERVER_PUBLIC_URL=https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev
-AUTH_SERVER_WALLET_CLIENT_ID=wallet-demo
+AUTH_SERVER_WALLET_CLIENT_ID=wallet-demo  # Primary client for Inji Web Wallet (Certify accepts any wallet via credential endpoint audience)
 
 # Inji Verify Configuration
 VERIFIER_TITLE=AIT Credential Verifier

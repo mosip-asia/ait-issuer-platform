@@ -75,11 +75,12 @@ Configure these three protocol mappers on the `wallet-demo` client:
    - **Add to ID Token**: `true`
    - **Add to UserInfo**: `true`
 
-2. **`audience-self`** (Audience Mapper):
+2. **`certify-audience`** (Audience Mapper - Standard OAuth 2.0 / OpenID4VCI):
    - **Mapper Type**: `Audience`
-   - **Included Client Audience**: `wallet-demo`
+   - **Included Custom Audience**: `https://issuer.dpi.ait.ac.th/v1/certify/issuance/credential`
    - **Add to Access Token**: `true`
-   - *(Ensures the token's `aud` matches Certify's allowed audiences)*.
+   - *(Recommended: Maps the audience to Certify's credential endpoint. This allows Certify to accept tokens from **any** wallet client—Inji Web, AI4DPI Mobile Wallet, or third-party wallets—without changing Certify or `.env`).*
+   - *(Alternative: If mapping `audience-self`, set `Included Client Audience` to `wallet-demo`, which Certify also accepts via `AUTH_SERVER_WALLET_CLIENT_ID`).*
 
 3. **`client_id-hardcoded`** (Hardcoded Claim Mapper):
    - **Mapper Type**: `Hardcoded claim`

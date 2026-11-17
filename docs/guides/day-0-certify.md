@@ -191,15 +191,26 @@ AUTH_SERVER_JWKS_URL=https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev/p
 AUTH_SERVER_WALLET_CLIENT_ID=wallet-demo
 ```
 
-### D. How Certify Validates Incoming Access Tokens
-When the wallet sends `POST /v1/certify/issuance/credential` with `Authorization: Bearer <token>`:
+### D. How Certify Validates Incoming Access Tokens (Wallet-Agnostic Design)
+Inji Certify is completely **wallet-agnostic**. It does not care which wallet (Inji Web, AI4DPI Mobile Wallet, or any other OpenID4VCI-compliant wallet) sends the request.
+
+In `deploy/<tenant>/certify/certify-installation.properties`, Certify defines its allowed audiences:
+```properties
+mosip.certify.authn.allowed-audiences={ 
+  '${AUTH_SERVER_WALLET_CLIENT_ID}', 
+  'http://certify-nginx:80/v1/certify/issuance/credential', 
+  '${mosip.certify.domain.url}/v1/certify/issuance/credential' 
+}
+```
+
+When a wallet calls `POST /v1/certify/issuance/credential` with `Authorization: Bearer <token>`:
 1. Certify downloads Keycloak's public keys from `AUTH_SERVER_JWKS_URL` (keys are cached automatically in memory).
-2. Certify matches the token's `kid` against the public keys and verifies the cryptographic signature (e.g. RS256).
+2. Certify matches the token's `kid` against Keycloak's public keys and verifies the cryptographic signature (e.g. RS256).
 3. Certify validates that `token.iss == AUTH_SERVER_ISSUER`.
-4. Certify validates that `token.aud` contains `AUTH_SERVER_WALLET_CLIENT_ID`.
+4. **Audience Verification**: Certify verifies that `token.aud` matches any of its allowed audiences. As long as the token targets Certify's credential endpoint (`${mosip.certify.domain.url}/v1/certify/issuance/credential`), Certify accepts it from **any** wallet client.
 5. Certify extracts `sub` (the student ID) and calls `IssuerDataProviderPlugin`.
 
-If the signature fails, or if `iss` does not match, Certify immediately returns HTTP 401 (`invalid_access_token`).
+If the signature fails, or if `iss` or `aud` does not match, Certify immediately returns HTTP 401 (`invalid_access_token`).
 
 ---
 
