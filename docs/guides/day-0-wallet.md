@@ -42,29 +42,40 @@ flowchart LR
 
 ## 1. Keycloak Client Configuration (on `oauth-dev` Server)
 
-Unlike Inji Certify (which is a Resource Server), the **Wallet is an OAuth Client**. It must be registered in your campus Keycloak realm (`ait-dev`).
+Unlike Inji Certify (which is an OAuth Resource Server), **Wallets are OAuth Clients**. Each wallet application that talks to Keycloak must have a registered client.
 
-### A. Client Basic Settings
-Navigate to **Clients > Create client** in the Keycloak Admin Console:
-- **Client ID**: `wallet-demo` (or `inji-web-wallet`).
-- **Client Protocol**: `openid-connect`.
-- **Client Authentication**: `OFF` (Public Client with PKCE).
-- **Standard Flow Enabled**: `ON` (Authorization Code Grant).
-- **Direct Access Grants Enabled**: `OFF` (or `ON` for automated CLI smoke tests).
+For the AIT deployment, configure two clients in your campus Keycloak realm (`ait-dev`):
+1. **`wallet-demo`**: For the browser-based Inji Web Wallet (uses `did:jwk` key binding).
+2. **`ai4dpi-wallet`**: For the AI4DPI native Inji Mobile Wallet (uses `did:key` key binding per Thailand ETDA recommendations).
+
+### A. Client Settings
+
+#### Client 1: Inji Web Wallet (`wallet-demo`)
+- **Client ID**: `wallet-demo`
+- **Client Protocol**: `openid-connect`
+- **Client Authentication**: `OFF` (Public Client with PKCE)
+- **Standard Flow Enabled**: `ON` (Authorization Code Grant)
+- **Direct Access Grants Enabled**: `OFF` (or `ON` for automated CLI smoke tests)
 - **Valid Redirect URIs**:
   - `https://wallet.dpi.ait.ac.th/redirect`
   - `http://wallet.localhost/redirect` (for developer laptop testing)
-  - `io.mosip.residentapp.inji://oauthredirect` (for mobile wallets)
 - **Web Origins**:
-  - `+` or `https://wallet.dpi.ait.ac.th` (allows browser CORS during token exchange).
+  - `+` or `https://wallet.dpi.ait.ac.th` (enables browser CORS during token exchange)
+
+#### Client 2: AI4DPI Mobile Wallet (`ai4dpi-wallet`)
+- **Client ID**: `ai4dpi-wallet`
+- **Client Protocol**: `openid-connect`
+- **Client Authentication**: `OFF` (Public Client with PKCE)
+- **Standard Flow Enabled**: `ON` (Authorization Code Grant)
+- **Valid Redirect URIs**:
+  - `io.mosip.residentapp.inji://oauthredirect` (native custom URL scheme)
+- **Web Origins**: `+`
 
 ---
 
-### B. Required Protocol Mappers (Critical for Issuance)
+### B. Required Protocol Mappers
 
-By default, Keycloak assigns an internal UUID to the token `sub` claim. However, Inji Certify queries the SIS Adapter using `sub` (e.g. `GET /student/{sub}/transcript`).
-
-Configure these three protocol mappers on the `wallet-demo` client:
+Configure these protocol mappers on your wallet clients (or globally via Client Scopes):
 
 1. **`sub-from-username`** (User Model Property Mapper):
    - **Mapper Type**: `User Property`
@@ -74,6 +85,7 @@ Configure these three protocol mappers on the `wallet-demo` client:
    - **Add to Access Token**: `true`
    - **Add to ID Token**: `true`
    - **Add to UserInfo**: `true`
+   - *(Critical: Ensures Certify queries the SIS Adapter using the student registration number, not Keycloak's internal UUID).*
 
 2. **`certify-audience`** (Audience Mapper - Standard OAuth 2.0 / OpenID4VCI):
    - **Mapper Type**: `Audience`
@@ -81,13 +93,20 @@ Configure these three protocol mappers on the `wallet-demo` client:
    - **Add to Access Token**: `true`
    - *(Standard OpenID4VCI design: Maps the audience directly to Certify's credential endpoint. Inji Certify acts purely as an OAuth Resource Server and accepts valid tokens from **any** wallet client—Inji Web, AI4DPI Mobile Wallet, or third-party wallets—without requiring client IDs in Certify configuration).*
 
-   *(Note: In Keycloak, you can attach this Audience Mapper either directly to the wallet client, or globally to the `ait_transcript_vc_ldp` client scope so all wallets requesting this scope automatically target Certify).*
+   *(Tip: In Keycloak, attach this Audience Mapper globally to the `ait_transcript_vc_ldp` client scope so all wallets requesting this scope automatically target Certify).*
 
 3. **`client_id-hardcoded`** (Hardcoded Claim Mapper):
    - **Mapper Type**: `Hardcoded claim`
    - **Token Claim Name**: `client_id`
-   - **Claim Value**: `wallet-demo`
+   - **Claim Value**: Match the client ID (`wallet-demo` or `ai4dpi-wallet`)
    - **Add to Access Token**: `true`
+
+4. **`c_nonce-hardcoded`** (Optional for Stand-in Keycloak):
+   - **Mapper Type**: `Hardcoded claim`
+   - **Token Claim Name**: `c_nonce`
+   - **Claim Value**: `local-cnonce`
+   - **Add to Access Token**: `true`
+   - *(Note: Certify 0.14 validates proof nonces against the access token when using standard Keycloak without native OpenID4VCI dynamic nonce management).*
 
 ---
 

@@ -47,18 +47,69 @@ Inji Verify performs independent, decentralized verification of W3C Verifiable C
 3. **Status Check**: Verifies that the credential is not marked revoked on the issuer's Status List.
 
 ### Verification Rules Config (`deploy/base/verify-config.json`)
-The verifier UI reads `deploy/base/verify-config.json` to determine which credential types to display and accept:
+The verifier UI reads `deploy/base/verify-config.json` to determine which credential types to accept, how to request them via OpenID4VP, and in what order to render attributes:
 ```json
 {
-  "AitTranscriptCredential": {
-    "title": "AIT Academic Transcript",
-    "schema": "https://vdr.dpi.ait.ac.th/contexts/ait-transcript/v1.json",
-    "attributes": [
+  "verifiableClaims": [
+    {
+      "logo": "/assets/cert.png",
+      "name": "AIT Transcript",
+      "type": "AitTranscriptCredential",
+      "clientIdScheme": "did",
+      "definition": {
+        "purpose": "Verify the holder's AIT academic transcript credential.",
+        "format": { "ldp_vc": { "proof_type": ["Ed25519Signature2020"] } },
+        "input_descriptors": [
+          {
+            "id": "ait transcript credential",
+            "format": { "ldp_vc": { "proof_type": ["Ed25519Signature2020"] } },
+            "constraints": {
+              "fields": [
+                { "path": ["$.type"], "filter": { "type": "object", "pattern": "AitTranscriptCredential" } }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "logo": "/assets/cert.png",
+      "name": "AIT Student ID",
+      "type": "AitStudentIdCredential",
+      "clientIdScheme": "did",
+      "definition": {
+        "purpose": "Verify the holder's AIT student ID card credential.",
+        "format": { "ldp_vc": { "proof_type": ["Ed25519Signature2020"] } },
+        "input_descriptors": [
+          {
+            "id": "student id credential",
+            "format": { "ldp_vc": { "proof_type": ["Ed25519Signature2020"] } },
+            "constraints": {
+              "fields": [
+                { "path": ["$.type"], "filter": { "type": "object", "pattern": "AitStudentIdCredential" } }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "VCRenderOrders": {
+    "AitTranscriptCredentialRenderOrder": [
       "fullName",
       "registrationNo",
       "academicProgram",
-      "gpa",
-      "conferralDate"
+      "degreeAwarded",
+      "dateGraduation",
+      "faculty"
+    ],
+    "AitStudentIdCredentialRenderOrder": [
+      "studentId",
+      "fullName",
+      "faculty",
+      "academicProgram",
+      "studentStatus",
+      "expiryDate"
     ]
   }
 }

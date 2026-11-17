@@ -212,6 +212,13 @@ When any wallet calls `POST /v1/certify/issuance/credential` with `Authorization
 
 If the signature fails, or if `iss` or `aud` does not match, Certify immediately returns HTTP 401 (`invalid_access_token`).
 
+### E. Holder Key Binding Support (`did:jwk` & `did:key`)
+Inji Certify supports both standard holder key binding methods in `cryptographic_binding_methods_supported`:
+- **`did:jwk`**: Used by web-based wallets (e.g. Inji Web Wallet) generating browser-held ES256/RS256 keys.
+- **`did:key`**: Used by native mobile wallets (e.g. AI4DPI Inji Mobile Wallet) aligned with Thailand ETDA recommendations.
+
+During issuance, Certify extracts the holder's public key from the OpenID4VCI proof JWT header (`kid`) and binds it as the credential subject's identifier (`credentialSubject.id = "${_holderId}"`).
+
 ---
 
 ## 5. Complete `.env` Reference for Certify Day-0
