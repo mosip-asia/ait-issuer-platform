@@ -167,12 +167,12 @@ docker compose -f compose.verify.yaml -f compose.trust.yaml -f compose.traefik.y
 
 ### A. Offline JSON File Verification
 1. Open `https://verifier.dpi.ait.ac.th` in a browser.
-2. Download or export a transcript credential JSON file from Inji Web Wallet (issued in Stage 2).
+2. Download or export a Student ID credential JSON file from Inji Web Wallet (issued in Stage 2).
 3. Drag and drop the credential JSON file into the Inji Verify web interface.
 4. **Expected Result**:
    - Verification status: **`Valid`** (`allChecksSuccessful: true`).
    - Issuer verified: AIT University.
-   - Claims displayed: Student Name, Registration No, Degree, GPA, Conferral Status.
+   - Claims displayed: Student ID, Full Name, Affiliation (`Student`), Faculty, Academic Program, Status (`Active`), Expiry Date.
 
 ### B. Mobile QR Code Presentation (OID4VP)
 1. In the Verify UI, click **Scan with Inji Wallet**.
@@ -187,5 +187,5 @@ docker compose -f compose.verify.yaml -f compose.trust.yaml -f compose.traefik.y
 | Symptom | Root Cause | Fix |
 |---|---|---|
 | **`INVALID_SIGNATURE`** | Issuer private key mismatch or credential payload altered | Verify that the credential was signed by the currently configured `CERTIFY_DID`. |
-| **Schema fetch failed (Network Error)** | Verify container cannot reach VDR domain (`vdr.dpi.ait.ac.th`) | Verify DNS or host resolution for VDR. Test: `docker compose exec service curl -I https://vdr.dpi.ait.ac.th/contexts/ait-transcript/v1.json`. |
+| **Schema fetch failed (Network Error)** | Verify container cannot reach VDR domain (`vdr.dpi.ait.ac.th`) | Verify DNS or host resolution for VDR. Test: `docker compose exec service curl -I https://vdr.dpi.ait.ac.th/contexts/student-id/v1.json`. |
 | **Verify UI blank page / 502** | Verify service backend not ready | Check backend logs: `docker compose logs -f service`. Verify DB connection is healthy. |

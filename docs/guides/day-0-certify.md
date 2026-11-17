@@ -33,7 +33,7 @@ flowchart LR
 
     subgraph Upstream["Upstream Infrastructure"]
         JWKS["Keycloak JWKS<br>(AUTH_SERVER_JWKS_URL)"]
-        Adapter["SIS Data Adapter<br>(GET /student/{sub}/transcript)"]
+        Adapter["SIS Data Adapter<br>(GET /student/{sub}/student-id)"]
     end
 
     Certify -->|"1. Read-only JWKS Fetch"| JWKS
@@ -48,6 +48,9 @@ flowchart LR
 > - Certify does **not** register as a client in Keycloak.
 > - Keycloak has **zero** knowledge of Certify.
 > - Certify only reads Keycloak's public keys (`AUTH_SERVER_JWKS_URL`) to verify token signatures when a wallet presents an access token.
+> 
+> **Day-0 Deployment Scope (Student ID First):**
+> In Day-0, Certify is configured to issue the **AIT Student ID Card** (`StudentIdCredential`, `AitIdCredential`) via scope `ait_student_id_vc_ldp` reading from `GET /student/{sub}/student-id`. Academic Transcript issuance via `GET /student/{sub}/transcript` is deferred to Phase 2.
 
 ---
 
@@ -81,43 +84,30 @@ Inji Certify's `IssuerDataProviderPlugin` queries your university's Student Info
 
 ### API Contract (`docs/contracts/adapter-openapi.yaml`)
 
-The SIS Adapter must serve:
+For Day-0 Student ID issuance, the SIS Adapter serves:
 ```http
-GET /student/{sub}/transcript
+GET /student/{sub}/student-id
 ```
 - **Path Parameter**: `{sub}` is the student's registration ID (e.g. `st120001`).
-- **Response**: HTTP 200 with JSON payload:
+- **Response**: HTTP 200 with JSON payload (`StudentIdRecord`):
   ```json
   {
-    "registrationNo": "st120001",
+    "studentId": "st120001",
     "fullName": "Nara Wattanakul",
-    "gender": "Female",
-    "nationality": "Thai",
-    "birthDate": "1998-04-12",
-    "academicProgram": "Master of Engineering in Computer Science",
-    "degreeName": "Master of Engineering (M.Eng.)",
-    "fieldOfStudy": "Computer Science",
-    "department": "Department of Information and Communication Technologies",
-    "school": "School of Engineering and Technology",
-    "conferralDate": "2024-05-20",
-    "enrollmentDate": "2022-08-15",
-    "gpa": "3.85",
-    "totalCredits": "48.0",
-    "courses": [
-      {
-        "courseCode": "AT70.01",
-        "courseName": "Data Modeling and Analysis",
-        "credits": "3.0",
-        "grade": "A",
-        "semester": "August 2022"
-      }
-    ]
+    "affiliation": "Student",
+    "faculty": "School of Engineering and Technology",
+    "academicProgram": "M.Eng Computer Science",
+    "studentStatus": "Active",
+    "issueDate": "2026-09-17",
+    "expiryDate": "2027-09-17"
   }
   ```
 - **Status Codes**:
-  - `200 OK`: Valid student transcript.
-  - `404 Not Found`: Student does not exist (Certify returns `no_record`).
+  - `200 OK`: Valid student record.
+  - `404 Not Found`: Student does not exist or user is not a student (Certify fails closed with `no_record`).
   - `500 Internal Error`: Adapter error (Certify returns `adapter_error`).
+
+*(Note: For Phase 2 Academic Transcript issuance, the Adapter also serves `GET /student/{sub}/transcript` with full course grades, GPA, credits, and degree conferral details).*
 
 ---
 
@@ -320,7 +310,7 @@ docker compose -f compose.certify.yaml restart template-sync service
 |---|---|---|
 | **Discovery endpoint returns 404** | Certify container still booting or failed DB connection | Check `docker compose logs database` and `docker compose logs template-sync`. |
 | **`invalid_access_token`** | Certify cannot reach Keycloak or `iss` mismatch | Verify `AUTH_SERVER_JWKS_URL` in `.env` is reachable from within Docker and matches token `iss`. |
-| **`no_record` on issuance** | Student ID not found in SIS Adapter | Verify the student ID exists: `curl http://.../student/{sub}/transcript`. |
+| **`no_record` on issuance** | Student ID not found in SIS Adapter | Verify the student ID exists: `curl http://.../student/{sub}/student-id`. |
 | **`adapter_error` on issuance** | SIS Adapter response violates OpenAPI schema | Validate JSON response matches [`docs/contracts/adapter-openapi.yaml`](../contracts/adapter-openapi.yaml). |
 | **Template Sync failed** | Database was not ready or credentials JSON syntax error | Check `docker compose logs template-sync`. Verify JSON files in `deploy/ait/certify/credentials/`. |
 | **Signature verification fails** | Verifier cannot resolve `did:key` or schema mismatch | Ensure `CERTIFY_DID` in `.env` matches the key loaded in Certify's keystore. |

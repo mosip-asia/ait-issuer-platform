@@ -93,7 +93,7 @@ Configure these protocol mappers on your wallet clients (or globally via Client 
    - **Add to Access Token**: `true`
    - *(Standard OpenID4VCI design: Maps the audience directly to Certify's credential endpoint. Inji Certify acts purely as an OAuth Resource Server and accepts valid tokens from **any** wallet client—Inji Web, AI4DPI Mobile Wallet, or third-party wallets—without requiring client IDs in Certify configuration).*
 
-   *(Tip: In Keycloak, attach this Audience Mapper globally to the `ait_transcript_vc_ldp` client scope so all wallets requesting this scope automatically target Certify).*
+   *(Tip: In Keycloak, attach this Audience Mapper globally to the `ait_student_id_vc_ldp` client scope so all wallets requesting this scope automatically target Certify).*
 
 3. **`client_id-hardcoded`** (Hardcoded Claim Mapper):
    - **Mapper Type**: `Hardcoded claim`
@@ -112,10 +112,11 @@ Configure these protocol mappers on your wallet clients (or globally via Client 
 
 ### C. Client Scopes
 1. Go to **Client Scopes > Create client scope**:
-   - **Name**: `ait_transcript_vc_ldp`
+   - **Name**: `ait_student_id_vc_ldp` *(Day-0 Student ID Scope)*
    - **Protocol**: `openid-connect`
    - **Include in token scope**: `true`
-2. Go to your client (`wallet-demo`) > **Client Scopes** > **Add Client Scope** > Select `ait_transcript_vc_ldp` as **Optional**.
+   *(Optional: You can also pre-create `ait_transcript_vc_ldp` for Phase 2 Academic Transcript deployment).*
+2. Go to your client (`wallet-demo`) > **Client Scopes** > **Add Client Scope** > Select `ait_student_id_vc_ldp` as **Default** (or **Optional**).
 
 ---
 
@@ -155,7 +156,7 @@ docker compose -f compose.web-wallet.yaml -f compose.trust.yaml -f compose.traef
 4. Log in with a valid student username (e.g. `st120001`).
 5. After login, Keycloak redirects back to `https://wallet.dpi.ait.ac.th/redirect`.
 6. The wallet exchanges the authorization code for a Bearer token and requests the credential from Inji Certify.
-7. Verify that the **AIT Transcript** credential is saved and viewable in the wallet UI.
+7. Verify that the **AIT Student ID Card** credential is saved and viewable in the wallet UI.
 
 ---
 
