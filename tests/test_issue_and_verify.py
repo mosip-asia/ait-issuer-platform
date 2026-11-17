@@ -221,11 +221,12 @@ def test_verify_step_fails_when_the_credential_itself_does_not_verify() -> None:
 
 def test_student_id_credential_verification_and_tampered_copies() -> None:
     student_id_vc = {
-        "type": ["VerifiableCredential", "AitStudentIdCredential"],
+        "type": ["VerifiableCredential", "StudentIdCredential", "AitIdCredential"],
         "credentialSubject": {
             "id": "did:jwk:abc",
             "studentId": "st125001",
             "fullName": "Nara Wattanakul",
+            "affiliation": "Student",
             "faculty": "School of Engineering and Technology",
             "academicProgram": "M.Eng Computer Science",
             "studentStatus": "Active",

@@ -100,6 +100,7 @@ Internal ports and management interfaces are never exposed to the public interne
 
 ## 5. Fail-Forward Policy & Automated Rollback
 
+- **Day-0 Deployment Guide**: For the initial installation, Keycloak SSO integration, and SIS adapter connection, see [Day-0 / First Installation & Integration Guide](./guides/day-0-deployment.md).
 - **Sensitive Data Guard**: Pre-deployment check `bash scripts/check-data-guard.sh` prevents uncommitted secrets, CSV identity leaks, CRLF mismatches, or large binaries.
 - **Smoke Testing**: Every deployment executes `scripts/smoke-test.sh` verifying real cryptographic token acquisition, credential issuance, signature verification, and ledger recording.
 - **Persistent Baseline (`.deploy_success`)**: The deployed commit SHA is written to `.deploy_success` only after the deployment and smoke tests pass.

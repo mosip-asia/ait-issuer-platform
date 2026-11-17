@@ -35,7 +35,10 @@ app = FastAPI(
 )
 
 # Configuration from environment or defaults
-CREDENTIALS_DIR = Path(os.environ.get("CREDENTIALS_DIR", REPO_ROOT / "deploy" / "ait" / "credentials"))
+default_creds = REPO_ROOT / "deploy" / "ait" / "certify" / "credentials"
+if not default_creds.exists():
+    default_creds = REPO_ROOT / "deploy" / "ait" / "credentials"
+CREDENTIALS_DIR = Path(os.environ.get("CREDENTIALS_DIR", default_creds))
 CONTEXTS_DIR = Path(os.environ.get("CONTEXTS_DIR", REPO_ROOT / "deploy" / "ait" / "vdr" / "contexts"))
 ASSETS_DIR = Path(os.environ.get("ASSETS_DIR", REPO_ROOT / "deploy" / "ait" / "vdr" / "assets"))
 TEMPLATES_DIR = Path(os.environ.get("TEMPLATES_DIR", REPO_ROOT / "deploy" / "ait" / "vdr" / "templates"))

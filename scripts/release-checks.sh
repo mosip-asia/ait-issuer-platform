@@ -63,7 +63,7 @@ run_release_checks() {
     fi
   done
   if [[ -n "$py" ]]; then
-    for f in docs/schemas/*.json deploy/*/credentials/*.json deploy/*/vdr/contexts/*/*.json deploy/base/*.json deploy/*/mock/*.json tests/fixtures/*.json; do
+    for f in docs/schemas/*.json deploy/*/certify/credentials/*.json deploy/*/credentials/*.json deploy/*/vdr/contexts/*/*.json deploy/base/*.json deploy/*/mock/*.json tests/fixtures/*.json; do
       if [[ -f "$f" ]]; then
         if ! "$py" -m json.tool "$f" >/dev/null; then
           log_err "JSON syntax error in $f"

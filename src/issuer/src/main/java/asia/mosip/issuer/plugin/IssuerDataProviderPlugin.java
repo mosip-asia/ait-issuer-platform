@@ -149,6 +149,8 @@ public class IssuerDataProviderPlugin implements DataProviderPlugin {
     private final Peer adapter;
     /** Empty when {@code mosip.certify.gateway.enabled} is false: every record the Adapter serves is issued. */
     private final Optional<Gate> gate;
+    /** Configured claim names that a record serves as an array or object, which Certify's template takes unquoted. */
+    private final Set<String> structuredKeys;
 
     /**
      * @throws IllegalArgumentException for a record URL that is not an {@code http(s)} URL holding {@code {sub}}, a
@@ -164,12 +166,14 @@ public class IssuerDataProviderPlugin implements DataProviderPlugin {
             @Value("${mosip.certify.gateway.url:}") String gatewayUrl,
             @Value("${mosip.certify.gateway.auth-token:}") String gatewayAuthToken,
             @Value("${mosip.certify.gateway.connect-timeout-ms:2000}") long gatewayConnectTimeoutMs,
-            @Value("${mosip.certify.gateway.read-timeout-ms:10000}") long gatewayReadTimeoutMs) {
+            @Value("${mosip.certify.gateway.read-timeout-ms:10000}") long gatewayReadTimeoutMs,
+            @Value("${mosip.certify.adapter.structured-keys:courses}") String structuredKeysConfig) {
         if (!recordUrl.contains(SUB) || !isHttpUrl(recordUrl.replace(SUB, "sub"))) {
             throw new IllegalArgumentException("mosip.certify.adapter.record-url must be an http(s) URL holding "
                     + SUB + ", not '" + recordUrl + "'");
         }
         this.adapter = Peer.of(recordUrl, adapterConnectTimeoutMs, adapterReadTimeoutMs, ADAPTER_ERROR);
+        this.structuredKeys = parseStructuredKeys(structuredKeysConfig);
         boolean enabled = switchSetting(gatewayEnabled);
         if (enabled) {
             if (!isHttpUrl(gatewayUrl)) {
@@ -189,8 +193,35 @@ public class IssuerDataProviderPlugin implements DataProviderPlugin {
             }
             this.gate = Optional.empty();
         }
-        log.info("IssuerDataProviderPlugin selected: gateway.enabled={}, Gateway {}, Adapter {}", enabled,
-                gate.map(g -> g.gateway().url()).orElse(NO_GATEWAY), adapter.url());
+        log.info("IssuerDataProviderPlugin selected: gateway.enabled={}, Gateway {}, Adapter {}, structuredKeys={}",
+                enabled, gate.map(g -> g.gateway().url()).orElse(NO_GATEWAY), adapter.url(), structuredKeys);
+    }
+
+    public IssuerDataProviderPlugin(
+            String recordUrl,
+            long adapterConnectTimeoutMs,
+            long adapterReadTimeoutMs,
+            String gatewayEnabled,
+            String gatewayUrl,
+            String gatewayAuthToken,
+            long gatewayConnectTimeoutMs,
+            long gatewayReadTimeoutMs) {
+        this(recordUrl, adapterConnectTimeoutMs, adapterReadTimeoutMs, gatewayEnabled, gatewayUrl, gatewayAuthToken,
+                gatewayConnectTimeoutMs, gatewayReadTimeoutMs, COURSES);
+    }
+
+    private static Set<String> parseStructuredKeys(String config) {
+        if (config == null || config.isBlank()) {
+            return Set.of(COURSES);
+        }
+        Set<String> set = new java.util.HashSet<>();
+        for (String s : config.split(",")) {
+            String trimmed = s.trim();
+            if (!trimmed.isEmpty()) {
+                set.add(trimmed);
+            }
+        }
+        return set.isEmpty() ? Set.of(COURSES) : Set.copyOf(set);
     }
 
     /** {@code mosip.certify.gateway.enabled}: exactly {@code true} or {@code false}, with no default. */
@@ -225,7 +256,6 @@ public class IssuerDataProviderPlugin implements DataProviderPlugin {
         if (!(claims.get("sub") instanceof String sub) || sub.isEmpty()) {
             throw new DataProviderExchangeException(INVALID_ACCESS_TOKEN);
         }
-        sub = extractSub(sub);
         if (gate.isPresent()) {
             gate.get().evaluate(sub, claims.get("scope") instanceof String scope ? scope : "");
         }
@@ -236,28 +266,6 @@ public class IssuerDataProviderPlugin implements DataProviderPlugin {
             data.put("tokenClientId", claims.get("client_id"));
         }
         return data;
-    }
-
-    private static String extractSub(String sub) {
-        if (sub.startsWith("{") && sub.endsWith("}")) {
-            try {
-                JSONObject json = strictObject(sub);
-                if (json.has("registrationNo")) {
-                    return json.getString("registrationNo");
-                }
-                if (json.has("studentId")) {
-                    return json.getString("studentId");
-                }
-                if (json.has("sub")) {
-                    return json.getString("sub");
-                }
-                if (json.has("id")) {
-                    return json.getString("id");
-                }
-            } catch (JSONException ignored) {
-            }
-        }
-        return sub;
     }
 
     /** The record URL with {@code sub} filled in as one path segment: the record, a JSON object with no forbidden key. */
@@ -294,12 +302,11 @@ public class IssuerDataProviderPlugin implements DataProviderPlugin {
 
     /**
      * The record for Certify's template, which substitutes every claim into a quoted slot ({@code "${fullName}"})
-     * except {@code courses} ({@code ${courses}}): every top-level string escaped, {@code courses} as its JSON text,
-     * any other value as it is. The contract allows no other object or array at the top, and a {@code courses} that is
-     * not an array would reach the unquoted slot as something else, so both are {@code adapter_error}; so is a
-     * {@code null}, which Certify would sign as the template's literal placeholder.
+     * except structured fields in {@code structuredKeys} (such as {@code ${courses}}): every top-level string escaped,
+     * structured keys as JSON text, any other primitive value as it is. Unconfigured structured values or a
+     * structured key that is not an array are {@code adapter_error}; so is a {@code null}.
      */
-    private static JSONObject shape(JSONObject record) throws DataProviderExchangeException {
+    private JSONObject shape(JSONObject record) throws DataProviderExchangeException {
         JSONObject data = new JSONObject();
         for (String key : record.keySet()) {
             Object value = record.get(key);
@@ -308,7 +315,7 @@ public class IssuerDataProviderPlugin implements DataProviderPlugin {
                 throw new DataProviderExchangeException(ADAPTER_ERROR);
             }
             boolean structured = value instanceof JSONObject || value instanceof JSONArray;
-            if (COURSES.equals(key) ? !(value instanceof JSONArray) : structured) {
+            if (structuredKeys.contains(key) ? !(value instanceof JSONArray) : structured) {
                 log.warn("the Adapter's record has a {} for {}", value.getClass().getSimpleName(), key);
                 throw new DataProviderExchangeException(ADAPTER_ERROR);
             }

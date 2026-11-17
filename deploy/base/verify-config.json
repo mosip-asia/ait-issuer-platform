@@ -2,147 +2,6 @@
   "verifiableClaims": [
     {
       "logo": "/assets/cert.png",
-      "name": "MOSIP ID",
-      "type": "MOSIPVerifiableCredential",
-      "essential": true,
-      "clientIdScheme":"did",
-      "definition": {
-        "purpose": "Relying party is requesting your digital ID for the purpose of Self-Authentication",
-        "format": {
-          "ldp_vc": {
-            "proof_type": ["RsaSignature2018"]
-          }
-        },
-        "input_descriptors": [
-          {
-            "id": "id card credential",
-            "format": {
-              "ldp_vc": {
-                "proof_type": ["RsaSignature2018"]
-              }
-            },
-            "constraints": {
-              "fields": [
-                {
-                  "path": ["$.type"],
-                  "filter": {
-                    "type": "object",
-                    "pattern": "MOSIPVerifiableCredential"
-                  }
-                }
-              ]
-            }
-          }
-        ]
-      }
-    },
-    {
-      "logo": "/assets/cert.png",
-      "name": "Life Insurance",
-      "type": "LifeInsuranceCredential",
-      "clientIdScheme":"did",
-      "definition": {
-        "purpose": "Relying party is requesting your digital ID for the purpose of Self-Authentication",
-        "format": {
-          "ldp_vc": {
-            "proof_type": ["Ed25519Signature2018"]
-          }
-        },
-        "input_descriptors": [
-          {
-            "id": "id card credential",
-            "format": {
-              "ldp_vc": {
-                "proof_type": ["Ed25519Signature2020"]
-              }
-            },
-            "constraints": {
-              "fields": [
-                {
-                  "path": ["$.type"],
-                  "filter": {
-                    "type": "object",
-                    "pattern": "LifeInsuranceCredential"
-                  }
-                }
-              ]
-            }
-          }
-        ]
-      }
-    },
-    {
-      "logo": "/assets/cert.png",
-      "name": "Health Insurance",
-      "type": "InsuranceCredential",
-      "clientIdScheme":"pre_registered",
-      "definition": {
-        "purpose": "Relying party is requesting your digital ID for the purpose of Self-Authentication",
-        "format": {
-          "ldp_vc": {
-            "proof_type": ["Ed25519Signature2018"]
-          }
-        },
-        "input_descriptors": [
-          {
-            "id": "id card credential",
-            "format": {
-              "ldp_vc": {
-                "proof_type": ["Ed25519Signature2020"]
-              }
-            },
-            "constraints": {
-              "fields": [
-                {
-                  "path": ["$.type"],
-                  "filter": {
-                    "type": "object",
-                    "pattern": "InsuranceCredential"
-                  }
-                }
-              ]
-            }
-          }
-        ]
-      }
-    },
-    {
-      "logo": "/assets/cert.png",
-      "name": "Mock Identity (SD JWT)",
-      "type": "SD_JWT",
-      "clientIdScheme":"did",
-      "definition": {
-        "purpose": "Relying party is requesting your digital ID for the purpose of Self-Authentication",
-        "format": {
-          "vc+sd-jwt": {
-            "sd-jwt_alg_values": ["EdDSA"]
-          }
-        },
-        "input_descriptors": [
-          {
-            "id": "Mock Identity card credential",
-            "format": {
-              "vc+sd-jwt": {
-                "sd-jwt_alg_values": ["EdDSA"]
-              }
-            },
-            "constraints": {
-              "fields": [
-                {
-                  "path": ["$.vct"],
-                  "filter": {
-                    "type": "string",
-                    "pattern": "SD_JWT"
-                  }
-                }
-              ]
-            }
-          }
-        ]
-      }
-    },
-    {
-      "logo": "/assets/cert.png",
       "name": "AIT Transcript",
       "type": "AitTranscriptCredential",
       "clientIdScheme": "did",
@@ -179,7 +38,7 @@
     {
       "logo": "/assets/cert.png",
       "name": "AIT Student ID",
-      "type": "AitStudentIdCredential",
+      "type": "StudentIdCredential",
       "clientIdScheme": "did",
       "definition": {
         "purpose": "Verify the holder's AIT student ID card credential.",
@@ -202,7 +61,7 @@
                   "path": ["$.type"],
                   "filter": {
                     "type": "object",
-                    "pattern": "AitStudentIdCredential"
+                    "pattern": "StudentIdCredential|AitIdCredential|AitStudentIdCredential"
                   }
                 }
               ]
@@ -213,11 +72,11 @@
     },
     {
       "logo": "/assets/cert.png",
-      "name": "Land Registry",
-      "type": "LandStatementCredential",
-      "clientIdScheme":"did",
+      "name": "AIT Developer Passport",
+      "type": "DeveloperPassportCredential",
+      "clientIdScheme": "did",
       "definition": {
-        "purpose": "Relying party is requesting your digital ID for the purpose of Self-Authentication",
+        "purpose": "Verify the hackathon participant's Developer Passport credential.",
         "format": {
           "ldp_vc": {
             "proof_type": ["Ed25519Signature2020"]
@@ -225,7 +84,7 @@
         },
         "input_descriptors": [
           {
-            "id": "id card credential",
+            "id": "developer passport credential",
             "format": {
               "ldp_vc": {
                 "proof_type": ["Ed25519Signature2020"]
@@ -237,7 +96,42 @@
                   "path": ["$.type"],
                   "filter": {
                     "type": "object",
-                    "pattern": "LandStatementCredential"
+                    "pattern": "DeveloperPassportCredential"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "logo": "/assets/cert.png",
+      "name": "AIT Achievement Certificate",
+      "type": "AchievementCertificateCredential",
+      "clientIdScheme": "did",
+      "definition": {
+        "purpose": "Verify the hackathon participant's Achievement Certificate credential.",
+        "format": {
+          "ldp_vc": {
+            "proof_type": ["Ed25519Signature2020"]
+          }
+        },
+        "input_descriptors": [
+          {
+            "id": "achievement certificate credential",
+            "format": {
+              "ldp_vc": {
+                "proof_type": ["Ed25519Signature2020"]
+              }
+            },
+            "constraints": {
+              "fields": [
+                {
+                  "path": ["$.type"],
+                  "filter": {
+                    "type": "object",
+                    "pattern": "AchievementCertificateCredential"
                   }
                 }
               ]
@@ -248,33 +142,6 @@
     }
   ],
   "VCRenderOrders": {
-    "InsuranceCredentialRenderOrder": [
-      "fullName",
-      "policyNumber",
-      "policyName",
-      "policyIssuedOn",
-      "policyExpiresOn",
-      "benefits",
-      "mobile",
-      "email",
-      "gender",
-      "dob"
-    ],
-    "MosipVerifiableCredentialRenderOrder": [
-      "face",
-      "fullName",
-      "phone",
-      "dateOfBirth",
-      "gender",
-      "email",
-      "city",
-      "UIN",
-      "VID",
-      "addressLine1",
-      "province",
-      "region",
-      "postalCode"
-    ],
     "AitTranscriptCredentialRenderOrder": [
       "fullName",
       "registrationNo",
@@ -286,18 +153,41 @@
     "AitStudentIdCredentialRenderOrder": [
       "studentId",
       "fullName",
+      "affiliation",
       "faculty",
       "academicProgram",
       "studentStatus",
       "expiryDate"
     ],
-    "IncomeTaxAccountCredentialRenderOrder": [
+    "StudentIdCredentialRenderOrder": [
+      "studentId",
       "fullName",
-      "tan",
-      "gender",
-      "dateOfBirth",
-      "issuedOn",
-      "expiresOn"
+      "affiliation",
+      "faculty",
+      "academicProgram",
+      "studentStatus",
+      "expiryDate"
+    ],
+    "AitIdCredentialRenderOrder": [
+      "studentId",
+      "fullName",
+      "affiliation",
+      "faculty",
+      "academicProgram",
+      "studentStatus",
+      "expiryDate"
+    ],
+    "DeveloperPassportCredentialRenderOrder": [
+      "teamName",
+      "teamId",
+      "oidcClientId",
+      "authEndpoint",
+      "issuerEndpoint",
+      "verifierEndpoint"
+    ],
+    "AchievementCertificateCredentialRenderOrder": [
+      "award",
+      "teamId"
     ]
   }
 }

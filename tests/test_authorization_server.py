@@ -75,7 +75,10 @@ def stand_in(installation: str) -> dict[str, str]:
 def certify_properties(installation: str, env: dict[str, str]) -> dict[str, str]:
     """The installation's Certify properties with their placeholders resolved as Certify sees them in the container."""
     known = {**r.authorization_server(installation, env), "mosip.certify.domain.url": CERTIFY_DOMAIN}
-    text = (INSTALLATIONS / installation / "certify-installation.properties").read_text(encoding="utf-8")
+    prop_path = INSTALLATIONS / installation / "certify" / "certify-installation.properties"
+    if not prop_path.is_file():
+        prop_path = INSTALLATIONS / installation / "certify-installation.properties"
+    text = prop_path.read_text(encoding="utf-8")
     props = {}
     for line in text.replace("\\\n", "").splitlines():
         if line.strip() and not line.startswith("#"):
@@ -138,7 +141,6 @@ def test_certify_trusts_the_configured_server() -> None:
             assert props["mosip.certify.authn.jwk-set-uri"] == want["AUTH_SERVER_JWKS_URL"], (name, props)
             audiences = re.findall(r"'([^']*)'", props["mosip.certify.authn.allowed-audiences"])
             assert audiences == [
-                want["AUTH_SERVER_WALLET_CLIENT_ID"],
                 "http://certify-nginx:80/v1/certify/issuance/credential",
                 "http://certify-nginx/v1/certify/issuance/credential",
                 f"{CERTIFY_DOMAIN}/v1/certify/issuance/credential",

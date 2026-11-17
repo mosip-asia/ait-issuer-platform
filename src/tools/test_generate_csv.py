@@ -80,7 +80,10 @@ AIT = gc.REPO_ROOT / "deploy" / "ait"
 
 def seed_value(pattern: str) -> str:
     """One SQL string literal of the ait-transcript credential_config row, found by its shape."""
-    text = (AIT / "certify_seed.sql").read_text(encoding="utf-8")
+    seed_sql = AIT / "certify" / "certify_seed.sql"
+    if not seed_sql.is_file():
+        seed_sql = AIT / "certify_seed.sql"
+    text = seed_sql.read_text(encoding="utf-8")
     transcript_block = text.split("-- Credential: ait-transcript", 1)[-1]
     return re.search(pattern, transcript_block)[1]
 

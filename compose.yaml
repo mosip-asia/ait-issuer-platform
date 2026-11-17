@@ -33,7 +33,7 @@ services:
       - TEMPLATES_DIR=/app/vdr/templates
       - BASE_TEMPLATES_DIR=/app/base_templates
     volumes:
-      - ./deploy/${INSTALLATION}/credentials:/app/credentials:ro
+      - ./deploy/${INSTALLATION}/certify/credentials:/app/credentials:ro
       - ./deploy/${INSTALLATION}/vdr/contexts:/app/vdr/contexts:ro
       - ./deploy/${INSTALLATION}/vdr/assets:/app/vdr/assets:ro
       - ./deploy/${INSTALLATION}/vdr/templates:/app/vdr/templates:ro

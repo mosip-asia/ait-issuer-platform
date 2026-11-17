@@ -271,7 +271,8 @@ def template_claims() -> dict[str, set[str]]:
     import base64
 
     found = {}
-    for seed in (REPO_ROOT / "deploy").glob("*/certify_seed.sql"):
+    seeds = list((REPO_ROOT / "deploy").glob("*/certify/certify_seed.sql")) or list((REPO_ROOT / "deploy").glob("*/certify_seed.sql"))
+    for seed in seeds:
         for row in seed.read_text(encoding="utf-8").split("INSERT INTO certify.credential_config")[1:]:
             (scope,) = re.findall(r"'([a-z_]+_vc_ldp)'", row)
             (template,) = re.findall(r"'(ewo[A-Za-z0-9+/=]+)'", row)
@@ -286,7 +287,7 @@ def test_every_record_schema_lists_exactly_the_claims_its_template_substitutes()
     substitutes, every one required, a string but `courses`, and no reserved or trace key."""
     contract = load_contract()
     claims = template_claims()
-    assert set(claims) == {"ait_transcript_vc_ldp", "developer_passport_vc_ldp", "achievement_certificate_vc_ldp"}
+    assert set(claims) == {"ait_transcript_vc_ldp", "developer_passport_vc_ldp", "achievement_certificate_vc_ldp", "ait_student_id_vc_ldp"}
     assert sorted(s.get("x-scope") for s in record_schemas(contract)) == sorted(claims)
     for scope, names in claims.items():
         schema = record_schema(contract, scope)
@@ -305,6 +306,7 @@ def test_the_contract_mode_passes_against_the_mock() -> None:
         get = host_get(csv_path)
         for sub in ("st120001", "st120006"):  # st120006: the SIS test student, so issuer-dev can gate it
             check_contract(get, TRANSCRIPT_URL, sub, "ait_transcript_vc_ldp")
+        check_contract(get, "/student/{sub}/student-id", "st120001", "ait_student_id_vc_ldp")
         check_contract(get, TRANSCRIPT_URL, "st120001", "openid ait_transcript_vc_ldp")  # the scope claim, whole
         assert get("/student/st120006/eligibility") == (200, {
             "holds": [], "conferralStatus": "Conferred", "balance": "0.00"})  # eligible: it passes every check
@@ -505,7 +507,10 @@ def test_the_transcript_record_is_the_credential_schemas_subject_less_the_holder
 def test_the_handovers_privacy_section_names_every_claim_the_ait_ledger_indexes() -> None:
     """Certify logs every value its ledger indexes (LedgerUtils, at INFO), so the list on the handover's "Certify also
     logs it" line (docs/project/issuer-v0.1/sis-adapter-handover.md) is the ait Installation's indexed mappings."""
-    properties = (REPO_ROOT / "deploy" / "ait" / "certify-installation.properties").read_text(encoding="utf-8")
+    prop_path = REPO_ROOT / "deploy" / "ait" / "certify" / "certify-installation.properties"
+    if not prop_path.is_file():
+        prop_path = REPO_ROOT / "deploy" / "ait" / "certify-installation.properties"
+    properties = prop_path.read_text(encoding="utf-8")
     indexed = set(re.findall(r"^mosip\.certify\.indexed-mappings\.(\w+)=", properties, re.M))
     page = (REPO_ROOT / "docs" / "project" / "issuer-v0.1" / "sis-adapter-handover.md").read_text(encoding="utf-8")
     line = next(line for line in page.splitlines() if line.startswith("- **Certify also logs it, and more.**"))

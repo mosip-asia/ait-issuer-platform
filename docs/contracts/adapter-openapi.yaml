@@ -64,6 +64,22 @@ paths:
                   - $ref: '#/components/schemas/AchievementRecord'
         '404':
           $ref: '#/components/responses/NoRecord'
+  /student/{sub}/student-id:
+    get:
+      operationId: getStudentId
+      summary: The student's ID card record, under the Issuer's claim names
+      parameters:
+        - $ref: '#/components/parameters/Sub'
+      responses:
+        '200':
+          description: |
+            The record in the record schema of ait_student_id_vc_ldp.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentIdRecord'
+        '404':
+          $ref: '#/components/responses/NoRecord'
   /student/{sub}/eligibility:
     get:
       operationId: getEligibility
@@ -243,6 +259,32 @@ components:
       properties:
         teamId: {type: string}
         award: {type: string}
+    StudentIdRecord:
+      type: object
+      x-scope: ait_student_id_vc_ldp
+      description: The Student ID card, the claims its template substitutes.
+      propertyNames:
+        $ref: '#/components/schemas/RecordKey'
+      additionalProperties:
+        $ref: '#/components/schemas/ExtraField'
+      required:
+        - studentId
+        - fullName
+        - affiliation
+        - faculty
+        - academicProgram
+        - studentStatus
+        - issueDate
+        - expiryDate
+      properties:
+        studentId: {type: string}
+        fullName: {type: string}
+        affiliation: {type: string}
+        faculty: {type: string}
+        academicProgram: {type: string}
+        studentStatus: {type: string}
+        issueDate: {$ref: '#/components/schemas/Date'}
+        expiryDate: {$ref: '#/components/schemas/Date'}
     TranscriptEligibility:
       type: object
       x-scope: ait_transcript_vc_ldp
