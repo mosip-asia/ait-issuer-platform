@@ -15,6 +15,7 @@ services:
     ports:
       - "${TRAEFIK_WEBSECURE_PORT}:443"
     command:
+      - "--log.level=INFO"
       - "--api.insecure=true"
       - "--api.dashboard=true"
       - "--providers.docker=true"
