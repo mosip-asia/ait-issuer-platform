@@ -181,12 +181,14 @@ jobs:
               git -C "$TARGET_DIR" init -q
               git -C "$TARGET_DIR" remote add origin "$AUTH_REPO"
               git -C "$TARGET_DIR" config core.sparseCheckout true
+              git -C "$TARGET_DIR" config core.sparseCheckoutCone true
               git -C "$TARGET_DIR" sparse-checkout set --cone "deploy/${TENANT}" deploy/base scripts docker
             fi
 
             cd "$TARGET_DIR"
             git remote set-url origin "$AUTH_REPO"
             git fetch -q origin --tags
+            git fetch -q origin ${{ github.sha }}
 
             # 1. The last verified deployment on this host
             STABLE_REV="$(cat .deploy_success 2>/dev/null || true)"
@@ -197,7 +199,9 @@ jobs:
 
             # Enable sparse-checkout so only runtime deployment files for target tenant exist on the server
             git config core.sparseCheckout true
+            git config core.sparseCheckoutCone true
             git sparse-checkout set --cone "deploy/${TENANT}" deploy/base scripts docker
+            git sparse-checkout reapply
 
             echo "Checking out ${{ github.ref_name }} (${{ github.sha }})..."
             git checkout -q -f ${{ github.sha }}

@@ -136,7 +136,10 @@ Deployment hosts only require compose manifests, deployment scripts, shared base
 ```bash
 # Sparse checkout scoped strictly to the target tenant (e.g. TENANT=ait)
 git clone --filter=blob:none --sparse https://github.com/mosip-asia/ait-issuer-platform.git .
+git config core.sparseCheckout true
+git config core.sparseCheckoutCone true
 git sparse-checkout set --cone "deploy/${TENANT:-ait}" deploy/base scripts docker
+git sparse-checkout reapply
 ```
 In automated CI/CD (`.github/workflows/cd.yml`), the deployment runner reads `TENANT` from the GitHub repository variable (`vars.TENANT`), ensuring each environment host only receives its own tenant files.
 
