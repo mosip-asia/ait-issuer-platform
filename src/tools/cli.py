@@ -12,6 +12,7 @@ import typer
 from tools import generate_csv as gc_mod
 from tools import issue_and_verify as iv_mod
 from tools import render_mimoto_issuers_config as rmc_mod
+from tools import did as did_mod
 
 app = typer.Typer(
     name="tools",
@@ -179,10 +180,69 @@ def refused_cmd(
         iv_mod.CERTIFY = old_certify
 
 
+# ------------------------------------------------------------------------------
+# 4. did Subcommand (derive or generate did:key)
+# ------------------------------------------------------------------------------
+did_app = typer.Typer(
+    name="did",
+    help="Derive or generate did:key identifiers for Inji Certify.",
+    no_args_is_help=False,
+)
+
+
+@did_app.callback(invoke_without_command=True)
+def did_cmd(
+    ctx: typer.Context,
+    target: Annotated[
+        Optional[str],
+        typer.Argument(help="Certify URL to query (e.g. https://issuer.dpi.ait.ac.th or http://localhost:9091)"),
+    ] = None,
+    generate: Annotated[
+        Optional[Path],
+        typer.Option("--generate", "-g", help="Output path to generate a fresh PKCS12 keystore"),
+    ] = None,
+    pem: Annotated[
+        Optional[Path],
+        typer.Option("--pem", "-p", help="Path to PEM public key or certificate file"),
+    ] = None,
+    password: Annotated[
+        str,
+        typer.Option("--password", help="Keystore password (default: local)"),
+    ] = "local",
+) -> None:
+    """Derive or generate did:key identifiers for Inji Certify."""
+    if ctx.invoked_subcommand is not None:
+        return
+
+    if generate:
+        typer.echo(f"Generating new Ed25519 keypair and PKCS12 keystore at: {generate}...")
+        did_str = did_mod.generate_new_keystore(generate, password)
+        typer.secho(f"\n[OK] Keystore successfully created at: {generate}", fg=typer.colors.GREEN, bold=True)
+        typer.echo(f"     Keystore Password: {password}")
+        typer.secho(f"     Derived CERTIFY_DID: {did_str}\n", fg=typer.colors.CYAN, bold=True)
+        typer.echo("Configure this value in your .env file:")
+        typer.echo(f"  CERTIFY_DID={did_str}")
+        return
+
+    if pem:
+        did_str = did_mod.extract_from_pem(pem)
+        typer.echo(did_str)
+        return
+
+    if target:
+        did_str = did_mod.query_running_certify(target)
+        typer.echo(did_str)
+        return
+
+    typer.echo(ctx.get_help())
+
+
 # Register submenus under the main tools CLI
 app.add_typer(generate_csv_app, name="generate-csv")
 app.add_typer(render_mimoto_app, name="render-mimoto")
 app.add_typer(issue_verify_app, name="issue-and-verify")
+app.add_typer(did_app, name="did")
+app.add_typer(did_app, name="derive-did")
 
 
 def main() -> None:

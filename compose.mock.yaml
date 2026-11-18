@@ -52,7 +52,9 @@ services:
       - portal-gateway
     build:
       context: .
-      dockerfile: src/portal/Dockerfile
+      dockerfile: docker/Dockerfile.ait-vc
+    image: ghcr.io/mosip-asia/ait-vc:${IMAGE_TAG}
+    command: ["uvicorn", "portal.main:app", "--host", "0.0.0.0", "--port", "4100"]
     extra_hosts:
       - "host.docker.internal:host-gateway"
       - "auth.localhost:host-gateway"
@@ -69,10 +71,10 @@ services:
     env_file:
       - ./deploy/${INSTALLATION}/authorization-server.env
     volumes:
-      - ./src/portal:/demo/src/portal
-      - ./scripts:/demo/scripts
-      - ./deploy:/demo/deploy
-      - ./tests/fixtures:/demo/tests/fixtures:ro
+      - ./src/portal:/app/src/portal
+      - ./scripts:/app/scripts
+      - ./deploy:/app/deploy
+      - ./tests/fixtures:/app/tests/fixtures:ro
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.portal.rule=${TRAEFIK_PORTAL_RULE}"
@@ -85,7 +87,9 @@ services:
       - portal-gateway
     build:
       context: .
-      dockerfile: src/gateway/Dockerfile
+      dockerfile: docker/Dockerfile.ait-vc
+    image: ghcr.io/mosip-asia/ait-vc:${IMAGE_TAG}
+    command: ["uvicorn", "gateway.main:from_env", "--factory", "--host", "0.0.0.0", "--port", "8000"]
     extra_hosts:
       - "host.docker.internal:host-gateway"
       - "auth.localhost:host-gateway"

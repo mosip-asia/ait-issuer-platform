@@ -121,7 +121,7 @@ deploy/ait/
 ### 6. Keystore Custody & Cryptographic Identity Invariance (`did:key`)
 - Inji Certify signs all credentials using the Ed25519 private key in `deploy/<tenant>/private_key/CERTIFY_PKCS12/local.p12`.
 - The corresponding public identifier is `CERTIFY_DID` (`did:key:z6Mk...`).
-- You can generate a fresh keystore and derive its `did:key` using `python3 scripts/derive-did.py --generate <path>` (see [Stage 1 Guide](day-0-certify.md#b-keystore-configuration--key-generation)).
+- You can generate a fresh keystore and derive its `did:key` using `uv run tools did --generate <path>` or `./scripts/derive-did.py --generate <path>` (see [Stage 1 Guide](day-0-certify.md#b-keystore-configuration--key-generation)).
 
 > [!CAUTION]
 > **Strict Immutability Invariant:** Once credentials have been issued to students, **`CERTIFY_DID` and `local.p12` must NEVER be changed, regenerated, or replaced**.
@@ -135,8 +135,7 @@ deploy/ait/
 To ensure reproducible deployments and keep build toolchains off production VMs, application components are built in CI and published to GitHub Container Registry (GHCR):
 - **`ghcr.io/mosip-asia/ait-certify:${IMAGE_TAG}`**: Inji Certify 0.14 with the Java 21 `IssuerDataProviderPlugin` pre-baked at `/home/inji/additional_jars/issuer-data-provider-plugin.jar`. No host JAR compilation or bind-mounting is required at runtime.
 - **`ghcr.io/mosip-asia/ait-verify-ui:${IMAGE_TAG}`**: Branded Inji Verify web interface.
-- **`ghcr.io/mosip-asia/ait-vc-lab:${IMAGE_TAG}`**: Credential lab and verification playground.
-- **`ghcr.io/mosip-asia/ait-certify-template-sync:${IMAGE_TAG}`**: Lightweight service to apply database seeds and synchronize credential templates into Inji Certify.
+- **`ghcr.io/mosip-asia/ait-vc:${IMAGE_TAG}`**: Unified multi-service Python container housing the Approval Gateway (`POST /evaluations`), Admin/Student VC Portal, VC Lab Studio (`:4200`), Developer Tools CLI (`tools`), and Database Template Sync (`certify-template-sync`). (Backward-compatibility tags `ait-vc-lab` and `ait-certify-template-sync` are also maintained).
 
 CI builds and publishes these images via `scripts/build.sh --tag <tag> --push`. If code has not changed between tags, `build.sh` fast-retags existing GHCR images using `docker buildx imagetools create` without re-uploading layers.
 

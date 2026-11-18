@@ -1,0 +1,43 @@
+# ==============================================================================
+# Unified AIT Verifiable Credential Platform Container: ait-vc
+# ==============================================================================
+# Single multi-service Python container housing:
+# - Gateway (Approval gate checklist evaluator, FastAPI :8000)
+# - Portal (Admin / Student VC portal, FastAPI :4100)
+# - Tools CLI (Typer CLI: did, generate-csv, render-mimoto, issue-and-verify)
+# - VC Lab (Visual VC Studio & Template Designer, FastAPI :4200)
+# - Certify Template Sync (Velocity template & PostgreSQL seed synchronizer)
+# ==============================================================================
+
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+
+# Install system runtime requirements (OpenSSL for PKCS12 / Ed25519, curl for healthchecks)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssl \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+ENV UV_COMPILE_BYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Copy dependency specifications
+COPY pyproject.toml uv.lock* README.md /app/
+
+# Copy all application sources, mock adapter, and fixtures
+COPY src/ /app/src/
+COPY tests/fixtures/ /app/tests/fixtures/
+COPY mock/adapter/ /app/mock/adapter/
+
+# Install dependencies and project in virtual environment via uv
+RUN uv sync --no-dev
+
+# Put virtualenv executables in PATH and configure Python module search paths
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONPATH="/app/src:/app/src/vc-lab:/app/mock/adapter"
+
+# Default command displays the unified CLI menu
+CMD ["tools", "--help"]

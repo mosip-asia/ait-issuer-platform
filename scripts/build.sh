@@ -225,10 +225,28 @@ build_or_retag_image "ait-certify" "docker/Dockerfile.certify" "." "src/issuer" 
 # 2. Verifier UI (watched: src/verifier)
 build_or_retag_image "ait-verify-ui" "src/verifier/Dockerfile" "." "src/verifier"
 
-# 3. VC Lab (watched: src/vc-lab and Dockerfile.vc-lab)
-build_or_retag_image "ait-vc-lab" "docker/Dockerfile.vc-lab" "." "src/vc-lab" "docker/Dockerfile.vc-lab"
+# 3. Unified AIT Verifiable Credential Platform: ait-vc (Gateway, Portal, Tools CLI, VC Lab, Template Sync)
+build_or_retag_image "ait-vc" "docker/Dockerfile.ait-vc" "." "src" "mock/adapter" "pyproject.toml" "uv.lock" "docker/Dockerfile.ait-vc"
 
-# 4. Certify Template Sync (watched: scripts/sync-templates.py and Dockerfile.template-sync)
-build_or_retag_image "ait-certify-template-sync" "docker/Dockerfile.template-sync" "." "scripts/sync-templates.py" "docker/Dockerfile.template-sync"
+# Compatibility tags for standalone image names
+alias_image() {
+  local target_alias="$1"
+  local src_tag="${REGISTRY}/ait-vc:${TAG}"
+  local dst_tag="${REGISTRY}/${target_alias}:${TAG}"
+  log_info "Creating compatibility tag: ${dst_tag} -> ${src_tag}"
+  docker tag "$src_tag" "$dst_tag" || true
+  if [ "$TAG" != "latest" ]; then
+    docker tag "$src_tag" "${REGISTRY}/${target_alias}:latest" || true
+  fi
+  if [ "$PUSH" = true ]; then
+    docker push "$dst_tag" || true
+    if [ "$TAG" != "latest" ]; then
+      docker push "${REGISTRY}/${target_alias}:latest" || true
+    fi
+  fi
+}
+
+alias_image "ait-vc-lab"
+alias_image "ait-certify-template-sync"
 
 log_ok "All Docker images ready!"

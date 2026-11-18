@@ -26,8 +26,9 @@ services:
   vc-lab:
     build:
       context: .
-      dockerfile: docker/Dockerfile.vc-lab
-    image: ghcr.io/mosip-asia/ait-vc-lab:${IMAGE_TAG}
+      dockerfile: docker/Dockerfile.ait-vc
+    image: ghcr.io/mosip-asia/ait-vc:${IMAGE_TAG}
+    command: ["python", "src/vc-lab/main.py"]
     container_name: vc-lab
     environment:
       - INSTALLATION=${INSTALLATION}

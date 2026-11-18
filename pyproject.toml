@@ -23,6 +23,7 @@ dependencies = [
 gateway = "gateway.main:main"
 portal = "portal.main:main"
 tools = "tools.cli:app"
+derive-did = "tools.did:main"
 certify-template-sync = "certify_template_sync.sync:main"
 
 [project.optional-dependencies]

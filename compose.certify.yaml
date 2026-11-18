@@ -86,8 +86,9 @@ services:
   template-sync:
     build:
       context: .
-      dockerfile: docker/Dockerfile.template-sync
-    image: ${TEMPLATE_SYNC_IMAGE:-ghcr.io/mosip-asia/ait-certify-template-sync:${IMAGE_TAG}}
+      dockerfile: docker/Dockerfile.ait-vc
+    image: ghcr.io/mosip-asia/ait-vc:${IMAGE_TAG}
+    command: ["certify-template-sync", "--apply"]
     restart: "no"
     depends_on:
       database:
