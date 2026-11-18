@@ -132,15 +132,15 @@ Reference guides:
    curl -sf https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev/protocol/openid-connect/certs | jq .
    curl -sf http://ait-itserv-dev-vm.netbird.selfhosted:8000/student/st120001/student-id | jq .
    ```
-2. Launch services (or run `./scripts/deploy.sh`):
+2. Launch services (using `./scripts/deploy.sh` to auto-provision keystore and sync `CERTIFY_DID`):
    ```bash
-   # Pre-built GHCR images are pulled automatically, or build locally via ./scripts/build.sh
-   docker compose -f compose.certify.yaml -f compose.trust.yaml -f compose.traefik.yaml up -d
+   ./scripts/deploy.sh ait
    ```
-3. Extract live `did:key` and update `.env`:
+3. Verify live `did:key` binding:
    ```bash
    LIVE_DID=$(curl -sf https://issuer.dpi.ait.ac.th/.well-known/did.json | jq -r '"did:key:" + .verificationMethod[0].publicKeyMultibase')
    echo "Live Keystore-derived Issuer DID: $LIVE_DID"
+   # Confirm that .id and CERTIFY_DID in .env match LIVE_DID
    ```
 4. Verify discovery endpoint reports `StudentIdCredential` and `AitIdCredential`:
    ```bash

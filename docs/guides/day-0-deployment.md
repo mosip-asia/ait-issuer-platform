@@ -118,13 +118,15 @@ deploy/ait/
 └── mock/                              # Stand-in Keycloak realm (offline testing only)
 ```
 
-### 6. Keystore Custody & Cryptographic Identity Invariance (`did:key`)
+### 6. Keystore Custody, Automatic DID Synchronization & Invariance (`did:key`)
 - Inji Certify signs all credentials using the Ed25519 private key in `deploy/<tenant>/private_key/CERTIFY_PKCS12/local.p12`.
-- The corresponding public identifier is `CERTIFY_DID` (`did:key:z6Mk...`).
-- You can generate a fresh keystore and derive its `did:key` using Docker (`docker run --rm --user "$(id -u):$(id -g)" -v "$(pwd):/work" -w /work ghcr.io/mosip-asia/ait-vc:${IMAGE_TAG:-latest} tools did --generate <path>`) or using `uv` (`uv run tools did --generate <path>`) (see [Stage 1 Guide](day-0-certify.md#b-keystore-configuration--key-generation)).
+- **Automated Lifecycle (`deploy.sh`)**: The deployment runner `./scripts/deploy.sh <tenant>` automatically checks if `local.p12` exists:
+  - If missing on Day-0, it auto-generates a fresh Ed25519 keystore with proper `0644` permissions.
+  - It extracts the derived `did:key` (via `tools did --p12`) and automatically synchronizes `CERTIFY_DID` into `.env`.
+- **Direct Keystore Reading (`template-sync`)**: The database synchronizer mounts `local.p12` into `/app/keys/CERTIFY_PKCS12/local.p12:ro`, automatically extracting the live `did:key` and seeding PostgreSQL without manual copy-pasting.
 
 > [!CAUTION]
-> **Strict Immutability Invariant:** Once credentials have been issued to students, **`CERTIFY_DID` and `local.p12` must NEVER be changed, regenerated, or replaced**.
+> **Strict Immutability Invariant:** Once credentials have been issued to students, **`local.p12` and `CERTIFY_DID` must NEVER be changed, regenerated, or deleted**.
 > In W3C VCDM, the signature is cryptographically bound to the issuer `did:key`. If the key or DID changes, **ALL existing credentials become permanently unverifiable** across all external wallets and verifiers worldwide. Always back up `local.p12` and `.env` securely!
 
 ---
@@ -149,15 +151,17 @@ bash scripts/sync-sparse.sh "${TENANT:-ait}"
 The tracked script [`scripts/sync-sparse.sh`](../../scripts/sync-sparse.sh) sets up cone mode and activates tracked Git hooks in [`.githooks/`](../../.githooks/) (`post-merge` and `post-checkout`), ensuring any newly pushed compose manifests or scripts are automatically materialized upon `git pull` or automated CD checkout without requiring manual SSH intervention.
 In automated CI/CD (`.github/workflows/cd.yml`), the deployment runner reads `TENANT` from the GitHub repository variable (`vars.TENANT`), ensuring each environment host only receives its own tenant files.
 
-### 3. Automated Deployment & Pre-flight Validation
-The unified deployment script `scripts/deploy.sh` streamlines provisioning:
+### 3. Automated Single-Step Deployment (`scripts/deploy.sh`)
+The unified deployment script `scripts/deploy.sh` streamlines provisioning into a single command:
 ```bash
-# Deploy with a specific image tag and tenant
-./scripts/deploy.sh ait --tag v0.0.6
+# Deploy with a specific image tag and tenant (e.g. ait)
+./scripts/deploy.sh ait
 ```
+- **Keystore Auto-Provisioning & DID Synchronization**: Checks for `deploy/<tenant>/private_key/CERTIFY_PKCS12/local.p12`. If missing on initial Day-0 setup, it automatically generates the Ed25519 keystore. It extracts the multibase public key and automatically synchronizes `CERTIFY_DID` in `.env`.
 - **`.env` Validation**: Runs `scripts/check-env.sh` to ensure all keys defined in `.env.example` are present and critical endpoints are non-empty. Accepts either `INSTALLATION` or `TENANT`.
 - **Tag & Tenant Synchronization**: Safely updates `IMAGE_TAG=<tag>` and `INSTALLATION=<tenant>` inside `.env` using inode-preserving stream writes (preventing stale Docker bind mounts).
 - **Service Pull & Startup**: Pulls tagged GHCR images and starts services using Docker Compose.
+- **Automated Engine Verification**: Automatically runs `scripts/smoke-test-certify.sh` to confirm database connectivity, cryptographic key loading, and OpenID4VCI discovery metadata.
 
 ### 4. Edge Ingress: HTTP (Local) vs HTTPS (Dev/Prod Server)
 Edge routing is managed by Traefik v3.7 in a modular compose architecture:
@@ -250,7 +254,8 @@ TRUSTED_VCGA_URLS=https://vcga.dpi.ait.ac.th
 # ------------------------------------------------------------------------------
 # ⚠️ CAUTION: NEVER modify CERTIFY_DID or replace local.p12 once credentials have
 # been issued. Doing so permanently invalidates all existing student credentials!
-CERTIFY_DID=did:key:z6MkhsC1EojKdBoLzPY2kL2mFLSMJbQVC83M2CsnYGwghcsE
+# Automatically synchronized from deploy/<tenant>/private_key/CERTIFY_PKCS12/local.p12 by deploy.sh:
+CERTIFY_DID=did:key:z6MknvXD49undgXJCPeXFhVr4abNqu1S7jWqeSvis2PFr6EH
 KEYSTORE_TYPE=PKCS12
 KEYSTORE_PASS=local
 
