@@ -192,15 +192,52 @@ log_info "Waiting for Inji Certify issuer engine to initialize at ${CERTIFY_URL}
 TIMEOUT="${DEPLOY_TIMEOUT:-180}"
 ELAPSED=0
 
+check_ready() {
+  local code
+  # 1. Direct probe against configured CERTIFY_URL (following redirects with -L, require HTTP 200)
+  code="$(curl -skL -o /dev/null -w "%{http_code}" --max-time 5 "${CERTIFY_URL}/.well-known/openid-credential-issuer" 2>/dev/null || true)"
+  if [ "$code" = "200" ]; then
+    return 0
+  fi
+  code="$(curl -skL -o /dev/null -w "%{http_code}" --max-time 5 "${CERTIFY_URL}/v1/certify/.well-known/openid-credential-issuer" 2>/dev/null || true)"
+  if [ "$code" = "200" ]; then
+    return 0
+  fi
+
+  # 2. Loopback probe for cloud VMs (in case public hairpin routing is restricted on GCE)
+  local domain
+  domain="$(echo "$CERTIFY_URL" | sed -E 's|^https?://([^:/]+).*|\1|')"
+  if [[ "$CERTIFY_URL" == https://* ]]; then
+    local secure_port="${TRAEFIK_WEBSECURE_PORT:-443}"
+    code="$(curl -skL -o /dev/null -w "%{http_code}" --max-time 5 \
+      --resolve "${domain}:${secure_port}:127.0.0.1" \
+      "${CERTIFY_URL}/.well-known/openid-credential-issuer" 2>/dev/null || true)"
+    if [ "$code" = "200" ]; then
+      return 0
+    fi
+  elif [[ "$CERTIFY_URL" == *"localhost"* ]]; then
+    local web_port="${TRAEFIK_WEB_PORT:-80}"
+    code="$(curl -skL -o /dev/null -w "%{http_code}" --max-time 5 \
+      -H "Host: issuer.localhost" \
+      "http://127.0.0.1:${web_port}/.well-known/openid-credential-issuer" 2>/dev/null || true)"
+    if [ "$code" = "200" ]; then
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
 while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
-  if curl -skf "${CERTIFY_URL}/.well-known/openid-credential-issuer" >/dev/null 2>&1 || \
-     curl -skf "${CERTIFY_URL}/v1/certify/.well-known/openid-credential-issuer" >/dev/null 2>&1 || \
-     curl -skf -H "Host: issuer.localhost" "http://127.0.0.1:${TRAEFIK_WEB_PORT:-80}/.well-known/openid-credential-issuer" >/dev/null 2>&1; then
-    log_ok "Inji Certify is ready!"
+  if check_ready; then
+    log_ok "Inji Certify is ready (elapsed: ${ELAPSED}s)!"
     break
   fi
-  sleep 3
-  ELAPSED=$((ELAPSED + 3))
+  sleep 5
+  ELAPSED=$((ELAPSED + 5))
+  if [ $((ELAPSED % 15)) -eq 0 ]; then
+    log_info "Still waiting for Certify to become ready (${ELAPSED}/${TIMEOUT}s)..."
+  fi
 done
 
 if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
@@ -214,7 +251,7 @@ log_info "Running post-deployment issuance smoke test..."
 if [ "$INSTALLATION" = "hackathon" ]; then
   SMOKE_CMD="bash scripts/smoke-test.sh ${CERTIFY_URL} hack-2026-0001 developer-passport"
 else
-  SMOKE_CMD="bash scripts/smoke-test.sh ${CERTIFY_URL}"
+  SMOKE_CMD="bash scripts/smoke-test.sh ${CERTIFY_URL} st120001 ait-student-id"
 fi
 if ! eval "$SMOKE_CMD"; then
   log_err "Post-deployment smoke test failed. Recent logs:"

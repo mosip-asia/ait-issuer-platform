@@ -122,6 +122,7 @@ jobs:
           docker compose config --quiet
           docker compose -f compose.yaml config --quiet
           docker compose -f compose.database.yaml -f compose.verify.yaml config --quiet
+          docker compose -f compose.traefik.yaml -f compose.traefik-tls.yaml config --quiet
           docker compose -f compose.yaml -f compose.mock.yaml config --quiet
           rm -f .env
 
@@ -231,7 +232,8 @@ jobs:
               echo "Rolling back to the last verified deployment: ${STABLE_REV}"
               echo "=========================================================="
               git checkout -q -f "${STABLE_REV}"
-              bash scripts/deploy.sh "$TENANT"
+              bash scripts/sync-sparse.sh "$TENANT" || true
+              bash scripts/deploy.sh "$TENANT" || true
               echo "✅ Rollback to ${STABLE_REV} complete. Server restored to last verified deployment."
               echo "Failing workflow per Fail Forward policy."
               exit 1

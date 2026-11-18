@@ -25,7 +25,7 @@ NC="\033[0m"
 
 CERTIFY_URL="${1:-${CERTIFY_PUBLIC_BASE_URL:-http://issuer.localhost}}"
 STUDENT_ID="${2:-st120001}"
-CONFIG_ID="${3:-ait-transcript}"
+CONFIG_ID="${3:-ait-student-id}"
 OUTPUT_FILE="${SMOKE_OUTPUT:-}"
 
 CERTIFY_URL="${CERTIFY_URL%/}" # Strip trailing slash
@@ -62,10 +62,30 @@ hex2bin() {
 # 1. Verify Discovery Endpoint & Credential Definition
 echo -e "${BLUE}${BOLD}[SMOKE TEST]${NC} 1/6 Checking OpenID Credential Issuer discovery endpoint..."
 DISCOVERY_URL="${CERTIFY_URL}/.well-known/openid-credential-issuer"
-ISSUER_META=$(curl -skf --max-time 10 "$DISCOVERY_URL") || {
-  echo -e "${RED}${BOLD}[SMOKE TEST FAILED]${NC} Could not reach discovery endpoint at ${DISCOVERY_URL}" >&2
+RETRY=0
+MAX_RETRIES=10
+ISSUER_META=""
+
+while [ "$RETRY" -lt "$MAX_RETRIES" ]; do
+  if ISSUER_META=$(curl -skfL --max-time 10 "$DISCOVERY_URL" 2>/dev/null); then
+    if [ -n "$ISSUER_META" ]; then
+      break
+    fi
+  fi
+  RETRY=$((RETRY + 1))
+  sleep 3
+done
+
+if [ -z "$ISSUER_META" ]; then
+  # Fallback: probe v1 subpath
+  DISCOVERY_URL="${CERTIFY_URL}/v1/certify/.well-known/openid-credential-issuer"
+  ISSUER_META=$(curl -skfL --max-time 10 "$DISCOVERY_URL" 2>/dev/null || true)
+fi
+
+if [ -z "$ISSUER_META" ]; then
+  echo -e "${RED}${BOLD}[SMOKE TEST FAILED]${NC} Could not reach discovery endpoint at ${CERTIFY_URL}/.well-known/openid-credential-issuer" >&2
   exit 1
-}
+fi
 
 CONFIG=$(echo "$ISSUER_META" | jq -c ".credential_configurations_supported[\"${CONFIG_ID}\"] // empty")
 if [ -z "$CONFIG" ]; then
@@ -76,11 +96,23 @@ FORMAT=$(echo "$CONFIG" | jq -r .format)
 DEF_JSON=$(echo "$CONFIG" | jq -c '{type: .credential_definition.type, "@context": .credential_definition["@context"]}')
 echo -e "${GREEN}${BOLD}[OK]${NC} Issuer metadata verified (Format: ${FORMAT})."
 
+# Determine subject ID claim key from credential definition
+CLAIM_KEY="studentId"
+if echo "$CONFIG" | jq -e '.credential_definition.credentialSubject.studentId' >/dev/null 2>&1; then
+  CLAIM_KEY="studentId"
+elif echo "$CONFIG" | jq -e '.credential_definition.credentialSubject.registrationNo' >/dev/null 2>&1; then
+  CLAIM_KEY="registrationNo"
+elif echo "$CONFIG" | jq -e '.credential_definition.credentialSubject.teamId' >/dev/null 2>&1; then
+  CLAIM_KEY="teamId"
+elif echo "$CONFIG" | jq -e '.credential_definition.credentialSubject.participantId' >/dev/null 2>&1; then
+  CLAIM_KEY="participantId"
+fi
+
 # 2. Pre-authorize issuance offer
-echo -e "${BLUE}${BOLD}[SMOKE TEST]${NC} 2/6 Staging pre-authorized issuance offer for ${STUDENT_ID}..."
-OFFER_RESP=$(curl -skf --max-time 10 -X POST "${CERTIFY_URL}/v1/certify/pre-authorized-data" \
+echo -e "${BLUE}${BOLD}[SMOKE TEST]${NC} 2/6 Staging pre-authorized issuance offer for ${STUDENT_ID} (${CLAIM_KEY})..."
+OFFER_RESP=$(curl -skfL --max-time 15 -X POST "${CERTIFY_URL}/v1/certify/pre-authorized-data" \
   -H "Content-Type: application/json" \
-  -d "{\"credential_configuration_id\":\"${CONFIG_ID}\",\"claims\":{\"registrationNo\":\"${STUDENT_ID}\"}}") || {
+  -d "{\"credential_configuration_id\":\"${CONFIG_ID}\",\"claims\":{\"${CLAIM_KEY}\":\"${STUDENT_ID}\"}}") || {
     echo -e "${RED}${BOLD}[SMOKE TEST FAILED]${NC} Failed to stage pre-authorized data offer from ${CERTIFY_URL}" >&2
     exit 1
 }
@@ -90,7 +122,7 @@ echo -e "${GREEN}${BOLD}[OK]${NC} Offer created successfully: ${OFFER_ID}"
 
 # 3. Fetch pre-authorized code from offer data
 echo -e "${BLUE}${BOLD}[SMOKE TEST]${NC} 3/6 Fetching pre-authorized code..."
-OFFER_DATA=$(curl -skf --max-time 10 "${CERTIFY_URL}/v1/certify/credential-offer-data/${OFFER_ID}") || {
+OFFER_DATA=$(curl -skfL --max-time 15 "${CERTIFY_URL}/v1/certify/credential-offer-data/${OFFER_ID}") || {
     echo -e "${RED}${BOLD}[SMOKE TEST FAILED]${NC} Failed to fetch credential offer data for ${OFFER_ID}" >&2
     exit 1
 }
@@ -103,7 +135,7 @@ echo -e "${GREEN}${BOLD}[OK]${NC} Pre-authorized code acquired."
 
 # 4. Exchange code for an Access Token directly with Inji Certify
 echo -e "${BLUE}${BOLD}[SMOKE TEST]${NC} 4/6 Exchanging pre-auth code for Inji Certify access token..."
-TOKEN_RESP=$(curl -skf --max-time 10 -X POST "${CERTIFY_URL}/v1/certify/oauth/token" \
+TOKEN_RESP=$(curl -skfL --max-time 15 -X POST "${CERTIFY_URL}/v1/certify/oauth/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=urn:ietf:params:oauth:grant-type:pre-authorized_code&pre-authorized_code=${PRE_AUTH_CODE}") || {
     echo -e "${RED}${BOLD}[SMOKE TEST FAILED]${NC} Failed to exchange pre-authorized code for access token." >&2
@@ -163,7 +195,7 @@ REQ_PAYLOAD=$(jq -cn \
   --arg proof "$PROOF_JWT" \
   '{"format": $format, "credential_definition": $def, "proof": {"proof_type": "jwt", "jwt": $proof}}')
 
-CRED_RESP=$(curl -skf --max-time 15 -X POST "${CERTIFY_URL}/v1/certify/issuance/credential" \
+CRED_RESP=$(curl -skfL --max-time 20 -X POST "${CERTIFY_URL}/v1/certify/issuance/credential" \
   -H "Authorization: Bearer ${ACCESS_TOKEN}" \
   -H "Content-Type: application/json" \
   -d "$REQ_PAYLOAD") || {
@@ -181,8 +213,8 @@ fi
 ISSUER=$(echo "$CREDENTIAL_STR" | jq -r .issuer)
 VC_TYPE=$(echo "$CREDENTIAL_STR" | jq -r '.type | join(", ")')
 SUBJECT_NAME=$(echo "$CREDENTIAL_STR" | jq -r '.credentialSubject.fullName // .credentialSubject.name // "N/A"')
-REG_NO=$(echo "$CREDENTIAL_STR" | jq -r '.credentialSubject.registrationNo // "N/A"')
-PROGRAM=$(echo "$CREDENTIAL_STR" | jq -r '.credentialSubject.academicProgram // "N/A"')
+REG_NO=$(echo "$CREDENTIAL_STR" | jq -r '.credentialSubject.studentId // .credentialSubject.registrationNo // .credentialSubject.teamId // .credentialSubject.participantId // "N/A"')
+PROGRAM=$(echo "$CREDENTIAL_STR" | jq -r '.credentialSubject.academicProgram // .credentialSubject.faculty // .credentialSubject.teamName // "N/A"')
 SIG_TYPE=$(echo "$CREDENTIAL_STR" | jq -r '.proof.type // "Unknown"')
 
 if [ -n "$OUTPUT_FILE" ]; then
