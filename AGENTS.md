@@ -139,8 +139,8 @@ Reference guides:
    ```
 3. Extract live `did:key` and update `.env`:
    ```bash
-   LIVE_DID=$(curl -sf https://issuer.dpi.ait.ac.th/.well-known/did.json | jq -r .id)
-   echo "Live Issuer DID: $LIVE_DID"
+   LIVE_DID=$(curl -sf https://issuer.dpi.ait.ac.th/.well-known/did.json | jq -r '"did:key:" + .verificationMethod[0].publicKeyMultibase')
+   echo "Live Keystore-derived Issuer DID: $LIVE_DID"
    ```
 4. Verify discovery endpoint reports `StudentIdCredential` and `AitIdCredential`:
    ```bash

@@ -129,24 +129,36 @@ Certify loads its Ed25519 private key from the keystore mounted into `/home/inji
   ```
   *(For production environments using a Hardware Security Module, `KEYSTORE_TYPE=PKCS11` is used).*
 
-### C. How to Configure `CERTIFY_DID`
-On startup, Inji Certify loads the keystore and exposes its live public DID document at `GET /.well-known/did.json`:
+### C. How to Configure `CERTIFY_DID` and Keystore Key Derivation
 
-1. Start the Certify stack with default credentials.
-2. Query the live DID document from Certify:
-   ```bash
-   curl -sf https://issuer.dpi.ait.ac.th/.well-known/did.json | jq -r .id
-   # or locally via port 9091:
-   curl -sf http://localhost:9091/.well-known/did.json | jq -r .id
-   ```
-   *Example Output:*
-   ```text
-   did:key:z6MkphmKx3m71Yw4NqPvxM9tX5b8cK3L2rV7u8s9T1w2Z3a4
-   ```
-3. Copy this string and set it in `.env`:
-   ```ini
-   CERTIFY_DID=did:key:z6MkphmKx3m71Yw4NqPvxM9tX5b8cK3L2rV7u8s9T1w2Z3a4
-   ```
+> [!IMPORTANT]
+> **Understanding Certify's DID Document Architecture:**
+> In Inji Certify:
+> 1. **Cryptographic Public Key (Derived from Keystore)**: On startup, Certify loads the Ed25519 signing certificate from the keystore (`local.p12` under alias `CERTIFY_VC_SIGN_ED25519`), extracts the raw 32-byte public key, prepends the multicodec `0xed01`, and encodes it in Base58btc with prefix `z`. This is exposed dynamically inside the DID document at `.verificationMethod[0].publicKeyMultibase` (e.g. `z6MkhsC1EojKdBoLzPY2kL2mFLSMJbQVC83M2CsnYGwghcsE`).
+> 2. **DID Document Root Identifier (`.id`) & Controller**: Certify does **not** dynamically synthesize `.id` from the keystore key. Instead, it reads the configured `did_url` from the database table `certify.credential_config` (which `template-sync` populates from `${CERTIFY_DID}` in `.env`).
+> 
+> **Why `jq -r .id` alone causes a circular trap:**
+> If `CERTIFY_DID` in `.env` is set to the default placeholder (`did:key:z6MkpPLACEHOLDER...`), running `curl .../.well-known/did.json | jq -r .id` will merely return that same placeholder back to you!
+> 
+> **The Canonical Derivation Rule:**
+> Per the W3C `did:key` specification, the issuer's canonical `did:key` identifier is:
+> `did:key:<publicKeyMultibase>`
+> You extract the genuine live key from the running container by querying the verification method multibase key:
+> ```bash
+> curl -sf https://issuer.dpi.ait.ac.th/.well-known/did.json | jq -r '"did:key:" + .verificationMethod[0].publicKeyMultibase'
+> # or locally via port 9091:
+> curl -sf http://localhost:9091/.well-known/did.json | jq -r '"did:key:" + .verificationMethod[0].publicKeyMultibase'
+> ```
+> *Example Output:*
+> ```text
+> did:key:z6MkhsC1EojKdBoLzPY2kL2mFLSMJbQVC83M2CsnYGwghcsE
+> ```
+> 
+> Set this derived key in `.env`:
+> ```ini
+> CERTIFY_DID=did:key:z6MkhsC1EojKdBoLzPY2kL2mFLSMJbQVC83M2CsnYGwghcsE
+> ```
+> Once updated and applied, `template-sync` updates the database, aligning `.id`, `.controller`, and the VC `issuer.id` with the actual cryptographic signing key in `local.p12`.
 
 ### D. How `CERTIFY_DID` is Applied
 Once set in `.env`:
@@ -226,7 +238,7 @@ CERTIFY_PUBLIC_BASE_URL=https://issuer.dpi.ait.ac.th
 VDR_BASE_URL=https://vdr.dpi.ait.ac.th
 
 # Cryptographic Identity & Keystore
-CERTIFY_DID=did:key:z6MkpYourActualIssuerDidKeyHere
+CERTIFY_DID=did:key:z6MkhsC1EojKdBoLzPY2kL2mFLSMJbQVC83M2CsnYGwghcsE
 KEYSTORE_TYPE=PKCS12
 KEYSTORE_PASS=local
 
@@ -287,14 +299,17 @@ Or start the containers manually via Docker Compose:
 docker compose -f compose.certify.yaml -f compose.trust.yaml -f compose.traefik.yaml up -d
 ```
 
-### Step 4: Extract the Live `did:key` and Bind to `.env`
-Query Certify's DID document to retrieve the live `did:key`:
+### Step 4: Extract the Live Keystore `did:key` and Bind to `.env`
+Query Certify's DID document to retrieve the genuine public key derived from the keystore (`local.p12`):
 ```bash
-LIVE_DID=$(curl -sf https://issuer.dpi.ait.ac.th/.well-known/did.json | jq -r .id)
-echo "Live Issuer DID: $LIVE_DID"
+LIVE_DID=$(curl -sf https://issuer.dpi.ait.ac.th/.well-known/did.json | jq -r '"did:key:" + .verificationMethod[0].publicKeyMultibase')
+echo "Live Keystore-derived Issuer DID: $LIVE_DID"
 ```
 
-If this differs from what is in `.env`, update `CERTIFY_DID` in `.env`.
+> [!NOTE]
+> Do not query `.id` directly to determine the live key. As explained in [Section 3.C](#c-how-to-configure-certify_did-and-keystore-key-derivation), querying `.id` merely echoes back whatever `CERTIFY_DID` is currently configured in `.env`. The genuine cryptographic public key resides at `.verificationMethod[0].publicKeyMultibase`.
+
+If this differs from what is currently set in `.env` (e.g. if `.env` still holds the bootstrap placeholder `did:key:z6MkpPLACEHOLDER...`), update `CERTIFY_DID` in `.env`:
 > [!WARNING]
 > **Never use `sed -i` on bind-mounted files!** Docker Desktop bind-mounts track inode numbers; `sed -i` replaces the inode, causing running containers to see stale configuration. Always rewrite in-place:
 ```bash

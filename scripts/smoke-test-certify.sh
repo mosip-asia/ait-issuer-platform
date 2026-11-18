@@ -101,7 +101,16 @@ DID_RESP=$(curl -skL --max-time 10 "$DID_URL" 2>/dev/null || curl -skL --max-tim
 if [ -n "$DID_RESP" ]; then
   ISSUER_DID=$(echo "$DID_RESP" | jq -r '.id // "UNKNOWN"')
   KEY_COUNT=$(echo "$DID_RESP" | jq -r '(.verificationMethod // []) | length')
-  echo -e "  ${GREEN}✓${NC} DID Document: ${CYAN}${ISSUER_DID}${NC}"
+  PUB_KEY_MULTI=$(echo "$DID_RESP" | jq -r '.verificationMethod[0].publicKeyMultibase // empty' 2>/dev/null || echo "")
+  echo -e "  ${GREEN}✓${NC} Configured DID: ${CYAN}${ISSUER_DID}${NC}"
+  if [ -n "$PUB_KEY_MULTI" ]; then
+    DERIVED_DID="did:key:${PUB_KEY_MULTI}"
+    echo -e "  ${GREEN}✓${NC} Keystore Derived did:key: ${CYAN}${DERIVED_DID}${NC}"
+    if [[ "$ISSUER_DID" == *"PLACEHOLDER"* ]] || [ "$ISSUER_DID" != "$DERIVED_DID" ]; then
+      echo -e "  ${YELLOW}ℹ${NC} Notice: Configured CERTIFY_DID differs from live keystore did:key."
+      echo -e "    Update CERTIFY_DID in .env to: ${BOLD}${DERIVED_DID}${NC}"
+    fi
+  fi
   echo -e "  ${GREEN}✓${NC} Verification Methods: ${KEY_COUNT} public key(s) registered"
 else
   echo -e "  ${YELLOW}⚠${NC} Could not fetch DID document from ${DID_URL} (may be unmapped on public ingress)"

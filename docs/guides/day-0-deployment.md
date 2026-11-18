@@ -240,7 +240,7 @@ TRUSTED_VCGA_URLS=https://vcga.dpi.ait.ac.th
 # ------------------------------------------------------------------------------
 # 2. Cryptographic Identity & Keystore
 # ------------------------------------------------------------------------------
-CERTIFY_DID=did:key:z6MkpPLACEHOLDERreplaceMeViaBootstrapDidRefreshScript1
+CERTIFY_DID=did:key:z6MkhsC1EojKdBoLzPY2kL2mFLSMJbQVC83M2CsnYGwghcsE
 KEYSTORE_TYPE=PKCS12
 KEYSTORE_PASS=local
 
