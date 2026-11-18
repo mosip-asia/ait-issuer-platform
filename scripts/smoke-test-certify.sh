@@ -31,6 +31,14 @@ YELLOW="\033[1;33m"
 CYAN="\033[0;36m"
 NC="\033[0m"
 
+# Auto-detect CERTIFY_URL from .env if not passed as an argument
+if [ -z "${1:-}" ] && [ -z "${CERTIFY_PUBLIC_BASE_URL:-}" ] && [ -f .env ]; then
+  ENV_BASE_URL="$(grep -E '^[[:space:]]*CERTIFY_PUBLIC_BASE_URL=' .env 2>/dev/null | cut -d '=' -f2- | tr -d ' "\r' || true)"
+  if [ -n "$ENV_BASE_URL" ]; then
+    CERTIFY_PUBLIC_BASE_URL="$ENV_BASE_URL"
+  fi
+fi
+
 CERTIFY_URL="${1:-${CERTIFY_PUBLIC_BASE_URL:-http://issuer.localhost}}"
 CERTIFY_URL="${CERTIFY_URL%/}" # Strip trailing slash
 
@@ -96,9 +104,9 @@ echo -e "${BLUE}${BOLD}[2/4] Checking Cryptographic Identity (DID & JWKS)...${NC
 
 # Check DID Document: try root ingress /.well-known/did.json first, fallback to /v1/certify/...
 DID_URL="${CERTIFY_URL}/.well-known/did.json"
-DID_RESP=$(curl -skL --max-time 10 "$DID_URL" 2>/dev/null || curl -skL --max-time 10 "${CERTIFY_URL}/v1/certify/.well-known/did.json" 2>/dev/null || echo "")
+DID_RESP=$(curl -skfL --max-time 10 "$DID_URL" 2>/dev/null || curl -skfL --max-time 10 "${CERTIFY_URL}/v1/certify/.well-known/did.json" 2>/dev/null || echo "")
 
-if [ -n "$DID_RESP" ]; then
+if [ -n "$DID_RESP" ] && echo "$DID_RESP" | jq -e . >/dev/null 2>&1; then
   ISSUER_DID=$(echo "$DID_RESP" | jq -r '.id // "UNKNOWN"')
   KEY_COUNT=$(echo "$DID_RESP" | jq -r '(.verificationMethod // []) | length')
   PUB_KEY_MULTI=$(echo "$DID_RESP" | jq -r '.verificationMethod[0].publicKeyMultibase // empty' 2>/dev/null || echo "")
@@ -113,7 +121,8 @@ if [ -n "$DID_RESP" ]; then
   fi
   echo -e "  ${GREEN}✓${NC} Verification Methods: ${KEY_COUNT} public key(s) registered"
 else
-  echo -e "  ${YELLOW}⚠${NC} Could not fetch DID document from ${DID_URL} (may be unmapped on public ingress)"
+  echo -e "  ${RED}✗${NC} Could not fetch valid JSON DID document from ${DID_URL}"
+  FAILED=1
 fi
 
 # Check JWKS Key Set
@@ -138,9 +147,9 @@ echo ""
 echo -e "${BLUE}${BOLD}[3/4] Checking OpenID4VCI Discovery & Configured VCs...${NC}"
 
 DISCOVERY_URL="${CERTIFY_URL}/.well-known/openid-credential-issuer"
-DISCOVERY_RESP=$(curl -skL --max-time 10 "$DISCOVERY_URL" 2>/dev/null || curl -skL --max-time 10 "${CERTIFY_URL}/v1/certify/.well-known/openid-credential-issuer" 2>/dev/null || echo "")
+DISCOVERY_RESP=$(curl -skfL --max-time 10 "$DISCOVERY_URL" 2>/dev/null || curl -skfL --max-time 10 "${CERTIFY_URL}/v1/certify/.well-known/openid-credential-issuer" 2>/dev/null || echo "")
 
-if [ -n "$DISCOVERY_RESP" ]; then
+if [ -n "$DISCOVERY_RESP" ] && echo "$DISCOVERY_RESP" | jq -e . >/dev/null 2>&1; then
   CRED_ISSUER=$(echo "$DISCOVERY_RESP" | jq -r '.credential_issuer // "N/A"')
   CRED_ENDPOINT=$(echo "$DISCOVERY_RESP" | jq -r '.credential_endpoint // "N/A"')
   AUTH_SERVERS=$(echo "$DISCOVERY_RESP" | jq -r '(.authorization_servers // []) | join(", ")')
