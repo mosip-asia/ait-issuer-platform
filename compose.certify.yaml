@@ -95,6 +95,7 @@ services:
         condition: service_healthy
     volumes:
       - ./deploy/${INSTALLATION}/certify/credentials:/app/config/credentials:ro
+      - ./deploy/${INSTALLATION}/private_key/CERTIFY_PKCS12:/app/keys/CERTIFY_PKCS12:ro
     environment:
       - POSTGRES_HOST=database
       - POSTGRES_PORT=5432

@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from did import generate_new_keystore, pubkey_to_did_key, extract_from_pem
+from did import generate_new_keystore, pubkey_to_did_key, extract_from_pem, extract_from_p12
 
 
 def test_pubkey_to_did_key_known_vector():
@@ -32,6 +32,10 @@ def test_generate_new_keystore_and_pem_extraction():
         assert p12_path.stat().st_size > 0
         assert (p12_path.stat().st_mode & 0o777) == 0o644
         assert did.startswith("did:key:z6Mk")
+
+        # Verify extract_from_p12 extracts the exact same did:key
+        did_from_p12 = extract_from_p12(p12_path, password="secret")
+        assert did_from_p12 == did
         print("PASS test_generate_new_keystore_and_pem_extraction")
 
 

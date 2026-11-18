@@ -126,6 +126,47 @@ if [ ! -f .env ]; then
   exit 1
 fi
 
+# 1b. Synchronize Keystore & CERTIFY_DID in .env
+KEYSTORE_DIR="deploy/${INSTALLATION}/private_key/CERTIFY_PKCS12"
+KEYSTORE_FILE="${KEYSTORE_DIR}/local.p12"
+
+if [ ! -f "$KEYSTORE_FILE" ]; then
+  log_info "No signing keystore found at ${KEYSTORE_FILE}."
+  log_info "Auto-generating initial Ed25519 signing keypair for ${INSTALLATION}..."
+  mkdir -p "$KEYSTORE_DIR"
+  if [ -x ".venv/bin/tools" ]; then
+    .venv/bin/tools did --generate "$KEYSTORE_FILE" >/dev/null 2>&1 || true
+  elif command -v uv >/dev/null 2>&1; then
+    uv run tools did --generate "$KEYSTORE_FILE" >/dev/null 2>&1 || true
+  elif command -v python3 >/dev/null 2>&1 && [ -f "src/tools/did.py" ]; then
+    python3 src/tools/did.py --generate "$KEYSTORE_FILE" >/dev/null 2>&1 || true
+  elif command -v docker >/dev/null 2>&1; then
+    docker run --rm --user "$(id -u):$(id -g)" -v "$(pwd):/work" -w /work "ghcr.io/mosip-asia/ait-vc:${IMAGE_TAG:-latest}" tools did --generate "$KEYSTORE_FILE" >/dev/null 2>&1 || true
+  fi
+fi
+
+if [ -f "$KEYSTORE_FILE" ]; then
+  DERIVED_DID=""
+  if [ -x ".venv/bin/tools" ]; then
+    DERIVED_DID="$(.venv/bin/tools did --p12 "$KEYSTORE_FILE" 2>/dev/null || true)"
+  elif command -v uv >/dev/null 2>&1; then
+    DERIVED_DID="$(uv run tools did --p12 "$KEYSTORE_FILE" 2>/dev/null || true)"
+  elif command -v python3 >/dev/null 2>&1 && [ -f "src/tools/did.py" ]; then
+    DERIVED_DID="$(python3 src/tools/did.py --p12 "$KEYSTORE_FILE" 2>/dev/null || true)"
+  elif command -v docker >/dev/null 2>&1; then
+    DERIVED_DID="$(docker run --rm --user "$(id -u):$(id -g)" -v "$(pwd):/work" -w /work "ghcr.io/mosip-asia/ait-vc:${IMAGE_TAG:-latest}" tools did --p12 "$KEYSTORE_FILE" 2>/dev/null || true)"
+  fi
+
+  if [ -n "$DERIVED_DID" ]; then
+    CURRENT_ENV_DID="$(grep -E '^[[:space:]]*CERTIFY_DID=' .env 2>/dev/null | cut -d '=' -f2 | tr -d ' "\r' || true)"
+    if [ "$CURRENT_ENV_DID" != "$DERIVED_DID" ]; then
+      log_info "Synchronizing CERTIFY_DID in .env with live keystore: ${DERIVED_DID}"
+      update_env_var ".env" "CERTIFY_DID" "$DERIVED_DID"
+    fi
+    export CERTIFY_DID="$DERIVED_DID"
+  fi
+fi
+
 log_info "Checking environment configuration against .env.example..."
 if ! bash scripts/check-env.sh; then
   log_err ".env configuration check failed. Update .env before deploying."

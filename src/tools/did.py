@@ -92,6 +92,24 @@ def query_running_certify(url: str) -> str:
     raise RuntimeError(f"No Ed25519 signing key found at {url}")
 
 
+def extract_from_p12(p12_path: str | Path, password: str = "local") -> str:
+    """Extract did:key from PKCS12 keystore file."""
+    p12_path = Path(p12_path).resolve()
+    if not p12_path.exists():
+        raise FileNotFoundError(f"Keystore file not found: {p12_path}")
+
+    res = subprocess.run(
+        ["openssl", "pkcs12", "-in", str(p12_path), "-nodes", "-passin", f"pass:{password}"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    with tempfile.NamedTemporaryFile("w") as tf:
+        tf.write(res.stdout)
+        tf.flush()
+        return extract_from_pem(tf.name)
+
+
 def extract_from_pem(pem_path: str | Path) -> str:
     """Extract did:key from PEM public key or certificate."""
     pem_path = str(pem_path)
@@ -193,6 +211,7 @@ def main():
         description="Derive or generate did:key identifiers for Inji Certify"
     )
     parser.add_argument("target", nargs="?", default="", help="Certify URL (e.g. http://localhost:9091)")
+    parser.add_argument("--p12", help="Path to PKCS12 keystore file (e.g. deploy/ait/private_key/CERTIFY_PKCS12/local.p12)")
     parser.add_argument("--pem", help="Path to PEM public key or certificate file")
     parser.add_argument("--generate", help="Output path to generate a new PKCS12 keystore (e.g. deploy/ait/private_key/CERTIFY_PKCS12/local.p12)")
     parser.add_argument("--password", default="local", help="Keystore password (default: local)")
@@ -207,6 +226,11 @@ def main():
         print(f"     Derived CERTIFY_DID: {did}\n")
         print("Configure this value in your .env file:")
         print(f"  CERTIFY_DID={did}")
+        return
+
+    if args.p12:
+        did = extract_from_p12(args.p12, args.password)
+        print(did)
         return
 
     if args.pem:

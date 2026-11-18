@@ -88,7 +88,33 @@ def load_credential_configs(creds_dir):
 
     vdr_base = os.getenv("VDR_BASE_URL") or "http://vdr.localhost"
     cdn_base = os.getenv("CDN_BASE_URL") or vdr_base
-    certify_did = os.getenv("CERTIFY_DID") or "did:key:z6MkpPLACEHOLDERreplaceMeViaBootstrapDidRefreshScript1"
+
+    # Auto-detect CERTIFY_DID directly from local.p12 keystore if available
+    certify_did = os.getenv("CERTIFY_DID")
+    if not certify_did or "PLACEHOLDER" in certify_did:
+        keystore_path = os.getenv("KEYSTORE_PATH")
+        candidates = []
+        if keystore_path:
+            candidates.append(Path(keystore_path))
+        candidates.extend([
+            Path("/app/keys/CERTIFY_PKCS12/local.p12"),
+            creds_dir.parent.parent / "private_key" / "CERTIFY_PKCS12" / "local.p12",
+        ])
+        for cand in candidates:
+            if cand.exists() and cand.is_file():
+                try:
+                    from tools.did import extract_from_p12
+                    keystore_pass = os.getenv("KEYSTORE_PASS", "local")
+                    extracted = extract_from_p12(cand, password=keystore_pass)
+                    if extracted and extracted.startswith("did:key:"):
+                        certify_did = extracted
+                        print(f"[+] template-sync auto-detected did:key from keystore ({cand}): {certify_did}")
+                        break
+                except Exception as e:
+                    print(f"[-] Warning: Failed to extract did:key from {cand}: {e}", file=sys.stderr)
+
+    if not certify_did:
+        certify_did = "did:key:z6MkpPLACEHOLDERreplaceMeViaBootstrapDidRefreshScript1"
 
     substitutions = {
         "VDR_BASE_URL": vdr_base.rstrip("/"),

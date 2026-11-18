@@ -201,6 +201,10 @@ def did_cmd(
         Optional[Path],
         typer.Option("--generate", "-g", help="Output path to generate a fresh PKCS12 keystore"),
     ] = None,
+    p12: Annotated[
+        Optional[Path],
+        typer.Option("--p12", help="Path to PKCS12 keystore file to derive did:key from"),
+    ] = None,
     pem: Annotated[
         Optional[Path],
         typer.Option("--pem", "-p", help="Path to PEM public key or certificate file"),
@@ -227,6 +231,15 @@ def did_cmd(
         typer.echo("Configure this value in your .env file:")
         typer.echo(f"  CERTIFY_DID={did_str}")
         return
+
+    if p12:
+        try:
+            did_str = did_mod.extract_from_p12(p12, password)
+            typer.echo(did_str)
+            return
+        except Exception as e:
+            typer.secho(f"[ERROR] Failed to extract from {p12}: {e}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(code=1)
 
     if pem:
         did_str = did_mod.extract_from_pem(pem)
