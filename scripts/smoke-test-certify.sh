@@ -55,7 +55,7 @@ fetch_json() {
   local url="$1"
   local desc="$2"
   local resp
-  if ! resp=$(curl -sf --max-time 10 "$url" 2>/dev/null); then
+  if ! resp=$(curl -skfL --max-time 10 "$url" 2>/dev/null); then
     echo -e "${RED}${BOLD}[FAILED]${NC} Could not reach ${desc} at: ${url}" >&2
     return 1
   fi
@@ -92,7 +92,7 @@ echo -e "${BLUE}${BOLD}[2/4] Checking Cryptographic Identity (DID & JWKS)...${NC
 
 # Check DID Document: try root ingress /.well-known/did.json first, fallback to /v1/certify/...
 DID_URL="${CERTIFY_URL}/.well-known/did.json"
-DID_RESP=$(curl -sf --max-time 10 "$DID_URL" 2>/dev/null || curl -sf --max-time 10 "${CERTIFY_URL}/v1/certify/.well-known/did.json" 2>/dev/null || echo "")
+DID_RESP=$(curl -skL --max-time 10 "$DID_URL" 2>/dev/null || curl -skL --max-time 10 "${CERTIFY_URL}/v1/certify/.well-known/did.json" 2>/dev/null || echo "")
 
 if [ -n "$DID_RESP" ]; then
   ISSUER_DID=$(echo "$DID_RESP" | jq -r '.id // "UNKNOWN"')
@@ -125,7 +125,7 @@ echo ""
 echo -e "${BLUE}${BOLD}[3/4] Checking OpenID4VCI Discovery & Configured VCs...${NC}"
 
 DISCOVERY_URL="${CERTIFY_URL}/.well-known/openid-credential-issuer"
-DISCOVERY_RESP=$(curl -sf --max-time 10 "$DISCOVERY_URL" 2>/dev/null || curl -sf --max-time 10 "${CERTIFY_URL}/v1/certify/.well-known/openid-credential-issuer" 2>/dev/null || echo "")
+DISCOVERY_RESP=$(curl -skL --max-time 10 "$DISCOVERY_URL" 2>/dev/null || curl -skL --max-time 10 "${CERTIFY_URL}/v1/certify/.well-known/openid-credential-issuer" 2>/dev/null || echo "")
 
 if [ -n "$DISCOVERY_RESP" ]; then
   CRED_ISSUER=$(echo "$DISCOVERY_RESP" | jq -r '.credential_issuer // "N/A"')
@@ -172,7 +172,7 @@ fi
 echo ""
 echo -e "${BLUE}${BOLD}[4/4] Checking Revocation Registry (Status List API)...${NC}"
 STATUS_URL="${CERTIFY_URL}/v1/certify/credentials/status-list/1"
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$STATUS_URL" 2>/dev/null || echo "000")
+HTTP_CODE=$(curl -skL -o /dev/null -w "%{http_code}" --max-time 5 "$STATUS_URL" 2>/dev/null || echo "000")
 HTTP_CODE="${HTTP_CODE:0:3}"
 
 if [ "$HTTP_CODE" = "200" ]; then

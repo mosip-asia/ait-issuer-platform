@@ -246,13 +246,9 @@ if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
   exit 1
 fi
 
-# 7. Run post-deployment issuance smoke test
-log_info "Running post-deployment issuance smoke test..."
-if [ "$INSTALLATION" = "hackathon" ]; then
-  SMOKE_CMD="bash scripts/smoke-test.sh ${CERTIFY_URL} hack-2026-0001 developer-passport"
-else
-  SMOKE_CMD="bash scripts/smoke-test.sh ${CERTIFY_URL} st120001 ait-student-id"
-fi
+# 7. Run post-deployment smoke test
+log_info "Running post-deployment smoke test..."
+SMOKE_CMD="bash scripts/smoke-test-certify.sh ${CERTIFY_URL}"
 if ! eval "$SMOKE_CMD"; then
   log_err "Post-deployment smoke test failed. Recent logs:"
   docker compose logs --tail 50 certify
