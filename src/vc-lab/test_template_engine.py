@@ -50,12 +50,27 @@ def test_render_transcript_template() -> None:
     assert "Nara Wattanakul" in content
     assert "st120001" in content
     assert "Master of Engineering" in content
-    assert "AIT_globe.png" in content
     assert "data:image/png;base64," in content
+    # Mimoto's variables only: no $terms, so the course body is courseList, and no background.
+    assert "Advanced Algorithms — A" in content
+    assert 'class="bg"' not in content
     assert "#macro" not in content, "Macro definitions must be stripped"
     assert "#claimValue" not in content, "#claimValue calls must be replaced"
     assert "#end" not in content, "No dangling #end tags should remain"
     assert "#if" not in content, "No dangling #if tags should remain"
+
+
+def test_render_transcript_semester_table() -> None:
+    claims = engine.load_student_claims("st120001")
+    ctx = engine.lab_context(claims, background_url="/bg.jpg")
+    content = engine.render_velocity_template(TRANSCRIPT_TMPL.read_text(encoding="utf-8"), ctx, claims)
+
+    assert "August Semester 2024" in content and "January Semester 2025" in content
+    assert "<td style=\"padding-left:6.8pt;\">CS601</td>" in content
+    assert ">3.78</td>" in content, "Each term closes with its credits, GPA and cumulative GPA"
+    assert "Advanced Algorithms — A" not in content, "The courseList fallback must not render beside the table"
+    assert '<img class="bg" src="/bg.jpg"' in content
+    assert "$t." not in content and "$c." not in content and "#foreach" not in content
 
 
 def test_render_base_credential_template() -> None:
@@ -92,18 +107,51 @@ def test_custom_claims_inline() -> None:
     assert "First Place - Verifiable Credentials Track" in rendered
 
 
+def test_foreach_over_nested_lists() -> None:
+    template_str = (
+        "#foreach($t in $terms)[$t.term:"
+        "#foreach($c in $t.courses)<$c.no #if($c.grade)$c.grade#else-#end>#end]#end"
+    )
+    ctx = {"terms": [
+        {"term": "Aug 2016", "courses": [{"no": "CE70.11", "grade": "B+"}, {"no": "CE70.12", "grade": ""}]},
+        {"term": "Jan 2017", "courses": [{"no": "CE70.22", "grade": "A & B"}]},
+    ]}
+    rendered = engine.render_velocity_template(template_str, ctx, {})
+    assert rendered == "[Aug 2016:<CE70.11 B+><CE70.12 ->][Jan 2017:<CE70.22 A &amp; B>]", rendered
+
+
+def test_foreach_over_missing_list_falls_back() -> None:
+    # Mimoto never passes $terms; the #else branch must win and no loop text may leak.
+    template_str = "#if($terms)#foreach($t in $terms)$t.term#end#else#claimValue('courseList')#end"
+    rendered = engine.render_velocity_template(template_str, {}, {"courseList": "A — B"})
+    assert rendered == "A — B", rendered
+
+
+def test_longer_variable_names_win() -> None:
+    rendered = engine.render_velocity_template("$title|$titleName", {"title": "x", "titleName": "y"}, {})
+    assert rendered == "x|y", rendered
+
+
 def main() -> None:
+    test_foreach_over_nested_lists()
+    print("PASS test_foreach_over_nested_lists")
+    test_foreach_over_missing_list_falls_back()
+    print("PASS test_foreach_over_missing_list_falls_back")
+    test_longer_variable_names_win()
+    print("PASS test_longer_variable_names_win")
     test_generate_mock_qr_png_base64()
     print("PASS test_generate_mock_qr_png_base64")
     test_load_student_claims()
     print("PASS test_load_student_claims")
     test_render_transcript_template()
     print("PASS test_render_transcript_template")
+    test_render_transcript_semester_table()
+    print("PASS test_render_transcript_semester_table")
     test_render_base_credential_template()
     print("PASS test_render_base_credential_template")
     test_custom_claims_inline()
     print("PASS test_custom_claims_inline")
-    print("5 tests passed")
+    print("9 tests passed")
 
 
 if __name__ == "__main__":

@@ -12,20 +12,24 @@ Usage:
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import sys
+import zipfile
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import quote
 
-from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src" / "vc-lab"))
 sys.path.insert(0, str(REPO_ROOT / "mock" / "adapter"))
 
+import hardcopy  # noqa: E402
 import template_engine as pt  # noqa: E402
 
 app = FastAPI(
@@ -47,6 +51,12 @@ STUDENTS_FILE = Path(os.environ.get("STUDENTS_FILE", REPO_ROOT / "tests" / "fixt
 INSTALLATION = os.environ.get("INSTALLATION", "ait")
 VDR_BASE_URL = (os.environ.get("VDR_BASE_URL") or "http://vdr.localhost").rstrip("/")
 CDN_BASE_URL = (os.environ.get("CDN_BASE_URL") or VDR_BASE_URL).rstrip("/")
+DEFAULT_TEMPLATE = "AITUniversity-ait-transcript-template.html"
+
+# Uploaded backgrounds, by template name. Memory only, on purpose: a background (AIT's watermark, seal and
+# signature) is confidential, so it is never written to the bind-mounted, git-tracked or VDR-served folders,
+# and a restart forgets it. "Download template" is how a finished template and its background are kept.
+BACKGROUNDS: dict[str, hardcopy.Background] = {}
 
 
 class PreviewRequest(BaseModel):
@@ -173,79 +183,123 @@ def list_templates() -> list[dict[str, str]]:
     return templates
 
 
-@app.get("/preview", response_class=HTMLResponse)
-def preview_html(
-    template: str = Query("AITUniversity-ait-transcript-template.html", description="Template file name"),
-    student: str = Query("st120001", description="Student persona ID"),
-    degree: Optional[str] = Query(None, description="Degree ID"),
-) -> HTMLResponse:
-    """Render and return the Velocity credential template directly as HTML."""
-    target_path = None
+def _template_text(name: str) -> str:
+    """A template from the installation's templates, else the base ones; 404 if neither has it."""
     for d in [TEMPLATES_DIR, BASE_TEMPLATES_DIR]:
-        candidate = d / template
-        if candidate.exists():
-            target_path = candidate
-            break
+        candidate = d / name
+        if candidate.is_file() and candidate.parent == d:
+            return candidate.read_text(encoding="utf-8")
+    raise HTTPException(status_code=404, detail=f"Template {name} not found")
 
-    if not target_path or not target_path.exists():
-        raise HTTPException(status_code=404, detail=f"Template {template} not found")
 
+def _student_claims(student: str, degree: Optional[str] = None) -> dict[str, Any]:
     try:
-        claims = pt.load_student_claims(student_id=student, degree_id=degree, students_path=STUDENTS_FILE)
+        return pt.load_student_claims(student_id=student, degree_id=degree, students_path=STUDENTS_FILE)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error loading student {student}: {e}")
 
-    template_text = target_path.read_text(encoding="utf-8")
-    context = {
-        "titleName": "Asian Institute of Technology Credential",
-        "logoUrl": pt.DEFAULT_LOGO,
-        "qrCodeImage": pt.generate_mock_qr_png_base64(),
-        "textColor": "#000000",
-        "backgroundColor": "#FFFFFF",
-        "credentialValidity": -1,
-    }
 
-    rendered = pt.render_velocity_template(template_text, context, claims)
-    return HTMLResponse(content=rendered)
+def _background_url(template: str) -> Optional[str]:
+    bg = BACKGROUNDS.get(template)
+    if bg is None:
+        return None
+    # The rotation and size in the query make the browser fetch a changed background instead of its cached one.
+    return f"/api/background/preview.jpg?template={quote(template)}&v={bg.rotation}-{len(bg.original)}"
+
+
+@app.get("/preview", response_class=HTMLResponse)
+def preview_html(
+    template: str = Query(DEFAULT_TEMPLATE, description="Template file name"),
+    student: str = Query("st120001", description="Student persona ID"),
+    degree: Optional[str] = Query(None, description="Degree ID"),
+) -> HTMLResponse:
+    """Render the template as HTML, over the template's uploaded background when it has one."""
+    claims = _student_claims(student, degree)
+    context = pt.lab_context(claims, background_url=_background_url(template))
+    return HTMLResponse(content=pt.render_velocity_template(_template_text(template), context, claims))
+
+
+@app.get("/export.pdf")
+def export_pdf(
+    template: str = Query(DEFAULT_TEMPLATE, description="Template file name"),
+    student: str = Query("st120001", description="Student persona ID"),
+    degree: Optional[str] = Query(None, description="Degree ID"),
+) -> Response:
+    """Render the template to PDF with mock data; the uploaded background, if any, goes under page 1."""
+    claims = _student_claims(student, degree)
+    html = pt.render_velocity_template(_template_text(template), pt.lab_context(claims), claims)
+    pdf = hardcopy.render_pdf(html, BACKGROUNDS.get(template))
+    filename = f"{Path(template).stem}-{student}.pdf"
+    return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{filename}"'})
+
+
+@app.post("/api/background")
+async def set_background(
+    template: str = Form(DEFAULT_TEMPLATE),
+    rotation: int = Form(0),
+    file: Optional[UploadFile] = File(None),
+) -> dict[str, Any]:
+    """Upload a template's background (PDF, PNG or JPEG), or change the rotation of the one it has."""
+    _template_text(template)
+    if file is not None and file.filename:
+        filename, data = file.filename, await file.read()
+    elif template in BACKGROUNDS:
+        filename, data = BACKGROUNDS[template].filename, BACKGROUNDS[template].original
+    else:
+        raise HTTPException(status_code=400, detail="No file uploaded and this template has no background yet")
+    try:
+        BACKGROUNDS[template] = hardcopy.make_background(filename, data, rotation)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"template": template, "filename": filename, "rotation": rotation}
+
+
+@app.get("/api/background")
+def get_background(template: str = Query(DEFAULT_TEMPLATE)) -> dict[str, Any]:
+    bg = BACKGROUNDS.get(template)
+    return {"template": template, "filename": bg.filename if bg else None, "rotation": bg.rotation if bg else 0}
+
+
+@app.delete("/api/background")
+def delete_background(template: str = Query(DEFAULT_TEMPLATE)) -> dict[str, str]:
+    BACKGROUNDS.pop(template, None)
+    return {"template": template}
+
+
+@app.get("/api/background/preview.jpg")
+def background_preview(template: str = Query(DEFAULT_TEMPLATE)) -> Response:
+    bg = BACKGROUNDS.get(template)
+    if bg is None:
+        raise HTTPException(status_code=404, detail=f"Template {template} has no background")
+    return Response(bg.preview_jpeg, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/download")
+def download_template(template: str = Query(DEFAULT_TEMPLATE)) -> Response:
+    """The finished template as a zip: the template file, plus its background as uploaded and its rotation."""
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr(template, _template_text(template))
+        bg = BACKGROUNDS.get(template)
+        if bg is not None:
+            z.writestr(f"background/{bg.filename}", bg.original)
+            z.writestr("background/background.json", json.dumps({"file": bg.filename, "rotation": bg.rotation}, indent=2))
+    headers = {"Content-Disposition": f'attachment; filename="{Path(template).stem}.zip"'}
+    return Response(out.getvalue(), media_type="application/zip", headers=headers)
 
 
 @app.post("/api/preview")
 def api_preview(req: PreviewRequest) -> dict[str, str]:
     """Programmatic API to render a Velocity template with custom or student claims."""
-    template_text = ""
     if req.template_content:
         template_text = req.template_content
-    elif req.template_name:
-        for d in [TEMPLATES_DIR, BASE_TEMPLATES_DIR]:
-            candidate = d / req.template_name
-            if candidate.exists():
-                template_text = candidate.read_text(encoding="utf-8")
-                break
-        if not template_text:
-            raise HTTPException(status_code=404, detail=f"Template {req.template_name} not found")
     else:
-        # Default to transcript
-        default_file = TEMPLATES_DIR / "AITUniversity-ait-transcript-template.html"
-        if default_file.exists():
-            template_text = default_file.read_text(encoding="utf-8")
-        else:
-            template_text = "<html><body><h1>$titleName</h1><p>#claimValue('fullName')</p></body></html>"
-
-    claims = req.claims
-    if not claims:
-        claims = pt.load_student_claims(student_id=req.student_id or "st120001", students_path=STUDENTS_FILE)
-
-    context = {
-        "titleName": req.title,
-        "logoUrl": req.logo_url,
-        "qrCodeImage": pt.generate_mock_qr_png_base64(),
-        "textColor": req.text_color,
-        "backgroundColor": req.bg_color,
-        "credentialValidity": -1,
-    }
-
-    rendered = pt.render_velocity_template(template_text, context, claims)
-    return {"html": rendered}
+        template_text = _template_text(req.template_name or DEFAULT_TEMPLATE)
+    claims = req.claims or _student_claims(req.student_id or "st120001")
+    context = pt.lab_context(
+        claims, titleName=req.title, logoUrl=req.logo_url, textColor=req.text_color, backgroundColor=req.bg_color
+    )
+    return {"html": pt.render_velocity_template(template_text, context, claims)}
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -405,8 +459,32 @@ def studio_dashboard() -> HTMLResponse:
           <select id="studentSelect">{personas_options}</select>
 
           <button onclick="updatePreview()">Render Live Preview</button>
+          <div style="display:flex; gap:8px;">
+            <button onclick="openWith('/export.pdf', true)">Export PDF</button>
+            <button onclick="openWith('/download', false)">Download template</button>
+          </div>
           <div style="margin-top: 10px; font-size: 12px; color: #64748b;">
-            💡 Evaluates Velocity `#claimValue`, `#if`, loops, and generates mock verification QR codes.
+            💡 Evaluates Velocity `#claimValue`, `#if`, `#foreach`, and generates mock verification QR codes.
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Background</h2>
+          <div style="font-size: 12px; color: #b45309; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 8px;">
+            ⚠️ A background such as AIT's watermark is confidential. Upload it only on a VC Lab running on your own machine,
+            never on a deployed one. VC Lab keeps it in memory for the selected template, forgets it on restart, and never
+            publishes it; "Download template" is how you keep it.
+          </div>
+          <label for="bgFile">PDF, PNG or JPEG (page 1 only, used as uploaded):</label>
+          <input type="file" id="bgFile" accept="application/pdf,image/png,image/jpeg" />
+          <label for="bgRotation">Rotation (clockwise):</label>
+          <select id="bgRotation">
+            <option value="0">0°</option><option value="90">90°</option><option value="180">180°</option><option value="270">270°</option>
+          </select>
+          <div id="bgStatus" style="margin-top: 8px; font-size: 12px; color: #64748b;">No background (the default).</div>
+          <div style="display:flex; gap:8px;">
+            <button onclick="saveBackground()">Apply</button>
+            <button onclick="removeBackground()" style="background:#64748b;">Remove</button>
           </div>
         </div>
 
@@ -449,13 +527,48 @@ def studio_dashboard() -> HTMLResponse:
   </div>
 
   <script>
+    const selected = () => ({{
+      template: document.getElementById('templateSelect').value,
+      student: document.getElementById('studentSelect').value,
+    }});
     function updatePreview() {{
-      const template = document.getElementById('templateSelect').value;
-      const student = document.getElementById('studentSelect').value;
+      const {{template, student}} = selected();
       const url = `/preview?template=${{encodeURIComponent(template)}}&student=${{encodeURIComponent(student)}}`;
       document.getElementById('previewFrame').src = url;
       document.getElementById('openNewTab').href = url;
     }}
+    function openWith(path, withStudent) {{
+      const {{template, student}} = selected();
+      let url = `${{path}}?template=${{encodeURIComponent(template)}}`;
+      if (withStudent) url += `&student=${{encodeURIComponent(student)}}`;
+      window.open(url, '_blank');
+    }}
+    async function showBackground() {{
+      const res = await fetch(`/api/background?template=${{encodeURIComponent(selected().template)}}`);
+      const bg = await res.json();
+      document.getElementById('bgStatus').textContent = bg.filename
+        ? `Background: ${{bg.filename}}, turned ${{bg.rotation}}°.` : 'No background (the default).';
+      document.getElementById('bgRotation').value = String(bg.rotation);
+    }}
+    async function saveBackground() {{
+      const form = new FormData();
+      form.append('template', selected().template);
+      form.append('rotation', document.getElementById('bgRotation').value);
+      const file = document.getElementById('bgFile').files[0];
+      if (file) form.append('file', file);
+      const res = await fetch('/api/background', {{method: 'POST', body: form}});
+      if (!res.ok) {{ alert((await res.json()).detail); return; }}
+      document.getElementById('bgFile').value = '';
+      await showBackground();
+      updatePreview();
+    }}
+    async function removeBackground() {{
+      await fetch(`/api/background?template=${{encodeURIComponent(selected().template)}}`, {{method: 'DELETE'}});
+      await showBackground();
+      updatePreview();
+    }}
+    document.getElementById('templateSelect').addEventListener('change', () => {{ showBackground(); updatePreview(); }});
+    showBackground();
   </script>
 </body>
 </html>"""

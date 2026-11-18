@@ -20,7 +20,7 @@ from typing import Any, Optional
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "mock" / "adapter"))
-from ait_courses import enrich_ait_transcript_subject  # noqa: E402
+from ait_courses import enrich_ait_transcript_subject, parse_courses  # noqa: E402
 
 STUDENTS_JSON = REPO_ROOT / "tests" / "fixtures" / "students.json"
 VDR_BASE_URL = (os.environ.get("VDR_BASE_URL") or "http://vdr.localhost").rstrip("/")
@@ -60,6 +60,25 @@ def generate_mock_qr_png_base64() -> str:
     idat = zlib.compress(bytes(raw_data))
     png_bytes = header + chunk(b"IHDR", ihdr) + chunk(b"IDAT", idat) + chunk(b"IEND", b"")
     return base64.b64encode(png_bytes).decode("ascii")
+
+
+def lab_context(claims: dict[str, Any], background_url: Optional[str] = None, **overrides: Any) -> dict[str, Any]:
+    """The variables VC Lab hands a template: Mimoto's, plus $terms (the courses claim as a list, which Mimoto
+    cannot pass) and $backgroundUrl (preview only; the PDF lays the background under the page instead)."""
+    ctx: dict[str, Any] = {
+        "titleName": "Asian Institute of Technology Credential",
+        "logoUrl": DEFAULT_LOGO,
+        "qrCodeImage": generate_mock_qr_png_base64(),
+        "textColor": "#000000",
+        "backgroundColor": "#FFFFFF",
+        "credentialValidity": -1,
+        **{k: v for k, v in overrides.items() if v is not None},
+    }
+    if claims.get("courses"):
+        ctx["terms"] = parse_courses(claims["courses"])
+    if background_url:
+        ctx["backgroundUrl"] = background_url
+    return ctx
 
 
 def load_student_claims(
@@ -222,6 +241,52 @@ def eval_condition(cond: str, ctx: dict[str, Any]) -> bool:
     return bool(cond)
 
 
+_BLOCK_TAG = re.compile(r"#(?:if|foreach)\b|#end\b")
+_FOREACH = re.compile(r"#foreach\s*\(\s*\$(\w+)\s+in\s+\$([\w.]+)\s*\)")
+
+
+def _find_block_end(text: str, body_start: int) -> tuple[int, int]:
+    """Return (start, end) of the #end closing the block whose body starts at body_start."""
+    depth = 1
+    for tm in _BLOCK_TAG.finditer(text, body_start):
+        depth += -1 if tm.group(0) == "#end" else 1
+        if depth == 0:
+            return tm.start(), tm.end()
+    raise ValueError("Unbalanced #foreach/#if: missing #end")
+
+
+def _scope(ctx: dict[str, Any], var: str, item: Any) -> dict[str, Any]:
+    """Context for one loop pass: $var is the item, $var.key each field (strings escaped, lists kept for nested loops)."""
+    inner = dict(ctx)
+    fields = item.items() if isinstance(item, dict) else [("", item)]
+    for key, value in fields:
+        name = f"{var}.{key}" if key else var
+        inner[name] = value if isinstance(value, list) else html.escape(str(value))
+    return inner
+
+
+def _render_blocks(text: str, ctx: dict[str, Any]) -> str:
+    """Expand #foreach over context lists, then #if blocks, then $variables (longest name first)."""
+    out = []
+    pos = 0
+    for m in _FOREACH.finditer(text):
+        if m.start() < pos:
+            continue  # inside a loop body already expanded
+        end_start, end_end = _find_block_end(text, m.end())
+        body = text[m.end():end_start]
+        items = ctx.get(m.group(2))
+        out.append(text[pos:m.start()])
+        out.extend(_render_blocks(body, _scope(ctx, m.group(1), it)) for it in (items or []))
+        pos = end_end
+    out.append(text[pos:])
+    rendered = render_if_blocks("".join(out), ctx)
+    for k in sorted(ctx, key=len, reverse=True):
+        v = ctx[k]
+        if isinstance(v, (str, int, float, bool)):
+            rendered = rendered.replace(f"${{{k}}}", str(v)).replace(f"${k}", str(v))
+    return rendered
+
+
 def render_velocity_template(
     template_text: str,
     context: dict[str, Any],
@@ -235,17 +300,7 @@ def render_velocity_template(
     # 2. Strip macro definitions
     tmpl = strip_macros(tmpl)
 
-    # 3. Replace #claimValue("key") and #claimValue('key')
-    def replace_claim_value(m: re.Match) -> str:
-        key = m.group(1)
-        val = claims.get(key, "")
-        if val is None:
-            return ""
-        return html.escape(str(val))
-
-    tmpl = re.sub(r"#claimValue\s*\(\s*[\"']([^\"']+)[\"']\s*\)", replace_claim_value, tmpl)
-
-    # 4. Handle generic card #foreach over rowProperties.entrySet()
+    # 3. Handle generic card #foreach over rowProperties.entrySet()
     if "#foreach($entry in $rowProperties.entrySet())" in tmpl:
         card_blocks = []
         for k, v in claims.items():
@@ -261,29 +316,15 @@ def render_velocity_template(
         # Replace balanced foreach block
         m_fe = re.search(r"#foreach\s*\(\$entry in \$rowProperties\.entrySet\(\)\)", tmpl)
         if m_fe:
-            start_fe = m_fe.start()
-            curr = m_fe.end()
-            depth = 1
-            tag_re = re.compile(r"#(?:if|foreach)\b|#end\b")
-            while curr < len(tmpl) and depth > 0:
-                tm = tag_re.search(tmpl, curr)
-                if not tm:
-                    break
-                tag = tm.group(0)
-                if tag in ("#if", "#foreach"):
-                    depth += 1
-                elif tag == "#end":
-                    depth -= 1
-                curr = tm.end()
-            tmpl = tmpl[:start_fe] + rendered_claims_html + tmpl[curr:]
+            _, end_end = _find_block_end(tmpl, m_fe.end())
+            tmpl = tmpl[:m_fe.start()] + rendered_claims_html + tmpl[end_end:]
 
-    # 5. Evaluate #if / #else / #end blocks
-    tmpl = render_if_blocks(tmpl, context)
+    # 4. #foreach over context lists, #if / #else / #end, then $var / ${var}
+    tmpl = _render_blocks(tmpl, context)
 
-    # 6. Replace context variables: $var, ${var}
-    for k, v in context.items():
-        if isinstance(v, (str, int, float, bool)):
-            tmpl = tmpl.replace(f"${k}", str(v))
-            tmpl = tmpl.replace(f"${{{k}}}", str(v))
+    # 5. #claimValue("key") last, so claim data is never read as template syntax
+    def replace_claim_value(m: re.Match) -> str:
+        val = claims.get(m.group(1))
+        return "" if val is None else html.escape(str(val))
 
-    return tmpl
+    return re.sub(r"#claimValue\s*\(\s*[\"']([^\"']+)[\"']\s*\)", replace_claim_value, tmpl)
