@@ -55,6 +55,6 @@ cp .env.example .env
 # 3. Deploy services
 docker compose up -d
 
-# 4. Verify issuance
-./scripts/smoke-test.sh
+# 4. Verify deployment
+./scripts/smoke-test-certify.sh
 ```

@@ -65,7 +65,7 @@ python3 src/vc-lab/test_template_engine.py
 
 ## 3. Docker Service & Compose Integration
 
-VC Lab is containerized with [`docker/Dockerfile.vc-lab`](../../docker/Dockerfile.vc-lab) and runs as a service in [`compose.yaml`](../../compose.yaml).
+VC Lab is containerized with [`docker/Dockerfile.ait-vc`](../../docker/Dockerfile.ait-vc) and runs as a service in [`compose.yaml`](../../compose.yaml).
 
 ### Running with Docker:
 ```bash

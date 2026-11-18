@@ -137,8 +137,6 @@ You can provision `local.p12` in one of two ways:
    Use the platform's unified `tools did` command (via `uv`) to generate a new Ed25519 signing keypair and package it into a PKCS12 keystore:
    ```bash
    uv run tools did --generate deploy/ait/private_key/CERTIFY_PKCS12/local.p12
-   # Or using the helper script:
-   ./scripts/derive-did.py --generate deploy/ait/private_key/CERTIFY_PKCS12/local.p12
    ```
    *Output Example:*
    ```text
@@ -222,8 +220,6 @@ You can provision `local.p12` in one of two ways:
 > curl -sf http://localhost:9091/.well-known/did.json | jq -r '"did:key:" + .verificationMethod[0].publicKeyMultibase'
 > # or using uv:
 > uv run tools did https://issuer.dpi.ait.ac.th
-> # or using the derive-did utility:
-> ./scripts/derive-did.py https://issuer.dpi.ait.ac.th
 > ```
 > *Example Output:*
 > ```text
@@ -384,7 +380,7 @@ echo "Live Keystore-derived Issuer DID: $LIVE_DID"
 
 > [!NOTE]
 > Do not query `.id` directly to determine the live key. As explained in [Section 3.D](#d-how-to-configure-certify_did-and-keystore-key-derivation), querying `.id` merely echoes back whatever `CERTIFY_DID` is currently configured in `.env`. The genuine cryptographic public key resides at `.verificationMethod[0].publicKeyMultibase`.
-> You can also run the derivation tool: `uv run tools did https://issuer.dpi.ait.ac.th` (or `./scripts/derive-did.py https://issuer.dpi.ait.ac.th`).
+> You can also run the derivation tool: `uv run tools did https://issuer.dpi.ait.ac.th`.
 
 If this differs from what is currently set in `.env` (e.g. if `.env` still holds the bootstrap placeholder `did:key:z6MkpPLACEHOLDER...`), update `CERTIFY_DID` in `.env`:
 > [!WARNING]

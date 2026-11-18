@@ -37,7 +37,7 @@ uv run certify-template-sync --generate-sql
 uv run certify-template-sync --check
 ```
 
-### 2. With Docker Compose (Containerized via `docker/Dockerfile.template-sync`)
+### 2. With Docker Compose (Containerized via `docker/Dockerfile.ait-vc`)
 ```bash
 # Apply templates:
 docker compose run --rm template-sync

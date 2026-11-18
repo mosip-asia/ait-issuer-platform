@@ -109,9 +109,9 @@ cp .env.example .env
 ### 2. Verify Stack Readiness
 Run the post-deployment smoke test anytime:
 ```bash
-./scripts/smoke-test.sh
+./scripts/smoke-test-certify.sh
 ```
-*Expected: Requests pre-authorized issuance for `st120001`, exchanges token with Certify, signs with ephemeral DID key, and cryptographically verifies the issued W3C Verifiable Credential.*
+*Expected: Verifies Spring Boot runtime health, PostgreSQL connection, cryptographic signing keys (JWKS & DID document), and OpenID4VCI credential metadata.*
 
 ---
 
@@ -182,7 +182,7 @@ ait-issuer-platform/
 │   ├── deploy.sh                          # Deploy or update platform compose stack
 │   ├── release.sh                         # Build and release artifacts/images
 │   ├── check.sh                           # Pre-push validation runner (tests + data guard)
-│   └── smoke-test.sh                      # Post-deployment OpenID4VCI smoke test
+│   └── smoke-test-certify.sh              # Inji Certify engine baseline smoke test
 │
 ├── deploy/                               # DEPLOYMENT OVERLAYS & PLATFORM RUNTIME
 │   ├── base/                             # Shared Inji platform defaults (properties, nginx, SQL)
@@ -212,9 +212,8 @@ ait-issuer-platform/
 │   └── adapter-openapi.yaml              # Canonical Adapter OpenAPI 3.1 specification
 │
 ├── docker/                               # CONTAINER PACKAGING RECIPES
-│   ├── Dockerfile.certify                # Bakes src/issuer SPI plugin into Inji Certify
-│   ├── Dockerfile.template-sync          # Packages certify_template_sync (uv + Alpine)
-│   └── Dockerfile.vc-lab                 # Packages VC Lab Studio & Template Designer
+│   ├── Dockerfile.ait-vc                 # Unified Python container (Gateway, Portal, Tools, VC Lab, Template Sync)
+│   └── Dockerfile.certify                # Bakes src/issuer SPI plugin into Inji Certify
 │
 ├── compose.yaml                          # Root orchestrator (includes certify, verify, web-wallet, trust, traefik)
 ├── compose.certify.yaml                  # Core Inji Certify Issuer Engine (internal DB & ingress Nginx)

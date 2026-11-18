@@ -23,7 +23,7 @@ src/gateway/
     └── test_evaluations.py
 ```
 
-*(Note: Container build recipes are located in `docker/Dockerfile.gateway`)*
+*(Note: Container build recipes are located in `docker/Dockerfile.ait-vc`)*
 
 ---
 

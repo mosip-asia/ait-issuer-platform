@@ -13,13 +13,13 @@ How the infra team deploys this directory (the service set, every variable and m
 | `gateway.env` | The Gateway (`gateway/`), through Compose's `env_file` | Its settings, listed below |
 | `vcga/issuers.json` | VCGA, Inji Web | Authoritative trusted issuer registry for wallet discovery |
 | `adapter/student_identity_data.csv` | The mock adapter (`adapter/`, mounted read-only at `/data`) | The roster, committed and edited by hand: one row per participant, keyed by `id` (the Keycloak username). The adapter reads it on every request, no restart of anything |
-| `smoke.json` | `scripts/smoke-test.sh`, `tests/` | The installation's test fixtures, below |
+| `smoke.json` | `tests/`, `src/tools/issue_and_verify.py` | The installation's test fixtures, below |
 
 The installation's own values:
 
 - Authorization Server: the stand-in Keycloak realm `hackathon` (`http://auth.localhost/realms/hackathon`) unless the environment sets `AUTH_SERVER_*` in `.env`; see `authorization-server.env`
 - Keycloak realm: `hackathon`, with wallet client `wallet-demo`; every user's password is `inji` (test-only)
-- Test-only client `smoke`: public, direct-access grant, the two scopes and a hardcoded `client_id` claim; only `scripts/smoke-test.sh` uses it
+- Test-only client `smoke`: public, direct-access grant, the two scopes and a hardcoded `client_id` claim; used in local test suites
 - Scopes: `developer_passport_vc_ldp`, `achievement_certificate_vc_ldp`
 - Credential configuration: `developer-passport`, type `DeveloperPassportCredential`, VCDM 2.0, context `vc-lab/contexts/developer-passport/v1.json` on the VDR (`http://host.docker.internal:9098/contexts/developer-passport/v1.json`); claims `teamId`, `teamName`, `oidcClientId`, `authEndpoint`, `issuerEndpoint`, `verifierEndpoint`, each the roster column of that name
 - Credential configuration: `achievement-certificate`, type `AchievementCertificateCredential`, VCDM 2.0, context `vc-lab/contexts/achievement/v1.json` on the VDR (`http://host.docker.internal:9098/contexts/achievement/v1.json`); claims `teamId` and `award`, each the roster column of that name

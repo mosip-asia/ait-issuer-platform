@@ -14,13 +14,13 @@ How the infra team deploys this directory (the service set, every variable and m
 | `vcga/issuers.json` | VCGA, Inji Web | Authoritative trusted issuer registry for wallet discovery |
 | `public-gateway-mobile.conf.template` | `src/tools/render_mimoto_issuers_config.py` | The `api.` gateway's phone-only nginx locations. Its presence makes the script also render `deploy/base/vcga/issuers-mobile.json` and `public-gateway-mobile.conf` (mounted by Compose); an installation without it renders only Mimoto's list |
 | `adapter/student_identity_data.csv` | The mock adapter (`src/adapter/`, mounted read-only at `/data`) | Mock transcript records. After the claim columns come `holds` (a JSON list), `conferralStatus` and `balance`, the eligibility attributes. To change a student's eligibility edit the file (or regenerate via `src/tools/generate_csv.py`): the adapter reads it on every request, no restart of anything |
-| `smoke.json` | `scripts/smoke-test.sh`, `tests/` | The installation's test fixtures, below |
+| `smoke.json` | `tests/`, `src/tools/issue_and_verify.py` | The installation's test fixtures, below |
 
 The installation's own values:
 
 - Authorization Server: the stand-in Keycloak realm `ait` (`http://auth.localhost/realms/ait`) unless the environment sets `AUTH_SERVER_*` in `.env`; see `authorization-server.env`
 - Keycloak realm: `inji`, with wallet client `wallet-demo`; every user's password is `inji` (test-only)
-- Test-only client `smoke`: public, direct-access grant, the `ait_transcript_vc_ldp` scope and a hardcoded `client_id` claim; only `scripts/smoke-test.sh` uses it
+- Test-only client `smoke`: public, direct-access grant, the `ait_transcript_vc_ldp` scope and a hardcoded `client_id` claim; used in local test suites
 - Scope: `ait_transcript_vc_ldp`
 - Credential configuration: `ait-transcript`, type `AitTranscriptCredential`
 - Issuer display: "AIT University Registrar"; Mimoto issuer id `AITUniversity`

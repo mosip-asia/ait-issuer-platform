@@ -62,7 +62,7 @@ Target VM (ait-itserv-*)
        │      ├── Docker plugin jar build
        │      ├── Docker Compose stack bring-up (compose.yaml, overlays)
        │      └── Automatic health checks & template sync
-       ├── 4. Execute post-deployment smoke test (`scripts/smoke-test.sh`)
+       ├── 4. Execute post-deployment smoke test (`scripts/smoke-test-certify.sh`)
        └── 5. On success: write commit SHA to `.deploy_success`
               On failure: automatic rollback to previous stable SHA
 ```
@@ -102,7 +102,7 @@ Internal ports and management interfaces are never exposed to the public interne
 
 - **Day-0 Deployment Guide**: For the initial installation, Keycloak SSO integration, and SIS adapter connection, see [Day-0 / First Installation & Integration Guide](./guides/day-0-deployment.md).
 - **Sensitive Data Guard**: Pre-deployment check `bash scripts/check-data-guard.sh` prevents uncommitted secrets, CSV identity leaks, CRLF mismatches, or large binaries.
-- **Smoke Testing**: Every deployment executes `scripts/smoke-test.sh` verifying real cryptographic token acquisition, credential issuance, signature verification, and ledger recording.
+- **Smoke Testing**: Every deployment executes `scripts/smoke-test-certify.sh` verifying engine discovery and schema readiness, and `uv run tools issue-and-verify` for end-to-end credential issuance and verification.
 - **Persistent Baseline (`.deploy_success`)**: The deployed commit SHA is written to `.deploy_success` only after the deployment and smoke tests pass.
 - **Zero-Touch Rollback**: If `scripts/deploy.sh` or post-deployment checks fail:
   1. The workflow checks out the previous verified SHA recorded in `.deploy_success`.
