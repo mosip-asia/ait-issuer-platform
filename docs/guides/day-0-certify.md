@@ -347,12 +347,26 @@ AUTH_SERVER_JWKS_URL=https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev/p
 ### Step 1: Pre-flight Network & Config Verification
 1. Ensure the deployment host has network reachability to both campus Keycloak JWKS and the SIS Adapter:
    ```bash
-   # Verify Keycloak JWKS is reachable
+   # 1. Verify Keycloak JWKS is reachable and contains active RS256 signing keys
    curl -sf https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev/protocol/openid-connect/certs | jq .
+   # Expected: A JSON array with at least one key holding "use": "sig" and "alg": "RS256"
 
-   # Verify SIS Adapter is reachable from the host (e.g. over NetBird VPN)
-   curl -sf http://ait-itserv-dev-vm.netbird.selfhosted:8000/student/st120001/student-id | jq .
+   # 2. Verify SIS Adapter host connectivity over NetBird VPN
+   ping -c 2 ait-itserv-dev-vm.netbird.selfhosted
+
+   # 3. Inspect available routes exposed on the SIS Adapter (FastAPI / uvicorn)
+   curl -s http://ait-itserv-dev-vm.netbird.selfhosted:8000/openapi.json | jq '.paths | keys'
+
+   # 4. Query student record (use -i to inspect HTTP status and response headers):
+   # For Academic Transcript:
+   curl -i http://ait-itserv-dev-vm.netbird.selfhosted:8000/student/st123456/transcript
+   # For Student ID (when deployed on SIS Adapter):
+   curl -i http://ait-itserv-dev-vm.netbird.selfhosted:8000/student/st123456/student-id
    ```
+
+   > [!TIP]
+   > **Avoid `curl -sf` during initial troubleshooting**: The flags `-s` (silent) and `-f` (fail silently) suppress all HTTP error outputs. If the endpoint returns a 404 or connection error, `curl -sf` outputs nothing. Always use `curl -i` or `curl -v` to see the actual HTTP status code and response headers.
+   > If querying `/student/{sub}/student-id` returns `{"detail": "Not Found"}` from `server: uvicorn`, the SIS Adapter on the VM currently implements `/student/{sub}/transcript` only. Configure `CERTIFY_RECORD_URL=http://ait-itserv-dev-vm.netbird.selfhosted:8000/student/{sub}/transcript` in `.env`.
 
 2. Validate environment configuration integrity:
    ```bash
@@ -407,14 +421,43 @@ All three values should match identically (`did:key:z6Mk...`).
 > - You can also inspect `local.p12` directly using Docker: `docker run --rm -v "$(pwd):/work" -w /work ghcr.io/mosip-asia/ait-vc:${IMAGE_TAG:-latest} tools did --p12 deploy/ait/private_key/CERTIFY_PKCS12/local.p12` (or on host via `uv run tools did --p12 deploy/ait/private_key/CERTIFY_PKCS12/local.p12`).
 > - If you ever replace or restore `local.p12` from backup, simply re-run `./scripts/deploy.sh ait` to re-synchronize `.env` and restart containers cleanly.
 
-### Step 5: Verify Service Health
-1. **Run Automated Smoke Tests**:
+### Step 5: Post-Deployment Engine Sanity Check (Without Integration)
+To verify that Inji Certify itself is healthy and operational before connecting wallets or issuing credentials, run the following standalone sanity checks:
+
+1. **Run Automated Baseline Smoke Test**:
    ```bash
    bash scripts/smoke-test-certify.sh
+   # Or explicitly specify the target URL:
+   bash scripts/smoke-test-certify.sh https://issuer.dpi.ait.ac.th
    ```
-   Validates database connectivity, cryptographic key loading, and OpenID4VCI discovery metadata.
+   *Validates 4 essential engine checkpoints:*
+   - `[1/4] System Health & Database`: Verifies Spring Boot runtime is UP and PostgreSQL database is connected.
+   - `[2/4] Cryptographic Identity & Public Keys`: Verifies keystore loading, extracts live `did:key`, confirms it matches `CERTIFY_DID` in `.env`, and checks public JWKS.
+   - `[3/4] OpenID4VCI Discovery & Registered VCs`: Confirms discovery metadata is served and verifies registered credentials (`ait-student-id`, `ait-transcript`).
+   - `[4/4] Status List Revocation Registry`: Confirms W3C Bitstring / StatusList2021 endpoint returns HTTP 200 OK.
 
-2. **Check OpenID4VCI Issuer Discovery Endpoint**:
+2. **Verify Certify Application Container Startup**:
+   ```bash
+   docker compose logs certify | grep "Started InjiCertifyApplication"
+   # Or inspect full startup logs:
+   docker compose logs certify
+   ```
+   > [!NOTE]
+   > The Compose service name is **`certify`** (e.g. `docker compose logs certify`, not `service`).
+
+3. **Verify OAuth 2.0 Resource Server Security Guard (Fail-Closed Check)**:
+   ```bash
+   curl -s -o /dev/null -w "HTTP Response: %{http_code}\n" -X POST \
+     https://issuer.dpi.ait.ac.th/v1/certify/issuance/credential \
+     -H "Content-Type: application/json" -d '{}'
+   ```
+   *Expected Output*: `HTTP Response: 401`
+   *(Confirms Spring Security is actively intercepting and rejecting unauthenticated calls).*
+
+   > [!TIP]
+   > Sending an empty POST without `-H "Content-Type: application/json" -d '{}'` causes Spring Boot to return HTTP 500 (`HttpMessageNotReadableException: Required request body is missing`). Always include the JSON content-type and body.
+
+4. **Inspect OpenID4VCI Issuer Discovery Endpoint**:
    ```bash
    curl -sf https://issuer.dpi.ait.ac.th/.well-known/openid-credential-issuer | jq .
    ```
@@ -423,18 +466,13 @@ All three values should match identically (`did:key:z6Mk...`).
    - `"authorization_servers": ["https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev"]`
    - `"credentials_supported"` containing `StudentIdCredential` and `AitTranscriptCredential`.
 
-3. **Check VDR Context Schema Resolution**:
+5. **Check VDR Context Schema Resolution**:
    ```bash
    curl -sf https://vdr.dpi.ait.ac.th/contexts/student-id/v1.json | jq .
+   curl -sf https://vdr.dpi.ait.ac.th/contexts/transcript/v1.json | jq .
    ```
 
-4. **Check Certify Container Logs**:
-   ```bash
-   docker compose logs -f service
-   ```
-   Ensure Certify initializes without errors and reports `Started InjiCertifyApplication`.
-
-5. **Run Comprehensive Host Validation Suite**:
+6. **Run Comprehensive Host Validation Suite**:
    ```bash
    bash scripts/check.sh
    ```
@@ -449,5 +487,9 @@ All three values should match identically (`did:key:z6Mk...`).
 | **`invalid_access_token`** | Certify cannot reach Keycloak or `iss` mismatch | Verify `AUTH_SERVER_JWKS_URL` in `.env` is reachable from within Docker and matches token `iss`. |
 | **`no_record` on issuance** | Student ID not found in SIS Adapter | Verify the student ID exists: `curl http://.../student/{sub}/student-id`. |
 | **`adapter_error` on issuance** | SIS Adapter response violates OpenAPI schema | Validate JSON response matches [`docs/contracts/adapter-openapi.yaml`](../contracts/adapter-openapi.yaml). |
+| **`curl -sf` returns empty output** | `-s` (silent) and `-f` (fail) suppress error output and HTTP status codes | Run with `curl -i` or `curl -v` to see actual HTTP status code (e.g. 404, 500) and headers. |
+| **FastAPI `{"detail": "Not Found"}`** | Requested path is not implemented in uvicorn service | Query `curl -s http://.../openapi.json \| jq .paths` to inspect available routes on the SIS VM. |
+| **`docker compose logs service` empty** | Service in Compose is named `certify`, not `service` | Query the correct service name: `docker compose logs certify`. |
+| **`POST .../credential` returns 500** | Missing request body on Spring `@RequestBody` | Pass JSON headers and body: `-H "Content-Type: application/json" -d '{}'`. |
 | **Template Sync failed** | Database was not ready or credentials JSON syntax error | Check `docker compose logs template-sync`. Verify JSON files in `deploy/ait/certify/credentials/`. |
 | **Signature verification fails** | Verifier cannot resolve `did:key` or schema mismatch | Ensure `CERTIFY_DID` in `.env` matches the key loaded in Certify's keystore. |
