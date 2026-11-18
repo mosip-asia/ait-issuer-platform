@@ -136,11 +136,9 @@ Deployment hosts only require compose manifests, deployment scripts, shared base
 ```bash
 # Sparse checkout scoped strictly to the target tenant (e.g. TENANT=ait)
 git clone --filter=blob:none --sparse https://github.com/mosip-asia/ait-issuer-platform.git .
-git config core.sparseCheckout true
-git config core.sparseCheckoutCone true
-git sparse-checkout set --cone "deploy/${TENANT:-ait}" deploy/base scripts docker
-git sparse-checkout reapply
+bash scripts/sync-sparse.sh "${TENANT:-ait}"
 ```
+The tracked script [`scripts/sync-sparse.sh`](../../scripts/sync-sparse.sh) sets up cone mode and activates tracked Git hooks in [`.githooks/`](../../.githooks/) (`post-merge` and `post-checkout`), ensuring any newly pushed compose manifests or scripts are automatically materialized upon `git pull` or automated CD checkout without requiring manual SSH intervention.
 In automated CI/CD (`.github/workflows/cd.yml`), the deployment runner reads `TENANT` from the GitHub repository variable (`vars.TENANT`), ensuring each environment host only receives its own tenant files.
 
 ### 3. Automated Deployment & Pre-flight Validation

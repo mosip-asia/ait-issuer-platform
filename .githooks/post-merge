@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# .githooks/post-merge: Auto-reapply sparse checkout on git pull or merge
+if [ "$(git config --get core.sparseCheckout 2>/dev/null)" = "true" ]; then
+  git sparse-checkout reapply 2>/dev/null || true
+fi

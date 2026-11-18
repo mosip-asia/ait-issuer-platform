@@ -106,11 +106,8 @@ export TENANT
 IS_SPARSE="$(git config --get core.sparseCheckout 2>/dev/null || true)"
 if [ "$SPARSE_FLAG" = true ] || [ "${SPARSE_CHECKOUT:-false}" = "true" ] || [ "$IS_SPARSE" = "true" ]; then
   if [ -d .git ] && command -v git >/dev/null 2>&1; then
-    log_info "Configuring git sparse-checkout (deploy/${INSTALLATION}, deploy/base, scripts, docker)..."
-    git config core.sparseCheckout true
-    git config core.sparseCheckoutCone true
-    git sparse-checkout set --cone "deploy/${INSTALLATION}" deploy/base scripts docker 2>/dev/null || true
-    git sparse-checkout reapply 2>/dev/null || true
+    log_info "Synchronizing git sparse-checkout (deploy/${INSTALLATION}, deploy/base, scripts, docker)..."
+    bash scripts/sync-sparse.sh "$INSTALLATION"
   fi
 fi
 
