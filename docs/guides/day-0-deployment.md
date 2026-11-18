@@ -155,59 +155,125 @@ The unified deployment script `scripts/deploy.sh` streamlines provisioning:
 Edge routing is managed by Traefik v3.7 in a modular compose architecture:
 - **Local Machine (HTTP)**: Uses [`compose.traefik.yaml`](../../compose.traefik.yaml) listening on HTTP port `80` (routing `*.localhost` without TLS).
 - **Dev / Production Host (HTTPS with Let's Encrypt)**: Appends [`compose.traefik-tls.yaml`](../../compose.traefik-tls.yaml) to `COMPOSE_FILE`. This:
-  1. Binds port `443` (HTTPS).
-  2. Provisions automated **Let's Encrypt TLS certificates** using HTTP-01 challenge on port `80`.
-  3. Automatically redirects incoming HTTP traffic on port `80` to HTTPS `443`.
-  4. Stores certificates persistently in the `vc-stack_traefik-acme` volume.
+  1. Binds port `443` (HTTPS) alongside port `80` (HTTP).
+  2. Provisions automated **Let's Encrypt TLS certificates** using the HTTP-01 challenge on port `80`.
+  3. Automatically redirects incoming HTTP traffic on port `80` to HTTPS `443` (while preserving `/.well-known/acme-challenge/` for automated renewals).
+  4. Stores certificates persistently in the `vc-stack_traefik-acme` volume (`/etc/traefik/acme/acme.json`).
+
+> [!CAUTION]
+> **Critical Let's Encrypt Invariant: Pure Public FQDNs Only**
+> When `compose.traefik-tls.yaml` is active, Traefik inspects every router attached to `websecure` (port 443) and requests a certificate covering **all** domains declared in the router's `Host()` rule.
+> - **Never include `*.localhost` in remote TLS rules**: Traefik submits all domains in a router rule as Subject Alternative Names (SANs) in a single ACME order. Because `.localhost` is an ICANN-reserved TLD (RFC 6761), Let's Encrypt rejects the order with HTTP 400 (`rejectedIdentifier`). Because ACME orders are atomic, the rejection of `.localhost` cancels certificate issuance for the public domain, causing Traefik to fall back to its internal self-signed `CN=TRAEFIK DEFAULT CERT`.
+> - **Remote rules must declare only public FQDNs**: e.g., `TRAEFIK_CERTIFY_RULE=Host(\`issuer-dev.ait-vc.dpi.ait.ac.th\`)`.
+> - **Internal Dashboard isolation**: The Traefik dashboard router is pinned to `traefik.http.routers.dashboard.entrypoints=traefik` (`:8080` / host `:8088`), ensuring it never attempts an ACME certificate request for internal/non-DNS domains.
 
 ---
 
-## Consolidated `.env` Reference for Dev Environment
+### 5. Post-Deployment Verification: Smoke Test vs. Integration Test
+To ensure deployments are reliable without stalling on external dependencies, tests are separated into two distinct layers:
+
+1. **Engine Baseline Smoke Test (`scripts/smoke-test-certify.sh`)**:
+   Runs automatically in CI/CD right after `docker compose up`:
+   - **System Health**: Probes `/v1/certify/actuator/health` to confirm the Spring Boot application context is responsive.
+   - **Cryptographic Identity & Keystore**: Validates the public DID Document (`/.well-known/did.json`) and queries `/v1/certify/.well-known/jwks.json` to confirm that all 5 active cryptographic keys (`EC`, `OKP` / `Ed25519`, `RSA`) are loaded from the database keystore.
+   - **OpenID4VCI Metadata Discovery**: Queries `/.well-known/openid-credential-issuer` to verify the issuer URL, token endpoint, Keycloak authorization server, and all configured credentials (`ait-student-id` with scope `ait_student_id_vc_ldp` and `ait-transcript` with scope `ait_transcript_vc_ldp`).
+   - **Revocation Registry**: Verifies that the W3C Bitstring / StatusList2021 endpoint (`/v1/certify/credentials/status-list/1`) is active.
+   - *Scope*: Purely evaluates the issuer engine and database health. It requires **zero** end-user credentials, no Keycloak user login, and does not mint a Verifiable Credential.
+
+2. **End-to-End Integration Test (`tests/test_issue_and_verify.py` / Inji Web Wallet)**:
+   - Authenticates a real student persona (`st123456`) against campus Keycloak (`https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev`) to obtain a bearer token with scope `ait_student_id_vc_ldp`.
+   - Sends a `POST /v1/certify/issuance/credential` request with a signed proof JWT.
+   - Certify queries the SIS Adapter (`GET /student/{sub}/student-id`), signs the W3C VCDM 2.0 credential using Ed25519, and returns the issued credential to the wallet.
+   - Submits the issued VC to Inji Verify (`https://verifier-dev.ait-vc.dpi.ait.ac.th`) to verify cryptographic signatures and schema conformity against VDR.
+
+---
+
+## Consolidated `.env` Reference for Dev Environment (`.env.dev`)
 
 ```ini
 # ==============================================================================
-# Inji Verifiable Credential Platform - Dev Environment Baseline
+# Inji Verifiable Credential Platform - Remote Dev Environment Baseline (.env.dev)
 # ==============================================================================
+# Host: GCE Dev VM (issuer-dev-vm / issuer-dev)
+# Ingress: Traefik v3.7 Edge Ingress on *.ait-vc.dpi.ait.ac.th
+# Campus IAM: https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev
+# Upstream SIS: http://ait-itserv-dev-vm.netbird.selfhosted:8000
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 0. Compose Configuration & Tenant
+# ------------------------------------------------------------------------------
 COMPOSE_PROJECT_NAME=vc-stack
+COMPOSE_FILE=compose.database.yaml:compose.certify.yaml:compose.verify.yaml:compose.web-wallet.yaml:compose.traefik.yaml:compose.traefik-tls.yaml
 INSTALLATION=ait
+TENANT=ait
 IMAGE_TAG=latest
 
-# Edge Ingress Domains
-CERTIFY_PUBLIC_BASE_URL=https://issuer.dpi.ait.ac.th
-INJI_WEB_URL=https://wallet.dpi.ait.ac.th
-INJI_VERIFY_URL=https://verifier.dpi.ait.ac.th
+# ------------------------------------------------------------------------------
+# 1. Ingress & Public Base Domains
+# ------------------------------------------------------------------------------
+# Traefik Host Ports
+TRAEFIK_WEB_PORT=80
+TRAEFIK_WEBSECURE_PORT=443
+TRAEFIK_DASHBOARD_PORT=8088
+ACME_EMAIL=admin@dpi.ait.ac.th
+
+# Traefik Edge Ingress Host Routing Rules (Public FQDNs only - no *.localhost in TLS rules)
+TRAEFIK_CERTIFY_RULE=Host(`issuer-dev.ait-vc.dpi.ait.ac.th`)
+TRAEFIK_VERIFY_RULE=Host(`verifier-dev.ait-vc.dpi.ait.ac.th`)
+TRAEFIK_WALLET_RULE=Host(`wallet-dev.ait-vc.dpi.ait.ac.th`)
+TRAEFIK_VDR_RULE=Host(`vdr.localhost`)
+TRAEFIK_VCGA_RULE=Host(`vcga.localhost`)
+TRAEFIK_VCLAB_RULE=Host(`lab.localhost`)
+TRAEFIK_DASHBOARD_RULE=Host(`traefik.localhost`)
+
+# Public Dev Endpoints
+CERTIFY_PUBLIC_BASE_URL=https://issuer-dev.ait-vc.dpi.ait.ac.th
+ISSUER_BASE_URL=https://issuer-dev.ait-vc.dpi.ait.ac.th
+INJI_WEB_URL=https://wallet-dev.ait-vc.dpi.ait.ac.th
+INJI_VERIFY_URL=https://verifier-dev.ait-vc.dpi.ait.ac.th
+KEYCLOAK_PUBLIC_BASE_URL=https://oauth-dev.ait-itserv.dpi.ait.ac.th
 VDR_BASE_URL=https://vdr.dpi.ait.ac.th
 VCGA_BASE_URL=https://vcga.dpi.ait.ac.th
 TRUSTED_VCGA_URLS=https://vcga.dpi.ait.ac.th
 
-# Cryptographic Identity & Keystore
-CERTIFY_DID=did:key:z6MkpYourActualIssuerDidKeyHere
+# ------------------------------------------------------------------------------
+# 2. Cryptographic Identity & Keystore
+# ------------------------------------------------------------------------------
+CERTIFY_DID=did:key:z6MkpPLACEHOLDERreplaceMeViaBootstrapDidRefreshScript1
 KEYSTORE_TYPE=PKCS12
-KEYSTORE_PASS=your-keystore-password
+KEYSTORE_PASS=local
 
-# Upstream SIS Data Adapter (NetBird VPN or campus network)
-# For Day-0 Student ID deployment, point to the student-id endpoint:
+# ------------------------------------------------------------------------------
+# 3. Upstream Data Source (Dev SIS Adapter over NetBird VPN)
+# ------------------------------------------------------------------------------
+# Day-0 Student ID Card endpoint (Phase 2 switches to .../student/{sub}/transcript):
 CERTIFY_RECORD_URL=http://ait-itserv-dev-vm.netbird.selfhosted:8000/student/{sub}/student-id
 
 # Approval Gate (Keep disabled for Day-0 to test direct adapter data retrieval first)
 MOSIP_CERTIFY_GATEWAY_ENABLED=false
 MOSIP_CERTIFY_GATEWAY_URL=NO GATEWAY
 
-# Inji Certify (OAuth Resource Server - Token Verification)
+# ------------------------------------------------------------------------------
+# 4. Identity & Authorization Servers
+# ------------------------------------------------------------------------------
+# Inji Certify (OAuth Resource Server - Token Verification via JWKS)
 AUTH_SERVER_ISSUER=https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev
 AUTH_SERVER_JWKS_URL=https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev/protocol/openid-connect/certs
 
-# Inji Web Wallet / Mimoto (OAuth Client - Stage 2 only)
+# Inji Web Wallet / Mimoto (OAuth Client)
 AUTH_SERVER_TOKEN_ENDPOINT=https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev/protocol/openid-connect/token
 AUTH_SERVER_PUBLIC_URL=https://oauth-dev.ait-itserv.dpi.ait.ac.th/realms/ait-dev
-AUTH_SERVER_WALLET_CLIENT_ID=wallet-demo  # Used only by Web Wallet (Mimoto) to initiate Keycloak login
+AUTH_SERVER_WALLET_CLIENT_ID=wallet-demo
 
-# Inji Verify Configuration
-VERIFIER_TITLE=AIT Credential Verifier
-INJI_VERIFY_PUBLIC_BASE_URL=https://verifier.dpi.ait.ac.th
-INJI_VERIFY_DID_URI=did:web:localhost%3A9095:v1:verify
-INJI_VERIFY_DID_PUBLIC_KEY_URI=did:web:localhost%3A9095:v1:verify#key-0
-INJI_VERIFY_REDIRECT_URI=https://verifier.dpi.ait.ac.th
+# ------------------------------------------------------------------------------
+# 5. Inji Verify Configuration
+# ------------------------------------------------------------------------------
+VERIFIER_TITLE=AIT Credential Verifier (Dev)
+INJI_VERIFY_PUBLIC_BASE_URL=https://verifier-dev.ait-vc.dpi.ait.ac.th
+INJI_VERIFY_DID_URI=did:web:verifier-dev.ait-vc.dpi.ait.ac.th:v1:verify
+INJI_VERIFY_DID_PUBLIC_KEY_URI=did:web:verifier-dev.ait-vc.dpi.ait.ac.th:v1:verify#key-0
+INJI_VERIFY_REDIRECT_URI=https://verifier-dev.ait-vc.dpi.ait.ac.th
 ```
 
 ---
