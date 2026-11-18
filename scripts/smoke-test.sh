@@ -170,17 +170,20 @@ JWK_JSON=$(jq -cn \
 JWK_B64=$(printf "%s" "$JWK_JSON" | b64url)
 DID_JWK="did:jwk:${JWK_B64}#0"
 
+CREDENTIAL_ISSUER=$(echo "$ISSUER_META" | jq -r '.credential_issuer // empty')
+AUDIENCE="${CREDENTIAL_ISSUER:-$CERTIFY_URL}"
+
 NOW=$(date +%s)
 HEADER_B64=$(jq -cn \
   --arg kid "$DID_JWK" \
   '{"alg":"RS256","kid":$kid,"typ":"openid4vci-proof+jwt"}' | b64url)
 
 PAYLOAD_B64=$(jq -cn \
-  --arg aud "$CERTIFY_URL" \
+  --arg aud "$AUDIENCE" \
   --arg nonce "$C_NONCE" \
   --arg iss "$CLIENT_ID" \
   --argjson now "$NOW" \
-  '{"aud":$aud,"exp":($now+300),"iat":$now,"iss":$iss,"nonce":$nonce}' | b64url)
+  '{"aud":$aud,"exp":($now+300),"iat":$now,"nonce":$nonce} + (if $iss != "" then {"iss":$iss} else {} end)' | b64url)
 
 SIGNING_INPUT="${HEADER_B64}.${PAYLOAD_B64}"
 SIGNATURE_B64=$(printf "%s" "$SIGNING_INPUT" | openssl dgst -sha256 -sign "$KEY_FILE" 2>/dev/null | b64url)
@@ -195,13 +198,19 @@ REQ_PAYLOAD=$(jq -cn \
   --arg proof "$PROOF_JWT" \
   '{"format": $format, "credential_definition": $cred_def, "proof": {"proof_type": "jwt", "jwt": $proof}}')
 
-CRED_RESP=$(curl -skfL --max-time 20 -X POST "${CERTIFY_URL}/v1/certify/issuance/credential" \
+CRED_TMP="$(mktemp)"
+HTTP_STATUS=$(curl -skL --max-time 20 -o "$CRED_TMP" -w "%{http_code}" -X POST "${CERTIFY_URL}/v1/certify/issuance/credential" \
   -H "Authorization: Bearer ${ACCESS_TOKEN}" \
   -H "Content-Type: application/json" \
-  -d "$REQ_PAYLOAD") || {
-    echo -e "${RED}${BOLD}[SMOKE TEST FAILED]${NC} Credential issuance call failed." >&2
+  -d "$REQ_PAYLOAD" 2>/dev/null || true)
+CRED_RESP=$(cat "$CRED_TMP" 2>/dev/null || true)
+rm -f "$CRED_TMP"
+
+if [ "$HTTP_STATUS" != "200" ]; then
+    echo -e "${RED}${BOLD}[SMOKE TEST FAILED]${NC} Credential issuance call failed (HTTP ${HTTP_STATUS})." >&2
+    echo "$CRED_RESP" | jq . 2>/dev/null || echo "$CRED_RESP" >&2
     exit 1
-}
+fi
 
 CREDENTIAL_STR=$(echo "$CRED_RESP" | jq -r .credential)
 if [ -z "$CREDENTIAL_STR" ] || [ "$CREDENTIAL_STR" = "null" ]; then
