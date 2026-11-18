@@ -16,7 +16,7 @@ networks:
     name: ${COMPOSE_PROJECT_NAME}-verify-net
 
 services:
-  ui:
+  verify-ui:
     build:
       context: .
       dockerfile: src/verifier/Dockerfile
@@ -41,14 +41,14 @@ services:
       - "traefik.http.routers.verify.rule=${TRAEFIK_VERIFY_RULE}"
       - "traefik.http.services.verify.loadbalancer.server.port=8000"
     depends_on:
-      - service
+      - verify-service
     networks:
       verifier-network:
         aliases:
           - verify-ui
           - verifier
 
-  service:
+  verify-service:
     image: injistack/inji-verify-service:0.17.0
     user: root
     extra_hosts:
@@ -61,7 +61,7 @@ services:
       - "auth.localhost:host-gateway"
     environment:
       - active_profile_env=default
-      - DATABASE_HOST=database
+      - DATABASE_HOST=verify-database
       - DATABASE_PORT=5432
       - DATABASE_NAME=inji_verify
       - DATABASE_SCHEMA=verify
@@ -75,14 +75,14 @@ services:
       - INJI_VERIFY_REDIRECT_URI=${INJI_VERIFY_REDIRECT_URI}
       - INJI_VERIFY_CLAIMS_WITH_META_DATA=_sd,_sd_alg,iss,cnf,sub,aud,exp,nbf,iat,cti
     depends_on:
-      database:
+      verify-database:
         condition: service_healthy
     networks:
       verifier-network:
         aliases:
           - verify-service
 
-  database:
+  verify-database:
     image: postgres:15
     environment:
       - POSTGRES_USER=postgres
