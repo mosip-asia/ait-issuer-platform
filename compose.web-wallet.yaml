@@ -29,7 +29,7 @@ services:
     environment:
       - DEFAULT_LANG=en
       - MIMOTO_URL=${INJI_WEB_URL}/v1/mimoto
-      - TRUSTED_VCGA_URLS=${TRUSTED_VCGA_URLS:-http://vcga.localhost}
+      - TRUSTED_VCGA_URLS=${TRUSTED_VCGA_URLS}
     volumes:
       - ./deploy/base/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     restart: unless-stopped

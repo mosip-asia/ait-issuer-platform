@@ -13,7 +13,7 @@
 services:
   traefik:
     ports:
-      - "${TRAEFIK_WEBSECURE_PORT:-443}:443"
+      - "${TRAEFIK_WEBSECURE_PORT}:443"
     command:
       - "--api.insecure=true"
       - "--api.dashboard=true"
@@ -25,7 +25,7 @@ services:
       - "--entrypoints.websecure.address=:443"
       - "--entrypoints.websecure.http.tls=true"
       - "--entrypoints.websecure.http.tls.certresolver=letsencrypt"
-      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@dpi.ait.ac.th}"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
       - "--certificatesresolvers.letsencrypt.acme.storage=/etc/traefik/acme/acme.json"
       - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
       - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
@@ -34,4 +34,4 @@ services:
 
 volumes:
   traefik-acme:
-    name: ${COMPOSE_PROJECT_NAME:-vc-stack}_traefik-acme
+    name: ${COMPOSE_PROJECT_NAME}_traefik-acme

@@ -21,7 +21,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.certify
-    image: ${CERTIFY_IMAGE:-ghcr.io/mosip-asia/ait-certify:${IMAGE_TAG:-latest}}
+    image: ${CERTIFY_IMAGE:-ghcr.io/mosip-asia/ait-certify:${IMAGE_TAG}}
     user: root
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -42,8 +42,8 @@ services:
       - container_user=mosip
       - download_hsm_client=false
       - enable_certify_artifactory=false
-      - KEYSTORE_TYPE=${KEYSTORE_TYPE:-PKCS12}
-      - KEYSTORE_PASS=${KEYSTORE_PASS:-local}
+      - KEYSTORE_TYPE=${KEYSTORE_TYPE}
+      - KEYSTORE_PASS=${KEYSTORE_PASS}
       - MOSIP_CERTIFY_GATEWAY_ENABLED=${MOSIP_CERTIFY_GATEWAY_ENABLED}
       - MOSIP_CERTIFY_GATEWAY_URL=${MOSIP_CERTIFY_GATEWAY_URL}
       - mosip_certify_domain_url=${CERTIFY_PUBLIC_BASE_URL}
@@ -87,7 +87,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.template-sync
-    image: ${TEMPLATE_SYNC_IMAGE:-ghcr.io/mosip-asia/ait-certify-template-sync:${IMAGE_TAG:-latest}}
+    image: ${TEMPLATE_SYNC_IMAGE:-ghcr.io/mosip-asia/ait-certify-template-sync:${IMAGE_TAG}}
     restart: "no"
     depends_on:
       database:
