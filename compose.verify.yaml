@@ -2,11 +2,11 @@
 # Inji Verifier Stack Compose Manifest
 # ==============================================================================
 # Isolated Stack:
-# - Custom AIT-branded Inji Verify UI (port 4007)
+# - Custom AIT-branded Inji Verify UI (port 4007 / port 8000 Traefik upstream)
 # - Inji Verify Service backend (port 9095)
-# - PostgreSQL database (inji_verify) for OID4VP presentation job sessions
 #
 # Network: verifier-network (isolated)
+# Database: Provided by compose.database.yaml (database:5432)
 # Integration: Reaches Certify/VDR via host.docker.internal / public URL
 # ==============================================================================
 name: ${COMPOSE_PROJECT_NAME}-verify
@@ -41,14 +41,14 @@ services:
       - "traefik.http.routers.verify.rule=${TRAEFIK_VERIFY_RULE}"
       - "traefik.http.services.verify.loadbalancer.server.port=8000"
     depends_on:
-      - verify-service
+      - verify
     networks:
       verifier-network:
         aliases:
           - verify-ui
           - verifier
 
-  verify-service:
+  verify:
     image: injistack/inji-verify-service:0.17.0
     user: root
     extra_hosts:
@@ -61,7 +61,7 @@ services:
       - "auth.localhost:host-gateway"
     environment:
       - active_profile_env=default
-      - DATABASE_HOST=verify-database
+      - DATABASE_HOST=database
       - DATABASE_PORT=5432
       - DATABASE_NAME=inji_verify
       - DATABASE_SCHEMA=verify
@@ -75,24 +75,10 @@ services:
       - INJI_VERIFY_REDIRECT_URI=${INJI_VERIFY_REDIRECT_URI}
       - INJI_VERIFY_CLAIMS_WITH_META_DATA=_sd,_sd_alg,iss,cnf,sub,aud,exp,nbf,iat,cti
     depends_on:
-      verify-database:
+      database:
         condition: service_healthy
     networks:
       verifier-network:
         aliases:
+          - verify
           - verify-service
-
-  verify-database:
-    image: postgres:15
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-    volumes:
-      - ./deploy/base/verify_init.sql:/docker-entrypoint-initdb.d/verify_init.sql
-    healthcheck:
-      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "inji_verify"]
-      interval: 2s
-      timeout: 3s
-      retries: 60
-    networks:
-      - verifier-network

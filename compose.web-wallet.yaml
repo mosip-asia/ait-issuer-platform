@@ -2,7 +2,7 @@
 # Inji Web Wallet UI Compose Manifest
 # ==============================================================================
 # Isolated Stack:
-# - Inji Web Wallet UI (port 4004)
+# - Inji Web Wallet UI (port 4004 / port 3004 Traefik upstream)
 #
 # Network: wallet-network (isolated)
 # Integration: Proxies /v1/mimoto to VCGA via trust-network
@@ -16,7 +16,7 @@ networks:
     name: ${COMPOSE_PROJECT_NAME}-trust-net
 
 services:
-  inji-web:
+  web-wallet:
     image: injistack/inji-web:0.16.0
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -40,6 +40,7 @@ services:
     networks:
       wallet-network:
         aliases:
+          - web-wallet
           - wallet
           - inji-web
       trust-network: {}

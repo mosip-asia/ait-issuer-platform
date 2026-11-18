@@ -2,10 +2,12 @@
 # Inji Verifiable Credential Platform - Root Manifest
 # ==============================================================================
 # Orchestrates the modular platform components:
-# 1. Inji Certify Engine     (compose.certify.yaml)
-# 2. Inji Verifier Stack     (compose.verify.yaml)
-# 3. Inji Web Wallet UI      (compose.web-wallet.yaml)
-# 4. Trust Registry (VDR/VCGA)(compose.trust.yaml)
+# 1. Platform Database       (compose.database.yaml)
+# 2. Inji Certify Engine     (compose.certify.yaml)
+# 3. Inji Verifier Stack     (compose.verify.yaml)
+# 4. Inji Web Wallet UI      (compose.web-wallet.yaml)
+# 5. Trust Registry (VDR/VCGA)(compose.trust.yaml)
+# 6. Traefik Ingress Router  (compose.traefik.yaml)
 #
 # For local development with stand-in mock dependencies (Keycloak & Mock SIS):
 #   docker compose -f compose.yaml -f compose.mock.yaml up -d
@@ -13,6 +15,7 @@
 name: ${COMPOSE_PROJECT_NAME}
 
 include:
+  - compose.database.yaml
   - compose.certify.yaml
   - compose.verify.yaml
   - compose.web-wallet.yaml

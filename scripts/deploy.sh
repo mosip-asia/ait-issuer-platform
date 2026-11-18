@@ -203,7 +203,7 @@ done
 
 if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
   log_err "Inji Certify failed to become ready within ${TIMEOUT}s. Recent logs:"
-  docker compose logs --tail 50 service
+  docker compose logs --tail 50 certify
   exit 1
 fi
 
@@ -216,7 +216,7 @@ else
 fi
 if ! eval "$SMOKE_CMD"; then
   log_err "Post-deployment smoke test failed. Recent logs:"
-  docker compose logs --tail 50 service
+  docker compose logs --tail 50 certify
   exit 1
 fi
 log_ok "Post-deployment smoke test passed."

@@ -3,11 +3,11 @@
 # ==============================================================================
 # Isolated Stack:
 # - Inji Certify with compiled SPI JAR mounted as plugin (internal port 8090)
-# - PostgreSQL database (inji_certify, internal port 5432)
-# - Ingress Nginx (port 9091)
+# - Ingress Nginx (port 9091 / port 80 Traefik upstream)
 # - GitOps Template-Sync
 #
 # Network: certify-network (isolated)
+# Database: Provided by compose.database.yaml (database:5432)
 # Integration: External via CERTIFY_PUBLIC_BASE_URL (http://localhost:9091)
 # ==============================================================================
 name: ${COMPOSE_PROJECT_NAME}-certify
@@ -17,23 +17,7 @@ networks:
     name: ${COMPOSE_PROJECT_NAME}-certify-net
 
 services:
-  database:
-    image: postgres:15
-    environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-    volumes:
-      - ./deploy/base/certify_init.sql:/docker-entrypoint-initdb.d/01_certify_init.sql
-      - issuer-db:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "${POSTGRES_USER}", "-d", "inji_certify"]
-      interval: 2s
-      timeout: 3s
-      retries: 60
-    networks:
-      - certify-network
-
-  service:
+  certify:
     build:
       context: .
       dockerfile: docker/Dockerfile.certify
@@ -79,6 +63,7 @@ services:
       certify-network:
         aliases:
           - certify
+          - service
 
   nginx:
     image: nginx:stable
@@ -91,7 +76,7 @@ services:
       - "traefik.http.routers.certify.rule=${TRAEFIK_CERTIFY_RULE}"
       - "traefik.http.services.certify.loadbalancer.server.port=80"
     depends_on:
-      - service
+      - certify
     networks:
       certify-network:
         aliases:
@@ -118,7 +103,3 @@ services:
       - VDR_BASE_URL=${VDR_BASE_URL}
     networks:
       - certify-network
-
-volumes:
-  issuer-db:
-    name: ${COMPOSE_PROJECT_NAME}_issuer-db_${INSTALLATION}

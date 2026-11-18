@@ -1,0 +1,43 @@
+# ==============================================================================
+# Shared Database Compose Manifest (Inji Certify & Inji Verify)
+# ==============================================================================
+# Central PostgreSQL 15 database instance for the platform:
+# - inji_certify: Credential configurations, templates, issuance state
+# - inji_verify:  Presentation definitions, OID4VP session transactions
+#
+# Networks: certify-network, verifier-network
+# ==============================================================================
+name: ${COMPOSE_PROJECT_NAME}-database
+
+networks:
+  certify-network:
+    name: ${COMPOSE_PROJECT_NAME}-certify-net
+  verifier-network:
+    name: ${COMPOSE_PROJECT_NAME}-verify-net
+
+services:
+  database:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - ./deploy/base/certify_init.sql:/docker-entrypoint-initdb.d/01_certify_init.sql
+      - ./deploy/base/verify_init.sql:/docker-entrypoint-initdb.d/02_verify_init.sql
+      - issuer-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "${POSTGRES_USER}", "-d", "inji_certify"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+    networks:
+      certify-network:
+        aliases:
+          - database
+      verifier-network:
+        aliases:
+          - database
+
+volumes:
+  issuer-db:
+    name: ${COMPOSE_PROJECT_NAME}_issuer-db_${INSTALLATION}

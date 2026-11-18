@@ -23,10 +23,13 @@ run_release_checks() {
   if ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.yaml docker compose config --quiet; then
     log_err "Root compose.yaml configuration failed validation."
     rc=1
-  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.certify.yaml docker compose config --quiet; then
+  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.database.yaml docker compose config --quiet; then
+    log_err "Database compose.database.yaml configuration failed validation."
+    rc=1
+  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.database.yaml:compose.certify.yaml docker compose config --quiet; then
     log_err "Certify compose.certify.yaml configuration failed validation."
     rc=1
-  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.verify.yaml docker compose config --quiet; then
+  elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.database.yaml:compose.verify.yaml docker compose config --quiet; then
     log_err "Verifier compose.verify.yaml configuration failed validation."
     rc=1
   elif ! COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.web-wallet.yaml docker compose config --quiet; then

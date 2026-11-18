@@ -65,9 +65,9 @@ def test_compose_verify_manifest() -> None:
     compose_file = REPO_ROOT / "compose.verify.yaml"
     assert compose_file.is_file(), "compose.verify.yaml must exist"
     content = compose_file.read_text(encoding="utf-8")
-    assert "ui:" in content
-    assert "service:" in content
-    assert "database:" in content
+    assert "verify-ui:" in content or "ui:" in content
+    assert "verify:" in content or "service:" in content
+    assert "database" in content
     assert "traefik.http.routers.verify" in content or "VERIFY_PORT" in content
     assert "8000" in content
     assert "DEFAULT_TITLE" in content
