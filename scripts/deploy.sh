@@ -167,7 +167,8 @@ if [ "$BUILD_FLAG" = true ]; then
 else
   log_info "Pulling pre-built images from container registry..."
   docker compose pull --quiet --ignore-pull-failures || log_warn "Pull completed with warnings (continuing with cached images if present)..."
-  if ! docker image inspect certify-template-sync:local >/dev/null 2>&1; then
+  local_ts_img="${TEMPLATE_SYNC_IMAGE:-ghcr.io/mosip-asia/ait-certify-template-sync:${IMAGE_TAG:-latest}}"
+  if ! docker image inspect "$local_ts_img" >/dev/null 2>&1; then
     log_info "Building local helper services (template-sync)..."
     docker compose build template-sync --quiet || true
   fi

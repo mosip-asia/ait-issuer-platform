@@ -24,6 +24,7 @@ import org.json.JSONObject;
 import org.json.JSONParserConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -158,6 +159,7 @@ public class IssuerDataProviderPlugin implements DataProviderPlugin {
      *     {@code NO GATEWAY} or no {@code http(s)} URL, off with anything but {@code NO GATEWAY}), or the gate on
      *     without a token; Certify then does not start
      */
+    @Autowired
     public IssuerDataProviderPlugin(
             @Value("${mosip.certify.adapter.record-url}") String recordUrl,
             @Value("${mosip.certify.adapter.connect-timeout-ms:2000}") long adapterConnectTimeoutMs,

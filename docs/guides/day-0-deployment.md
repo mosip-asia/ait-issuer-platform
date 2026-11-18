@@ -127,7 +127,7 @@ To ensure reproducible deployments and keep build toolchains off production VMs,
 - **`ghcr.io/mosip-asia/ait-certify:${IMAGE_TAG}`**: Inji Certify 0.14 with the Java 21 `IssuerDataProviderPlugin` pre-baked at `/home/inji/additional_jars/issuer-data-provider-plugin.jar`. No host JAR compilation or bind-mounting is required at runtime.
 - **`ghcr.io/mosip-asia/ait-verify-ui:${IMAGE_TAG}`**: Branded Inji Verify web interface.
 - **`ghcr.io/mosip-asia/ait-vc-lab:${IMAGE_TAG}`**: Credential lab and verification playground.
-- **`certify-template-sync:local`**: Lightweight Python service built locally on demand to apply database seeds and synchronize credential templates.
+- **`ghcr.io/mosip-asia/ait-certify-template-sync:${IMAGE_TAG}`**: Lightweight service to apply database seeds and synchronize credential templates into Inji Certify.
 
 CI builds and publishes these images via `scripts/build.sh --tag <tag> --push`. If code has not changed between tags, `build.sh` fast-retags existing GHCR images using `docker buildx imagetools create` without re-uploading layers.
 

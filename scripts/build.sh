@@ -228,4 +228,7 @@ build_or_retag_image "ait-verify-ui" "src/verifier/Dockerfile" "." "src/verifier
 # 3. VC Lab (watched: src/vc-lab and Dockerfile.vc-lab)
 build_or_retag_image "ait-vc-lab" "docker/Dockerfile.vc-lab" "." "src/vc-lab" "docker/Dockerfile.vc-lab"
 
+# 4. Certify Template Sync (watched: scripts/sync-templates.py and Dockerfile.template-sync)
+build_or_retag_image "ait-certify-template-sync" "docker/Dockerfile.template-sync" "." "scripts/sync-templates.py" "docker/Dockerfile.template-sync"
+
 log_ok "All Docker images ready!"
