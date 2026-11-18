@@ -121,7 +121,7 @@ deploy/ait/
 ### 6. Keystore Custody & Cryptographic Identity Invariance (`did:key`)
 - Inji Certify signs all credentials using the Ed25519 private key in `deploy/<tenant>/private_key/CERTIFY_PKCS12/local.p12`.
 - The corresponding public identifier is `CERTIFY_DID` (`did:key:z6Mk...`).
-- You can generate a fresh keystore and derive its `did:key` using `uv run tools did --generate <path>` (see [Stage 1 Guide](day-0-certify.md#b-keystore-configuration--key-generation)).
+- You can generate a fresh keystore and derive its `did:key` using Docker (`docker run --rm --user "$(id -u):$(id -g)" -v "$(pwd):/work" -w /work ghcr.io/mosip-asia/ait-vc:${IMAGE_TAG:-latest} tools did --generate <path>`) or using `uv` (`uv run tools did --generate <path>`) (see [Stage 1 Guide](day-0-certify.md#b-keystore-configuration--key-generation)).
 
 > [!CAUTION]
 > **Strict Immutability Invariant:** Once credentials have been issued to students, **`CERTIFY_DID` and `local.p12` must NEVER be changed, regenerated, or replaced**.
