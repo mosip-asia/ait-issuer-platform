@@ -189,12 +189,13 @@ docker compose up -d --remove-orphans
 
 # 6. Wait for Inji Certify to initialize
 log_info "Waiting for Inji Certify issuer engine to initialize at ${CERTIFY_URL}..."
-TIMEOUT=90
+TIMEOUT="${DEPLOY_TIMEOUT:-180}"
 ELAPSED=0
 
 while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
-  if curl -sf "${CERTIFY_URL}/.well-known/openid-credential-issuer" >/dev/null 2>&1 || \
-     curl -sf "${CERTIFY_URL}/v1/certify/.well-known/openid-credential-issuer" >/dev/null 2>&1; then
+  if curl -skf "${CERTIFY_URL}/.well-known/openid-credential-issuer" >/dev/null 2>&1 || \
+     curl -skf "${CERTIFY_URL}/v1/certify/.well-known/openid-credential-issuer" >/dev/null 2>&1 || \
+     curl -skf -H "Host: issuer.localhost" "http://127.0.0.1:${TRAEFIK_WEB_PORT:-80}/.well-known/openid-credential-issuer" >/dev/null 2>&1; then
     log_ok "Inji Certify is ready!"
     break
   fi

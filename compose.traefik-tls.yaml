@@ -1,0 +1,37 @@
+# ==============================================================================
+# Traefik v3.7 TLS & Let's Encrypt Automated Certificate Ingress Override
+# ==============================================================================
+# Layered onto compose.traefik.yaml for production/staging environments to:
+# 1. Bind port 443 (HTTPS)
+# 2. Automatically provision and renew Let's Encrypt SSL/TLS certificates
+# 3. Automatically redirect all plain HTTP (port 80) traffic to HTTPS (port 443)
+# 4. Persist ACME certificates in a dedicated Docker volume
+#
+# Usage (in .env on dev server):
+#   COMPOSE_FILE=compose.database.yaml:compose.certify.yaml:compose.verify.yaml:compose.web-wallet.yaml:compose.traefik.yaml:compose.traefik-tls.yaml
+# ==============================================================================
+services:
+  traefik:
+    ports:
+      - "${TRAEFIK_WEBSECURE_PORT:-443}:443"
+    command:
+      - "--api.insecure=true"
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.websecure.http.tls=true"
+      - "--entrypoints.websecure.http.tls.certresolver=letsencrypt"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@dpi.ait.ac.th}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/etc/traefik/acme/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+    volumes:
+      - traefik-acme:/etc/traefik/acme
+
+volumes:
+  traefik-acme:
+    name: ${COMPOSE_PROJECT_NAME:-vc-stack}_traefik-acme

@@ -62,7 +62,7 @@ hex2bin() {
 # 1. Verify Discovery Endpoint & Credential Definition
 echo -e "${BLUE}${BOLD}[SMOKE TEST]${NC} 1/6 Checking OpenID Credential Issuer discovery endpoint..."
 DISCOVERY_URL="${CERTIFY_URL}/.well-known/openid-credential-issuer"
-ISSUER_META=$(curl -sf --max-time 10 "$DISCOVERY_URL") || {
+ISSUER_META=$(curl -skf --max-time 10 "$DISCOVERY_URL") || {
   echo -e "${RED}${BOLD}[SMOKE TEST FAILED]${NC} Could not reach discovery endpoint at ${DISCOVERY_URL}" >&2
   exit 1
 }
@@ -78,7 +78,7 @@ echo -e "${GREEN}${BOLD}[OK]${NC} Issuer metadata verified (Format: ${FORMAT})."
 
 # 2. Pre-authorize issuance offer
 echo -e "${BLUE}${BOLD}[SMOKE TEST]${NC} 2/6 Staging pre-authorized issuance offer for ${STUDENT_ID}..."
-OFFER_RESP=$(curl -sf --max-time 10 -X POST "${CERTIFY_URL}/v1/certify/pre-authorized-data" \
+OFFER_RESP=$(curl -skf --max-time 10 -X POST "${CERTIFY_URL}/v1/certify/pre-authorized-data" \
   -H "Content-Type: application/json" \
   -d "{\"credential_configuration_id\":\"${CONFIG_ID}\",\"claims\":{\"registrationNo\":\"${STUDENT_ID}\"}}") || {
     echo -e "${RED}${BOLD}[SMOKE TEST FAILED]${NC} Failed to stage pre-authorized data offer from ${CERTIFY_URL}" >&2
@@ -90,7 +90,7 @@ echo -e "${GREEN}${BOLD}[OK]${NC} Offer created successfully: ${OFFER_ID}"
 
 # 3. Fetch pre-authorized code from offer data
 echo -e "${BLUE}${BOLD}[SMOKE TEST]${NC} 3/6 Fetching pre-authorized code..."
-OFFER_DATA=$(curl -sf --max-time 10 "${CERTIFY_URL}/v1/certify/credential-offer-data/${OFFER_ID}") || {
+OFFER_DATA=$(curl -skf --max-time 10 "${CERTIFY_URL}/v1/certify/credential-offer-data/${OFFER_ID}") || {
     echo -e "${RED}${BOLD}[SMOKE TEST FAILED]${NC} Failed to fetch credential offer data for ${OFFER_ID}" >&2
     exit 1
 }
@@ -103,7 +103,7 @@ echo -e "${GREEN}${BOLD}[OK]${NC} Pre-authorized code acquired."
 
 # 4. Exchange code for an Access Token directly with Inji Certify
 echo -e "${BLUE}${BOLD}[SMOKE TEST]${NC} 4/6 Exchanging pre-auth code for Inji Certify access token..."
-TOKEN_RESP=$(curl -sf --max-time 10 -X POST "${CERTIFY_URL}/v1/certify/oauth/token" \
+TOKEN_RESP=$(curl -skf --max-time 10 -X POST "${CERTIFY_URL}/v1/certify/oauth/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=urn:ietf:params:oauth:grant-type:pre-authorized_code&pre-authorized_code=${PRE_AUTH_CODE}") || {
     echo -e "${RED}${BOLD}[SMOKE TEST FAILED]${NC} Failed to exchange pre-authorized code for access token." >&2
@@ -163,7 +163,7 @@ REQ_PAYLOAD=$(jq -cn \
   --arg proof "$PROOF_JWT" \
   '{"format": $format, "credential_definition": $def, "proof": {"proof_type": "jwt", "jwt": $proof}}')
 
-CRED_RESP=$(curl -sf --max-time 15 -X POST "${CERTIFY_URL}/v1/certify/issuance/credential" \
+CRED_RESP=$(curl -skf --max-time 15 -X POST "${CERTIFY_URL}/v1/certify/issuance/credential" \
   -H "Authorization: Bearer ${ACCESS_TOKEN}" \
   -H "Content-Type: application/json" \
   -d "$REQ_PAYLOAD") || {

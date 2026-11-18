@@ -151,6 +151,15 @@ The unified deployment script `scripts/deploy.sh` streamlines provisioning:
 - **Tag & Tenant Synchronization**: Safely updates `IMAGE_TAG=<tag>` and `INSTALLATION=<tenant>` inside `.env` using inode-preserving stream writes (preventing stale Docker bind mounts).
 - **Service Pull & Startup**: Pulls tagged GHCR images and starts services using Docker Compose.
 
+### 4. Edge Ingress: HTTP (Local) vs HTTPS (Dev/Prod Server)
+Edge routing is managed by Traefik v3.7 in a modular compose architecture:
+- **Local Machine (HTTP)**: Uses [`compose.traefik.yaml`](../../compose.traefik.yaml) listening on HTTP port `80` (routing `*.localhost` without TLS).
+- **Dev / Production Host (HTTPS with Let's Encrypt)**: Appends [`compose.traefik-tls.yaml`](../../compose.traefik-tls.yaml) to `COMPOSE_FILE`. This:
+  1. Binds port `443` (HTTPS).
+  2. Provisions automated **Let's Encrypt TLS certificates** using HTTP-01 challenge on port `80`.
+  3. Automatically redirects incoming HTTP traffic on port `80` to HTTPS `443`.
+  4. Stores certificates persistently in the `vc-stack_traefik-acme` volume.
+
 ---
 
 ## Consolidated `.env` Reference for Dev Environment
