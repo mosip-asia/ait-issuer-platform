@@ -144,6 +144,12 @@ You can provision `local.p12` using one of the following methods:
        tools did --generate deploy/ait/private_key/CERTIFY_PKCS12/local.p12
      ```
 
+     > [!TIP]
+     > **Permission Denied Troubleshooting**: If Inji Certify previously ran on this host, Docker may have created `deploy/<tenant>/private_key/CERTIFY_PKCS12` owned by `root` or `inji` (UID 1001). If the command fails with permission denied, remove or chown the old directory first:
+     > ```bash
+     > sudo rm -rf deploy/ait/private_key/CERTIFY_PKCS12
+     > ```
+
    - **Method B: Using `uv` on the Host (Local Development)**:
      If Python 3.11+ and `uv` are already installed locally:
      ```bash

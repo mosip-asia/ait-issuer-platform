@@ -30,6 +30,7 @@ def test_generate_new_keystore_and_pem_extraction():
 
         assert p12_path.exists()
         assert p12_path.stat().st_size > 0
+        assert (p12_path.stat().st_mode & 0o777) == 0o644
         assert did.startswith("did:key:z6Mk")
         print("PASS test_generate_new_keystore_and_pem_extraction")
 

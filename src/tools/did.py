@@ -115,18 +115,41 @@ def extract_from_pem(pem_path: str | Path) -> str:
 def generate_new_keystore(output_path: str | Path, password: str = "local") -> str:
     """Generate a new Ed25519 keypair and package as PKCS12 keystore."""
     output_path = Path(output_path).resolve()
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Pre-flight check: ensure parent directory exists and is writable
+    try:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+    except PermissionError as e:
+        raise PermissionError(
+            f"Cannot create directory '{output_path.parent}': Permission denied. "
+            f"If created by Docker, run: sudo chown -R $(id -u):$(id -g) {output_path.parent}"
+        ) from e
+
+    if not os.access(output_path.parent, os.W_OK):
+        raise PermissionError(
+            f"Directory '{output_path.parent}' is not writable by current user (UID {os.getuid()}). "
+            f"If created by Docker as root, run: sudo chown -R $(id -u):$(id -g) {output_path.parent}"
+        )
+
+    if output_path.exists() and not os.access(output_path, os.W_OK):
+        raise PermissionError(
+            f"Existing keystore '{output_path}' is not writable by current user (UID {os.getuid()}). "
+            f"Run: sudo rm -f {output_path} (or sudo chown $(id -u):$(id -g) {output_path})"
+        )
 
     with tempfile.TemporaryDirectory() as tmpdir:
         key_pem = os.path.join(tmpdir, "ed25519-key.pem")
         cert_pem = os.path.join(tmpdir, "ed25519-cert.pem")
 
+        def run_ssl(cmd: list[str], step_name: str) -> subprocess.CompletedProcess:
+            res = subprocess.run(cmd, capture_output=True, text=True)
+            if res.returncode != 0:
+                err = res.stderr.strip() or res.stdout.strip() or "Unknown error"
+                raise RuntimeError(f"OpenSSL failed during {step_name}: {err}")
+            return res
+
         # 1. Generate Ed25519 private key
-        subprocess.run(
-            ["openssl", "genpkey", "-algorithm", "ED25519", "-out", key_pem],
-            check=True,
-            capture_output=True,
-        )
+        run_ssl(["openssl", "genpkey", "-algorithm", "ED25519", "-out", key_pem], "private key generation")
 
         # 2. Extract public key to compute did:key
         p_pub = subprocess.run(
@@ -138,25 +161,29 @@ def generate_new_keystore(output_path: str | Path, password: str = "local") -> s
         did_key = pubkey_to_did_key(raw_pub)
 
         # 3. Create self-signed X.509 certificate (valid 10 years)
-        subprocess.run(
+        run_ssl(
             [
                 "openssl", "req", "-new", "-x509", "-key", key_pem, "-out", cert_pem,
                 "-days", "3650", "-subj", "/C=TH/ST=Bangkok/O=AIT/CN=CERTIFY_VC_SIGN_ED25519"
             ],
-            check=True,
-            capture_output=True,
+            "certificate generation",
         )
 
         # 4. Package as PKCS12 keystore with alias CERTIFY_VC_SIGN_ED25519
-        subprocess.run(
+        run_ssl(
             [
                 "openssl", "pkcs12", "-export", "-in", cert_pem, "-inkey", key_pem,
                 "-out", str(output_path), "-name", "CERTIFY_VC_SIGN_ED25519",
                 "-passout", f"pass:{password}"
             ],
-            check=True,
-            capture_output=True,
+            "PKCS12 export",
         )
+
+    # Ensure keystore permissions allow Inji Certify (running as container user inji UID 1001) to read it
+    try:
+        output_path.chmod(0o644)
+    except OSError:
+        pass
 
     return did_key
 

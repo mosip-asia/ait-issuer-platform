@@ -216,7 +216,11 @@ def did_cmd(
 
     if generate:
         typer.echo(f"Generating new Ed25519 keypair and PKCS12 keystore at: {generate}...")
-        did_str = did_mod.generate_new_keystore(generate, password)
+        try:
+            did_str = did_mod.generate_new_keystore(generate, password)
+        except (PermissionError, RuntimeError, OSError) as e:
+            typer.secho(f"\n[ERROR] Keystore generation failed: {e}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(code=1)
         typer.secho(f"\n[OK] Keystore successfully created at: {generate}", fg=typer.colors.GREEN, bold=True)
         typer.echo(f"     Keystore Password: {password}")
         typer.secho(f"     Derived CERTIFY_DID: {did_str}\n", fg=typer.colors.CYAN, bold=True)
