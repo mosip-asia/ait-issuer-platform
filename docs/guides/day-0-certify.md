@@ -119,7 +119,8 @@ GET /student/{sub}/student-id
 - The `z` prefix indicates Multibase Base58btc encoding, and the bytes encode the Ed25519 public key multicodec (`0xed01` prefix followed by the 32-byte public key).
 - **Why this matters**: Any verifier worldwide can verify credentials issued by `did:key` completely offline without querying a blockchain or external server.
 
-### B. Keystore Configuration
+### B. Keystore Configuration & Key Generation
+
 Certify loads its Ed25519 private key from the keystore mounted into `/home/inji/CERTIFY_PKCS12/local.p12`:
 - Keystore file: `deploy/<tenant>/private_key/CERTIFY_PKCS12/local.p12`
 - Configurable environment variables:
@@ -129,7 +130,76 @@ Certify loads its Ed25519 private key from the keystore mounted into `/home/inji
   ```
   *(For production environments using a Hardware Security Module, `KEYSTORE_TYPE=PKCS11` is used).*
 
-### C. How to Configure `CERTIFY_DID` and Keystore Key Derivation
+#### How the Keystore is Created:
+You can provision `local.p12` in one of two ways:
+
+1. **Option 1: Pre-generate a Fresh Keystore Ahead of Time (Recommended for New Deployments)**
+   Use the platform's standalone cryptographic derivation utility to generate a new Ed25519 signing keypair and package it into a PKCS12 keystore:
+   ```bash
+   python3 scripts/derive-did.py --generate deploy/ait/private_key/CERTIFY_PKCS12/local.p12
+   ```
+   *Output Example:*
+   ```text
+   Generating new Ed25519 keypair and PKCS12 keystore at: deploy/ait/private_key/CERTIFY_PKCS12/local.p12...
+   [OK] Keystore successfully created at: deploy/ait/private_key/CERTIFY_PKCS12/local.p12
+        Keystore Password: local
+        Derived CERTIFY_DID: did:key:z6MkhsC1EojKdBoLzPY2kL2mFLSMJbQVC83M2CsnYGwghcsE
+
+   Configure this value in your .env file:
+     CERTIFY_DID=did:key:z6MkhsC1EojKdBoLzPY2kL2mFLSMJbQVC83M2CsnYGwghcsE
+   ```
+
+2. **Option 2: Automatic Generation by Inji Certify on Initial Boot**
+   If no file exists at `deploy/<tenant>/private_key/CERTIFY_PKCS12/local.p12`, Inji Certify's internal MOSIP Keymanager will automatically generate a new PKCS12 keystore with default signing keys (Ed25519, secp256k1, secp256r1, and RSA) on its very first startup.
+   Once Certify has booted, extract the derived `did:key` from the running service (see Section 3.D below).
+
+3. **Option 3: Manual Generation via OpenSSL CLI**
+   If creating the keystore manually without Python:
+   ```bash
+   # 1. Generate Ed25519 private key
+   openssl genpkey -algorithm ED25519 -out /tmp/ed25519-key.pem
+
+   # 2. Create self-signed certificate (valid 10 years)
+   openssl req -new -x509 -key /tmp/ed25519-key.pem -out /tmp/ed25519-cert.pem -days 3650 \
+     -subj "/C=TH/ST=Bangkok/O=AIT/CN=CERTIFY_VC_SIGN_ED25519"
+
+   # 3. Export to PKCS12 keystore with alias CERTIFY_VC_SIGN_ED25519
+   openssl pkcs12 -export -in /tmp/ed25519-cert.pem -inkey /tmp/ed25519-key.pem \
+     -out deploy/ait/private_key/CERTIFY_PKCS12/local.p12 -name CERTIFY_VC_SIGN_ED25519 -passout pass:local
+   rm -f /tmp/ed25519-key.pem /tmp/ed25519-cert.pem
+   ```
+
+---
+
+### C. ⚠️ Critical Invariant: Strict Immutability of `CERTIFY_DID` and Keystore
+
+> [!CAUTION]
+> ### ONCE ISSUANCE COMMENCES, `CERTIFY_DID` AND `local.p12` CAN NEVER BE CHANGED!
+>
+> In W3C Verifiable Credentials using the `did:key` method:
+> 1. **Cryptographic Signature Binding**: Every signed credential embeds the issuer's identifier and proof:
+>    ```json
+>    {
+>      "issuer": "did:key:z6MkhsC1EojKdBoLzPY2kL2mFLSMJbQVC83M2CsnYGwghcsE",
+>      "proof": {
+>        "type": "Ed25519Signature2020",
+>        "verificationMethod": "did:key:z6MkhsC1EojKdBoLzPY2kL2mFLSMJbQVC83M2CsnYGwghcsE#key-1"
+>      }
+>    }
+>    ```
+> 2. **Global Verification Failure**: Per W3C specifications, verifiers (such as Inji Verify, third-party employer verification systems, and other universities) verify the digital signature using **only** the public key encoded inside the `did:key` string.
+> 3. **Catastrophic Impact of Key / DID Changes**:
+>    - If `CERTIFY_DID` or `local.p12` is modified, regenerated, or replaced, **EVERY CREDENTIAL PREVIOUSLY ISSUED TO STUDENTS OR HOLDERS BECOMES PERMANENTLY UNVERIFIABLE AND INVALID**.
+>    - Any student presenting an existing Student ID or Academic Transcript to a verifier will fail with a cryptographic signature mismatch error (`FAILED_SIGNATURE`).
+> 4. **Revocation Authority Lost**: W3C Bitstring Status Lists and StatusList2021 are signed and controlled by the original issuer DID. A new DID has no authority to update or revoke credentials issued under a previous DID.
+> 5. **Backup & Disaster Recovery Requirement**:
+>    - Treat `deploy/<tenant>/private_key/CERTIFY_PKCS12/local.p12` and `CERTIFY_DID` in `.env` as **permanent institutional root secrets**.
+>    - Back up the keystore file to secure, encrypted disaster-recovery storage.
+>    - Never delete or wipe the keystore volume after initial issuance begins.
+
+---
+
+### D. How to Configure `CERTIFY_DID` and Keystore Key Derivation
 
 > [!IMPORTANT]
 > **Understanding Certify's DID Document Architecture:**
@@ -148,6 +218,8 @@ Certify loads its Ed25519 private key from the keystore mounted into `/home/inji
 > curl -sf https://issuer.dpi.ait.ac.th/.well-known/did.json | jq -r '"did:key:" + .verificationMethod[0].publicKeyMultibase'
 > # or locally via port 9091:
 > curl -sf http://localhost:9091/.well-known/did.json | jq -r '"did:key:" + .verificationMethod[0].publicKeyMultibase'
+> # or using the derive-did utility:
+> python3 scripts/derive-did.py https://issuer.dpi.ait.ac.th
 > ```
 > *Example Output:*
 > ```text
@@ -160,7 +232,7 @@ Certify loads its Ed25519 private key from the keystore mounted into `/home/inji
 > ```
 > Once updated and applied, `template-sync` updates the database, aligning `.id`, `.controller`, and the VC `issuer.id` with the actual cryptographic signing key in `local.p12`.
 
-### D. How `CERTIFY_DID` is Applied
+### E. How `CERTIFY_DID` is Applied
 Once set in `.env`:
 - **`template-sync`**: Reads `${CERTIFY_DID}` and automatically injects it into every credential configuration in the database (`credential_config.did_url`).
 - **`certify-installation.properties`**: Reads `mosip.certify.data-provider-plugin.did-url=${CERTIFY_DID}` and stamps it as the `issuer.id` inside every signed Verifiable Credential.
@@ -307,7 +379,8 @@ echo "Live Keystore-derived Issuer DID: $LIVE_DID"
 ```
 
 > [!NOTE]
-> Do not query `.id` directly to determine the live key. As explained in [Section 3.C](#c-how-to-configure-certify_did-and-keystore-key-derivation), querying `.id` merely echoes back whatever `CERTIFY_DID` is currently configured in `.env`. The genuine cryptographic public key resides at `.verificationMethod[0].publicKeyMultibase`.
+> Do not query `.id` directly to determine the live key. As explained in [Section 3.D](#d-how-to-configure-certify_did-and-keystore-key-derivation), querying `.id` merely echoes back whatever `CERTIFY_DID` is currently configured in `.env`. The genuine cryptographic public key resides at `.verificationMethod[0].publicKeyMultibase`.
+> You can also run the derivation tool: `python3 scripts/derive-did.py https://issuer.dpi.ait.ac.th`.
 
 If this differs from what is currently set in `.env` (e.g. if `.env` still holds the bootstrap placeholder `did:key:z6MkpPLACEHOLDER...`), update `CERTIFY_DID` in `.env`:
 > [!WARNING]

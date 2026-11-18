@@ -118,6 +118,15 @@ deploy/ait/
 └── mock/                              # Stand-in Keycloak realm (offline testing only)
 ```
 
+### 6. Keystore Custody & Cryptographic Identity Invariance (`did:key`)
+- Inji Certify signs all credentials using the Ed25519 private key in `deploy/<tenant>/private_key/CERTIFY_PKCS12/local.p12`.
+- The corresponding public identifier is `CERTIFY_DID` (`did:key:z6Mk...`).
+- You can generate a fresh keystore and derive its `did:key` using `python3 scripts/derive-did.py --generate <path>` (see [Stage 1 Guide](day-0-certify.md#b-keystore-configuration--key-generation)).
+
+> [!CAUTION]
+> **Strict Immutability Invariant:** Once credentials have been issued to students, **`CERTIFY_DID` and `local.p12` must NEVER be changed, regenerated, or replaced**.
+> In W3C VCDM, the signature is cryptographically bound to the issuer `did:key`. If the key or DID changes, **ALL existing credentials become permanently unverifiable** across all external wallets and verifiers worldwide. Always back up `local.p12` and `.env` securely!
+
 ---
 
 ## Deployment Automation, Container Images & Sparse Checkout
@@ -238,8 +247,10 @@ VCGA_BASE_URL=https://vcga.dpi.ait.ac.th
 TRUSTED_VCGA_URLS=https://vcga.dpi.ait.ac.th
 
 # ------------------------------------------------------------------------------
-# 2. Cryptographic Identity & Keystore
+# 2. Cryptographic Identity & Keystore (IMMUTABLE ONCE ISSUANCE BEGINS)
 # ------------------------------------------------------------------------------
+# ⚠️ CAUTION: NEVER modify CERTIFY_DID or replace local.p12 once credentials have
+# been issued. Doing so permanently invalidates all existing student credentials!
 CERTIFY_DID=did:key:z6MkhsC1EojKdBoLzPY2kL2mFLSMJbQVC83M2CsnYGwghcsE
 KEYSTORE_TYPE=PKCS12
 KEYSTORE_PASS=local
