@@ -191,9 +191,9 @@ echo -e "${GREEN}${BOLD}[OK]${NC} Proof JWT generated (Holder: ${DID_JWK:0:32}..
 echo -e "${BLUE}${BOLD}[SMOKE TEST]${NC} 6/6 Requesting Verifiable Credential from Inji Certify..."
 REQ_PAYLOAD=$(jq -cn \
   --arg format "$FORMAT" \
-  --argjson def "$DEF_JSON" \
+  --argjson cred_def "$DEF_JSON" \
   --arg proof "$PROOF_JWT" \
-  '{"format": $format, "credential_definition": $def, "proof": {"proof_type": "jwt", "jwt": $proof}}')
+  '{"format": $format, "credential_definition": $cred_def, "proof": {"proof_type": "jwt", "jwt": $proof}}')
 
 CRED_RESP=$(curl -skfL --max-time 20 -X POST "${CERTIFY_URL}/v1/certify/issuance/credential" \
   -H "Authorization: Bearer ${ACCESS_TOKEN}" \
