@@ -21,12 +21,3 @@ venv/
 .env.*
 !.env.example
 .pytest_cache/
-
-# local-only notes, not shared
-docker-compose.override.yml
-compose.override.yaml
-compose.override.yml
-/AGENTS.md
-/PLAN.md
-/docs/log.md
-
