@@ -13,6 +13,7 @@ import html
 import io
 import json
 import sys
+import tempfile
 import zipfile
 from pathlib import Path
 from typing import Callable
@@ -115,6 +116,12 @@ def _blank_pdf() -> bytes:
     writer.add_blank_page(width=200, height=300)
     out = io.BytesIO()
     writer.write(out)
+    return out.getvalue()
+
+
+def _empty_zip() -> bytes:
+    out = io.BytesIO()
+    zipfile.ZipFile(out, "w").close()
     return out.getvalue()
 
 
@@ -242,7 +249,11 @@ def test_rejects_wrong_files() -> None:
         "sample not JSON": {"sample": ("s.json", b"{oops")},
         "template with a stray #end": {"template": ("t.html", b"<p>#if($x)a#end#end</p>")},
         "template missing an #end": {"template": ("t.html", b"<p>#foreach($c in $terms)$c</p>")},
+        "credential with display not a list": {"credential": ("c.json", _json({**CREDENTIAL, "display": {"name": "x"}}))},
+        "credential with a logo not an object": {
+            "credential": ("c.json", _json({**CREDENTIAL, "display": [{"name": "x", "logo": "logo.png"}]}))},
         "bundle not a zip": {"bundle": ("set.zip", b"not a zip")},
+        "bundle with no files": {"bundle": ("set.zip", _empty_zip())},
         "too large": {"template": ("big.html", b"x" * (vc_lab.MAX_UPLOAD + 1))},
         "unknown field": {"stylesheet": ("s.css", b"p {}")},
     }
@@ -251,6 +262,21 @@ def test_rejects_wrong_files() -> None:
         assert res.status_code == 400, (case, res.status_code, res.text)
         assert isinstance(res.json()["detail"], str) and res.json()["detail"], case
     assert client.get("/api/set").json() == before, "a rejected upload leaves the set as it was"
+
+
+def test_large_upload_stays_in_memory() -> None:
+    """A file over Starlette's 1 MB spool limit (the AIT watermark is about 1 MB) never goes to a temp file."""
+    spilled = []
+    original = tempfile.SpooledTemporaryFile.rollover
+    tempfile.SpooledTemporaryFile.rollover = lambda self: spilled.append(True) or original(self)
+    try:
+        _upload_set()
+        big = b"<p>#claimValue('holderName')</p>" + b" " * (3 * 1024 * 1024)
+        assert _upload(template=("big.html", big)).status_code == 200
+    finally:
+        tempfile.SpooledTemporaryFile.rollover = original
+    assert not spilled, "the upload was written to a temporary file on disk"
+    assert "Ada Example" in client.get("/preview").text
 
 
 def test_export_pdf_lays_the_background_under_page_one() -> bool:
@@ -314,6 +340,7 @@ def main() -> None:
         test_remove_background_then_clear,
         test_download_and_upload_back,
         test_rejects_wrong_files,
+        test_large_upload_stays_in_memory,
         test_export_pdf_lays_the_background_under_page_one,
         test_background_with_its_own_rotation_comes_out_portrait,
     ]

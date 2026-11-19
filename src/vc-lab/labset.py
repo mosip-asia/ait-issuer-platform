@@ -19,7 +19,6 @@ import hardcopy
 import template_engine
 
 MAX_UPLOAD = 8 * 1024 * 1024  # bytes: one request, and the files unpacked from one zip
-SLOTS = ("template", "credential", "sample", "background")
 REQUIRED = ("template", "credential", "sample")
 
 T = TypeVar("T")
@@ -50,6 +49,9 @@ class LabSet:
     def replace(self, files: dict[str, tuple[str, bytes]]) -> LabSet:
         """This set with the given slots replaced by the parsed files ({slot: (filename, data)})."""
         return dataclasses.replace(self, **{slot: parse(slot, name, data) for slot, (name, data) in files.items()})
+
+
+SLOTS = tuple(f.name for f in dataclasses.fields(LabSet))
 
 
 def parse(slot: str, filename: str, data: bytes) -> Loaded[Any]:
@@ -86,6 +88,11 @@ def _credential(name: str, data: bytes) -> dict[str, Any]:
         raise ValueError(f"credential file {name!r} has no vc_template object")
     if not isinstance(vc_template.get("credentialSubject"), dict):
         raise ValueError(f"credential file {name!r}: vc_template has no credentialSubject object (the mapping)")
+    display = config.get("display", [])
+    if not isinstance(display, list) or not all(isinstance(entry, dict) for entry in display):
+        raise ValueError(f"credential file {name!r}: display must be a list of objects")
+    if display and not isinstance(display[0].get("logo") or {}, dict):
+        raise ValueError(f"credential file {name!r}: display's logo must be an object")
     return config
 
 
@@ -95,6 +102,7 @@ _PARSERS: dict[str, Callable[[str, bytes], Any]] = {
     "sample": lambda name, data: _json_object("sample", name, data),
     "background": hardcopy.make_background,
 }
+assert set(_PARSERS) == set(SLOTS), "every slot of LabSet needs a parser"
 
 
 def safe_filename(filename: str, fallback: str) -> str:
@@ -133,4 +141,6 @@ def from_zip(data: bytes) -> LabSet:
             if slot in files:
                 raise ValueError(f"bundle holds more than one {slot} file")
             files[slot] = (name, z.read(m))
+    if not files:
+        raise ValueError("bundle holds no files")
     return LabSet().replace(files)

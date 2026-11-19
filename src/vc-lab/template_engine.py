@@ -31,8 +31,7 @@ def render_credential(template_text: str, credential: dict[str, Any], sample: di
     claims = map_claims(credential["vc_template"]["credentialSubject"], record if isinstance(record, dict) else sample)
     if wallet:
         claims = {k: "" if isinstance(v, list) else v for k, v in claims.items()}
-    display = (credential.get("display") or [{}])[0]
-    display = display if isinstance(display, dict) else {}
+    display = (credential.get("display") or [{}])[0]  # its shape is checked at upload (labset)
     return render_velocity_template(template_text, template_context(claims, display, wallet), claims)
 
 

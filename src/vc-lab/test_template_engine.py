@@ -43,8 +43,15 @@ def test_loop_data_prints_as_written() -> None:
     assert html.unescape(rendered) == f"<p>{title}</p>", rendered
 
 
+def test_claim_data_prints_as_written() -> None:
+    value = "Costs in $title and #if($title)never#end"
+    rendered = engine.render_velocity_template("<p>#claimValue('note')</p>", {"title": "LEAK"}, {"note": value})
+    assert html.unescape(rendered) == f"<p>{value}</p>", rendered
+
+
 def main() -> None:
-    tests = [test_nested_foreach, test_if_else, test_longest_variable_name_wins, test_loop_data_prints_as_written]
+    tests = [test_nested_foreach, test_if_else, test_longest_variable_name_wins, test_loop_data_prints_as_written,
+             test_claim_data_prints_as_written]
     for test in tests:
         test()
         print(f"PASS {test.__name__}")

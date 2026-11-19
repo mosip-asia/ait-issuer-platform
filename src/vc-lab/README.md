@@ -55,6 +55,8 @@ Download gives the credential file back as uploaded, the same shape as the files
 docker compose run --rm -v <folder>:/app/config/credentials:ro template-sync
 ```
 
+Not checked yet: whether Certify needs a restart to pick up the new version.
+
 ## Running
 
 ```bash
