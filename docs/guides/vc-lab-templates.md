@@ -17,10 +17,10 @@ SIS response ──(credential file: vc_template)──► claims ──(templat
 
 | File | Extension | What it is | What it gives | If missing |
 |---|---|---|---|---|
-| Template | `.html` | HTML with Velocity: `#claimValue("name")` for a value, `#foreach` for a table, `#if`/`#else` | the page layout | nothing renders |
+| Template | `.html`, A4 | HTML with Velocity: `#claimValue("name")` for a value, `#foreach` for a table, `#if`/`#else` | the page layout | nothing renders |
 | Credential file | `.json` | Certify's credential file (as in `deploy/<installation>/certify/credentials/`); `vc_template.credentialSubject` is the mapping | the claims, plus the title, logo and colours from `display` | nothing renders |
-| Sample | `.json` | one student's response, exactly as the Adapter sends it | the values | nothing renders; a field it lacks prints empty |
-| Background | `.pdf` | the pre-printed paper (watermark, seal, signature); page 1 | the paper under page 1 of the PDF | optional: the PDF is the text alone, for pre-printed paper |
+| Data (the API's `sample`) | `.json` | one record, exactly as the Adapter sends it, with or without a `credentialSubject` envelope | the values | nothing renders; a field it lacks prints empty |
+| Background | `.pdf`, A4 | the pre-printed paper (watermark, seal, signature, image); page 1, fitted on portrait A4 | the paper under page 1 of the PDF | optional: the PDF is the text alone, for pre-printed paper |
 
 The background may be confidential and VC Lab has no login: upload it only on a VC Lab on your own machine, and never commit it.
 
@@ -31,7 +31,7 @@ The background may be confidential and VC Lab has no login: upload it only on a 
 3. **The context:** a new claim name needs a term in the installation's JSON-LD context (`deploy/<installation>/vdr/contexts/`), which lists every claim. Keep today's claim names where possible.
 4. **SIS:** if the response has no field for it, the box stays empty until the Adapter team adds one. Ask in their field names.
 
-Check it in VC Lab with a sample that has the field, in both views.
+Check it in VC Lab with data that has the field, in both views.
 
 ## Lab and Wallet views
 

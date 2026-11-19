@@ -195,39 +195,37 @@ _DASHBOARD = """<!DOCTYPE html>
       <div class="card">
         <h2>The set</h2>
         <div class="slot">
-          <b>Template</b> <span class="ext">.html</span>
+          <b>Template</b> <span class="ext">.html (A4)</span>
           <div class="hint">The layout: HTML where the data is placed. Each <code>#claimValue("name")</code> is filled with
-            that claim; <code>#foreach</code> draws a table from a list. Required: it is the page itself.</div>
+            that claim.</div>
           <div class="pick"><label>Choose file<input type="file" hidden data-field="template" accept=".html,.htm,.vm,text/html"></label>
             <span class="file" data-slot="template"></span></div>
         </div>
         <div class="slot">
           <b>Credential file</b> <span class="ext">.json</span>
           <div class="hint">Certify's credential file. Its <code>vc_template</code> maps each claim to a field of the
-            sample (<code>"registrationNo": "${studentId}"</code>); its <code>display</code> gives the title, logo and
-            colours. Required: without it the template has no claims.</div>
+            data (<code>"registrationNo": "${studentId}"</code>).</div>
           <div class="pick"><label>Choose file<input type="file" hidden data-field="credential" accept=".json,application/json"></label>
             <span class="file" data-slot="credential"></span></div>
         </div>
         <div class="slot">
-          <b>Sample</b> <span class="ext">.json</span>
-          <div class="hint">One student's record, exactly as the Adapter (SIS) sends it. It gives the values.
-            Required; a field it lacks prints empty.</div>
+          <b>Data</b> <span class="ext">.json</span>
+          <div class="hint">One record, as the Adapter sends it. It gives the values.</div>
           <div class="pick"><label>Choose file<input type="file" hidden data-field="sample" accept=".json,application/json"></label>
             <span class="file" data-slot="sample"></span></div>
         </div>
         <div class="slot">
-          <b>Background</b> <span class="ext">.pdf</span>
-          <div class="hint">The pre-printed paper (watermark, seal, signature); page 1 is used. It shows only in Export
-            PDF, under page 1. Optional: without it the PDF is the text alone, for printing on pre-printed paper.</div>
+          <b>Background</b> <span class="ext">.pdf (A4)</span>
+          <div class="hint">The pre-printed paper (watermark, seal, signature, image); page 1 is used. It shows only in
+            Export PDF.</div>
           <div class="pick"><label>Choose file<input type="file" hidden data-field="background" accept=".pdf,application/pdf"></label>
             <span class="file" data-slot="background"></span></div>
         </div>
-        <div class="warn">A background such as an organisation's watermark paper may be confidential. VC Lab has no
-          login, so upload it only on a VC Lab running on your own machine. It is kept in memory and forgotten on restart.</div>
+        <div class="warn">A background may be confidential. VC Lab has no login: upload one only on your own machine.
+          It is kept in memory and forgotten on restart.</div>
         <div class="slot">
           <b>Or a whole set</b> <span class="ext">.zip</span>
-          <div class="hint">A zip from Download. It replaces all four files at once.</div>
+          <div class="hint">A zip from Download. It replaces all four files.</div>
           <div class="pick"><label>Choose file<input type="file" hidden data-field="bundle" accept=".zip,application/zip"></label></div>
         </div>
         <div id="error"></div>
@@ -260,10 +258,10 @@ _DASHBOARD = """<!DOCTYPE html>
     const showError = (text) => { document.getElementById('error').textContent = text || ''; };
 
     const VIEW_HINTS = {
-      lab: 'Lab: every list (such as the course table) is looped over, so #foreach draws its rows.',
-      wallet: 'Wallet: what a Wallet prints through Mimoto 0.21, which hands every list to the template as empty. '
-        + 'Loops draw nothing and the template\\'s #else fallback shows instead (for a transcript, a courseList text claim).',
+      lab: 'Lab: lists are drawn.',
+      wallet: 'Wallet: as Mimoto prints it. Lists come through empty, so loops show their #else.',
     };
+    const NAMES = {template: 'template', credential: 'credential file', sample: 'data'};
 
     async function show(status) {
       for (const el of document.querySelectorAll('[data-slot]')) {
@@ -275,13 +273,13 @@ _DASHBOARD = """<!DOCTYPE html>
       const note = document.getElementById('backgroundNote');
       note.className = 'note' + (background ? ' strong' : '');
       note.textContent = background
-        ? 'Background loaded (' + background + '): it is not drawn in this HTML preview. Export PDF lays it under page 1.'
-        : 'This HTML preview never shows a background. Export PDF lays one under page 1.';
+        ? 'Background loaded (' + background + '). It shows only in Export PDF, not here.'
+        : 'This preview never shows the background. Export PDF does.';
       document.getElementById('viewHint').textContent = VIEW_HINTS[view()];
       const ready = status.missing.length === 0;
       document.getElementById('exportPdf').disabled = !ready;
       document.getElementById('removeBackground').disabled = !status.loaded.background;
-      document.getElementById('empty').textContent = ready ? '' : 'Upload these to see the preview: ' + status.missing.join(', ') + '.';
+      document.getElementById('empty').textContent = ready ? '' : 'Upload these to see the preview: ' + status.missing.map(s => NAMES[s]).join(', ') + '.';
       const frame = document.getElementById('preview');
       frame.hidden = !ready;
       if (ready) frame.src = '/preview?view=' + view() + '&t=' + Date.now();
