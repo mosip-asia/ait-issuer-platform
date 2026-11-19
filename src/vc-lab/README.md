@@ -1,90 +1,84 @@
-# VC Lab: Verifiable Credential Design & Authoring Studio
+# VC Lab
 
-**VC Lab** is the dedicated module and toolkit for **VC Developers** and **VC Operators** to author, model, preview, and export Verifiable Credentials (VCs) before deploying them to the runtime infrastructure.
+VC Lab renders a credential's HTML template from files you upload, shows what a Wallet will print, and exports the hard copy as a PDF. It knows nothing about any organisation: it has no built-in template, data or branding, and it reads nothing from the repo's folders, so a deployed VC Lab behaves the same as a local one.
 
----
+## The set
 
-## 1. Core Responsibilities
+What each file is, and how a value travels from SIS to the page, is in [the template guide](../../docs/guides/vc-lab-templates.md). VC Lab works on one set of files at a time, held in memory and forgotten on restart:
 
-VC Lab empowers credential designers and operators across three primary workflows:
+| Slot | File | What VC Lab reads from it |
+|---|---|---|
+| `template` | the HTML (Velocity) render template | the whole file |
+| `credential` | Certify's whole credential configuration file | `vc_template.credentialSubject` (the mapping) and the first `display` entry |
+| `sample` | the Adapter's response, exactly as the Adapter sends it | its `credentialSubject`, or the whole file when it has none |
+| `background` (optional) | a PDF page, such as the organisation's pre-printed paper | page 1 |
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                                   VC LAB                                    │
-│                 (Credential Design, Authoring & Versioning)                 │
-└─────────────────────────────────────┬───────────────────────────────────────┘
-                                      │
-         ┌────────────────────────────┼────────────────────────────┐
-         ▼                            ▼                            ▼
-┌──────────────────┐         ┌──────────────────┐         ┌──────────────────┐
-│ 1. Schema &      │         │ 2. HTML Template │         │ 3. Visual & UI   │
-│    Data Contract │         │    & Rendering   │         │    Presentation  │
-│ - Versioned      │         │ - Apache Velocity│         │ - Wallet Card    │
-│   @context JSON  │         │   Layouts        │   Thumbnails     │
-│ - Certify        │         │ - Offline Live   │ - Verify Input   │
-│   Blueprints     │         │   Preview Engine │   Descriptors    │
-│ - Canonical URIs │         │ - A4 Page Grid   │ - Claim Render   │
-│   (v1, v2...)    │         │   & Verification │   Orders         │
-│                  │         │   QR Code        │                  │
-└────────┬─────────┘         └────────┬─────────┘         └────────┬─────────┘
-         │                            │                            │
-         ▼                            ▼                            ▼
-┌──────────────────┐         ┌──────────────────┐         ┌──────────────────┐
-│ Export Target:   │         │ Export Target:   │         │ Export Target:   │
-│ deploy/<tenant>/ │         │ deploy/<tenant>/ │         │ deploy/base/     │
-│ vdr/contexts/    │         │ vdr/templates/   │         │ verify-config    │
-│ credentials/<vc> │         │                  │         │ .json            │
-└──────────────────┘         └──────────────────┘         └──────────────────┘
-```
+Uploading a file replaces that slot only; uploading a zip from Download replaces the whole set. Each file is checked when it is uploaded: the background must be a PDF, the credential file JSON with a `vc_template` object (holding a `credentialSubject` object), the sample a JSON object, and the template's `#if`/`#foreach`/`#macro` must each have their `#end`. One request may carry at most 8 MB.
 
-### 1. Define / Render / Export Schema (Version-Controlled)
-- **W3C JSON-LD `@context` Definitions**: Authors schema definitions with immutable canonical URIs under institutional production domains (e.g. `https://vdr.dpi.ait.ac.th/contexts/<vc>/v1.json`). Versioning is strictly controlled via directory increments (`v1.json`, `v2.json`).
-- **Inji Certify Blueprints**: Exports credential configurations (`deploy/<tenant>/credentials/<vc>.json`) with matching `scope`, `credential_format` (`ldp_vc` or `mso_mdoc`), signing algorithms (`Ed25519Signature2020` or `ES256`), and velocity template mappings (`vc_template`).
+## From sample to page
 
-### 2. Define / Render / Export HTML Template (Version-Controlled)
-- **Printable Certificate & Transcript Layouts**: Creates Apache Velocity templates (e.g. `deploy/<tenant>/vdr/templates/<Issuer>-<vc>-template.html`) styled for A4 portrait printing with precise margins, typography, and borders.
-- **Offline Template Preview Engine**: Evaluates `#macro(claimValue $claimName)`, `#if ... #else ... #end`, and `$rowProperties` to generate instant preview HTML files from mock student personas (`tests/fixtures/students.json`) without running Docker or backend services.
+1. The record is the sample's `credentialSubject`, or the whole sample.
+2. The mapping is evaluated against the record. `${name}`, `$name` and dotted paths (`${thesis.title}`) read the record; a value that is exactly one reference passes a list or object through unchanged. Certify's own variables (`${_holderId}`, `${_issuer}`, any name starting with `_`) get placeholders. The result is the credential's claims, keyed by the mapping's left side.
+3. The template sees Mimoto's variables (`titleName`, `logoUrl`, `backgroundColor`, `textColor` from the credential file's first `display` entry, a mock `qrCodeImage`, `credentialValidity`) plus every claim that holds a list, or text holding a JSON list, under its claim name, so `#foreach($t in $terms)` with `$t.field` and nested loops works.
+4. `#claimValue("name")` reads the claims last, and loop values are escaped (`$` and `#` included), so data is never read as template code.
 
-### 3. Define / Render / Export Visual Presentation & Button Renders
-- **Wallet Card Display**: Generates the display JSON properties (`display`, `display_order`, background color, text color, and logo) for Inji Web and Inji Mobile card lists.
-- **Inji Verify Button & Descriptors**: Exports verification rule blocks for `deploy/base/verify-config.json` (`verifiableClaims` descriptor, proof format checks, and `<CredentialType>RenderOrder`).
+**Wallet view** renders the same way, but every list claim is `""` and no list reaches the template, as Mimoto 0.21 does. A template that loops over a list should keep an `#else` for the Wallet's copy.
 
----
+## Dashboard and API
 
-## 2. In-Memory Velocity Template Engine (`template_engine.py`)
+The dashboard (`/`) has a file input per slot (or one for a zip), the list of loaded files, the HTML preview with a Lab/Wallet switch, and Export PDF, Download, Remove background and Clear.
 
-VC Lab includes a pure-Python Velocity template engine for live rendering in the studio dashboard and REST APIs without requiring Java, Inji Certify, or Docker.
+| Call | Does |
+|---|---|
+| `POST /api/set` | multipart; any of `template`, `credential`, `sample`, `background`, or one `bundle` (a zip from Download); answers what is loaded |
+| `GET /api/set` | which slots are loaded, with their file names, and which required ones are missing |
+| `DELETE /api/set` | clears the set |
+| `DELETE /api/set/background` | removes the background only |
+| `GET /preview?view=lab\|wallet` | the rendered HTML, never with the background |
+| `GET /export.pdf?view=lab\|wallet` | the PDF, with the background under page 1 when one is loaded |
+| `GET /download` | a zip with `template/`, `credential/`, `sample/` and `background/`, each file as uploaded |
+| `GET /health` | liveness |
 
-### Running Unit Tests:
+Rendering needs the template, the credential file and the sample; without them the preview and export answer 409, naming what is missing. A wrong file answers 400 with the reason.
+
+## The hard copy (`hardcopy.py`)
+
+`make_background(filename, data)` takes page 1 of an uploaded PDF, with its own `/Rotate` and crop box respected, and fits it on a portrait A4 page without redrawing it. `render_pdf(html, background=None)` renders the template through WeasyPrint and lays that page under page 1 only, so later pages (the verification QR) print clean. Without a background the PDF is the information alone, for printing on pre-printed paper. The Admin Portal's hard copy can use `render_pdf` the same way.
+
+> **A background may be confidential** (an organisation's watermark, seal and signature). VC Lab keeps it in memory only, but has no login: anyone who can reach a deployed VC Lab can download it. Upload one only on a VC Lab running on your own machine.
+
+## Issuing with a credential file from VC Lab
+
+Download gives the credential file back as uploaded, the same shape as the files Certify's sync tool reads. Put it in a folder outside git and run the sync tool with that folder mounted; it replaces the stored version by its key:
+
 ```bash
-python3 src/vc-lab/test_template_engine.py
-.venv/bin/python src/vc-lab/test_main.py
+docker compose run --rm -v <folder>:/app/config/credentials:ro template-sync
 ```
 
----
+Not checked yet: whether Certify needs a restart to pick up the new version.
 
-## 3. Docker Service & Compose Integration
+## Running
 
-VC Lab is containerized with [`docker/Dockerfile.ait-vc`](../../docker/Dockerfile.ait-vc) and runs as a service in [`compose.yaml`](../../compose.yaml).
-
-### Running with Docker:
 ```bash
-# Start the VC Lab studio container:
-docker compose up -d vc-lab
-
-# Access the interactive Web Studio:
-open http://lab.localhost
+docker compose up -d vc-lab   # then open http://lab.localhost
+python3 src/vc-lab/main.py    # or locally, on port 4200
 ```
 
----
+Tests (script-style; the PDF tests need WeasyPrint's system libraries, so they run in the `ait-vc` image and skip on a host without them):
 
-## 4. Directory Layout
+```bash
+.venv/bin/python src/vc-lab/test_main.py             # the web API, with a small made-up set
+.venv/bin/python src/vc-lab/test_template_engine.py  # Velocity details
+```
+
+## Layout
 
 ```
 src/vc-lab/
-├── README.md                  # Module architecture & developer documentation
-├── main.py                    # FastAPI Web Studio & REST API server
-├── template_engine.py         # In-memory Velocity template parser and QR generator
-├── test_main.py               # Unit tests for FastAPI studio endpoints
-└── test_template_engine.py    # Unit test suite verifying template rendering
+├── main.py                  # the web app: dashboard and API over the one set
+├── labset.py                # the set: its slots, upload parsing and validation, the zip
+├── template_engine.py       # pure: mapping, template context and the Velocity subset
+├── hardcopy.py              # the background page and the PDF
+├── test_main.py             # API tests
+└── test_template_engine.py  # Velocity tests
 ```

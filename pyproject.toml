@@ -17,6 +17,8 @@ dependencies = [
     "tzdata",
     "psycopg[binary]>=3.1.0",
     "typer>=0.29.0",
+    "pypdf>=5.0.0",
+    "weasyprint>=62.0",
 ]
 
 [project.scripts]
