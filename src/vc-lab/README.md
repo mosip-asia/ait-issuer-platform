@@ -4,7 +4,7 @@ VC Lab renders a credential's HTML template from files you upload, shows what a 
 
 ## The set
 
-VC Lab works on one set of files at a time, held in memory and forgotten on restart:
+What each file is, and how a value travels from SIS to the page, is in [the template guide](../../docs/guides/vc-lab-templates.md). VC Lab works on one set of files at a time, held in memory and forgotten on restart:
 
 | Slot | File | What VC Lab reads from it |
 |---|---|---|

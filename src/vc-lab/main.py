@@ -164,16 +164,25 @@ _DASHBOARD = """<!DOCTYPE html>
     main { display: grid; grid-template-columns: 380px 1fr; gap: 24px; max-width: 1400px; margin: 24px auto; padding: 0 24px; }
     .card { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 18px; margin-bottom: 20px; }
     .card h2 { margin: 0 0 10px; font-size: 15px; color: var(--primary); }
-    label { display: block; font-size: 13px; font-weight: 600; margin: 12px 0 4px; }
-    .loaded { font-weight: 400; color: var(--muted); }
-    input[type=file] { width: 100%; font-size: 13px; }
+    .slot { margin-top: 14px; }
+    .slot b { font-size: 13px; }
+    .ext { font-size: 12px; color: var(--muted); font-family: ui-monospace, monospace; }
+    .hint { font-size: 12px; color: var(--muted); margin: 2px 0 6px; line-height: 1.4; }
+    .pick { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+    .pick label { padding: 5px 10px; border: 1px solid var(--border); border-radius: 6px; background: #f1f5f9; cursor: pointer; white-space: nowrap; }
+    .pick label:hover { background: #e2e8f0; }
+    .file { word-break: break-all; }
+    .file.none { color: var(--muted); font-style: italic; }
+    .file.set { color: #047857; font-weight: 600; }
+    .note { font-size: 13px; color: #1e3a8a; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; }
+    .note.strong { color: #92400e; background: #fffbeb; border-color: #fde68a; font-weight: 600; }
     .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
     button { flex: 1; padding: 8px 10px; border: 0; border-radius: 6px; background: var(--primary); color: #fff; font-weight: 600; cursor: pointer; }
     button.quiet { background: var(--muted); }
     button:disabled { opacity: .45; cursor: default; }
     .warn { font-size: 12px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 8px; margin-top: 6px; }
     #error { font-size: 13px; color: #b91c1c; white-space: pre-wrap; }
-    .viewer-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .viewer-head { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; margin-bottom: 10px; }
     .views label { display: inline; margin: 0 0 0 12px; font-weight: 400; }
     iframe { width: 100%; height: 860px; border: 1px solid var(--border); border-radius: 6px; background: #fff; }
     #empty { color: var(--muted); font-size: 14px; padding: 40px 0; text-align: center; }
@@ -185,18 +194,42 @@ _DASHBOARD = """<!DOCTYPE html>
     <div>
       <div class="card">
         <h2>The set</h2>
-        <label>Template (HTML, Velocity) <span class="loaded" data-slot="template"></span></label>
-        <input type="file" data-field="template" accept=".html,.htm,.vm,text/html">
-        <label>Credential file (Certify JSON, with vc_template) <span class="loaded" data-slot="credential"></span></label>
-        <input type="file" data-field="credential" accept=".json,application/json">
-        <label>Sample (the Adapter's response, JSON) <span class="loaded" data-slot="sample"></span></label>
-        <input type="file" data-field="sample" accept=".json,application/json">
-        <label>Background (optional, PDF, page 1) <span class="loaded" data-slot="background"></span></label>
-        <input type="file" data-field="background" accept=".pdf,application/pdf">
+        <div class="slot">
+          <b>Template</b> <span class="ext">.html</span>
+          <div class="hint">The layout: HTML where the data is placed. Each <code>#claimValue("name")</code> is filled with
+            that claim; <code>#foreach</code> draws a table from a list. Required: it is the page itself.</div>
+          <div class="pick"><label>Choose file<input type="file" hidden data-field="template" accept=".html,.htm,.vm,text/html"></label>
+            <span class="file" data-slot="template"></span></div>
+        </div>
+        <div class="slot">
+          <b>Credential file</b> <span class="ext">.json</span>
+          <div class="hint">Certify's credential file. Its <code>vc_template</code> maps each claim to a field of the
+            sample (<code>"registrationNo": "${studentId}"</code>); its <code>display</code> gives the title, logo and
+            colours. Required: without it the template has no claims.</div>
+          <div class="pick"><label>Choose file<input type="file" hidden data-field="credential" accept=".json,application/json"></label>
+            <span class="file" data-slot="credential"></span></div>
+        </div>
+        <div class="slot">
+          <b>Sample</b> <span class="ext">.json</span>
+          <div class="hint">One student's record, exactly as the Adapter (SIS) sends it. It gives the values.
+            Required; a field it lacks prints empty.</div>
+          <div class="pick"><label>Choose file<input type="file" hidden data-field="sample" accept=".json,application/json"></label>
+            <span class="file" data-slot="sample"></span></div>
+        </div>
+        <div class="slot">
+          <b>Background</b> <span class="ext">.pdf</span>
+          <div class="hint">The pre-printed paper (watermark, seal, signature); page 1 is used. It shows only in Export
+            PDF, under page 1. Optional: without it the PDF is the text alone, for printing on pre-printed paper.</div>
+          <div class="pick"><label>Choose file<input type="file" hidden data-field="background" accept=".pdf,application/pdf"></label>
+            <span class="file" data-slot="background"></span></div>
+        </div>
         <div class="warn">A background such as an organisation's watermark paper may be confidential. VC Lab has no
           login, so upload it only on a VC Lab running on your own machine. It is kept in memory and forgotten on restart.</div>
-        <label>Or a whole set (a zip from Download)</label>
-        <input type="file" data-field="bundle" accept=".zip,application/zip">
+        <div class="slot">
+          <b>Or a whole set</b> <span class="ext">.zip</span>
+          <div class="hint">A zip from Download. It replaces all four files at once.</div>
+          <div class="pick"><label>Choose file<input type="file" hidden data-field="bundle" accept=".zip,application/zip"></label></div>
+        </div>
         <div id="error"></div>
         <div class="row">
           <button id="exportPdf">Export PDF</button>
@@ -210,12 +243,14 @@ _DASHBOARD = """<!DOCTYPE html>
     </div>
     <div class="card">
       <div class="viewer-head">
-        <h2 style="margin:0">Preview <span class="loaded">(HTML, without the background; Export PDF shows it)</span></h2>
+        <h2 style="margin:0">Preview</h2>
         <div class="views">
           <label><input type="radio" name="view" value="lab" checked> Lab</label>
           <label><input type="radio" name="view" value="wallet"> Wallet (as Mimoto prints it)</label>
         </div>
       </div>
+      <div class="note" id="backgroundNote"></div>
+      <div class="hint" id="viewHint"></div>
       <div id="empty"></div>
       <iframe id="preview" hidden></iframe>
     </div>
@@ -224,11 +259,25 @@ _DASHBOARD = """<!DOCTYPE html>
     const view = () => document.querySelector('input[name=view]:checked').value;
     const showError = (text) => { document.getElementById('error').textContent = text || ''; };
 
+    const VIEW_HINTS = {
+      lab: 'Lab: every list (such as the course table) is looped over, so #foreach draws its rows.',
+      wallet: 'Wallet: what a Wallet prints through Mimoto 0.21, which hands every list to the template as empty. '
+        + 'Loops draw nothing and the template\\'s #else fallback shows instead (for a transcript, a courseList text claim).',
+    };
+
     async function show(status) {
       for (const el of document.querySelectorAll('[data-slot]')) {
         const name = status.loaded[el.dataset.slot];
-        el.textContent = name ? '· ' + name : '';
+        el.textContent = name ? '\\u2713 ' + name : 'not loaded';
+        el.className = 'file ' + (name ? 'set' : 'none');
       }
+      const background = status.loaded.background;
+      const note = document.getElementById('backgroundNote');
+      note.className = 'note' + (background ? ' strong' : '');
+      note.textContent = background
+        ? 'Background loaded (' + background + '): it is not drawn in this HTML preview. Export PDF lays it under page 1.'
+        : 'This HTML preview never shows a background. Export PDF lays one under page 1.';
+      document.getElementById('viewHint').textContent = VIEW_HINTS[view()];
       const ready = status.missing.length === 0;
       document.getElementById('exportPdf').disabled = !ready;
       document.getElementById('removeBackground').disabled = !status.loaded.background;
