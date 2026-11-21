@@ -54,6 +54,15 @@ def test_course_rows_replace_the_separators_inside_a_field() -> None:
     assert lines[0].startswith("T|T/1|") and lines[1].startswith("C|X1|Pipes / and breaks here|"), lines
 
 
+def test_an_absent_value_is_an_empty_course_rows_field() -> None:
+    # None (a null in the record) is no value, not the text "None".
+    rows = derive_course_rows_from_courses(
+        [{"term": "T", "credits": "1", "gpa": None, "cumGpa": "3.5",
+          "courses": [{"no": "X1", "title": "Y", "lab": None, "lec": "3", "credits": "3", "grade": None}]}]
+    )
+    assert rows == "T|T|1||3.5\nC|X1|Y||3|3|", rows
+
+
 def test_course_rows_have_one_heading_per_term_and_one_row_per_course() -> None:
     semesters = parse_courses(
         [{"term": f"Term {t}", "credits": "6", "gpa": "3.50", "cumGpa": "3.50",

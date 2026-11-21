@@ -79,8 +79,11 @@ def derive_course_list_from_courses(semesters: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def _row_field(value: Any) -> str:
-    """One field of a courseRows line: `|` becomes `/` and a line break a space, so a field never splits its row."""
+def row_field(value: Any) -> str:
+    """One field of a courseRows line: `|` becomes `/` and a line break a space, so a field never splits its row.
+    An absent value (None) is an empty field."""
+    if value is None:
+        return ""
     return re.sub(r"[\r\n]+", " ", str(value).strip()).replace("|", "/")
 
 
@@ -90,9 +93,9 @@ def derive_course_rows_from_courses(semesters: list[dict[str, Any]]) -> str:
     splits this text instead."""
     lines: list[str] = []
     for block in semesters:
-        lines.append("|".join(["T", *(_row_field(block.get(k, "")) for k in ("term", "credits", "gpa", "cumGpa"))]))
+        lines.append("|".join(["T", *(row_field(block.get(k, "")) for k in ("term", "credits", "gpa", "cumGpa"))]))
         for c in block.get("courses") or []:
-            lines.append("|".join(["C", *(_row_field(c.get(k, "")) for k in _COURSE_KEYS)]))
+            lines.append("|".join(["C", *(row_field(c.get(k, "")) for k in _COURSE_KEYS)]))
     return "\n".join(lines)
 
 
