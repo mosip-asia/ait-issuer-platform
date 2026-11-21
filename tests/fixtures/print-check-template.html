@@ -9,6 +9,7 @@
   @font-face { font-family: "PrintCheckThai"; src: url("http://vdr.localhost/templates/print-check/thai-font.ttf"); }
   @page { size: A4; margin: 0; }
   body { margin: 0; font-family: PrintCheckThai, Helvetica, sans-serif; font-size: 9pt; }
+  .page { position: relative; width: 595.28pt; height: 841.89pt; }
   .background { position: absolute; left: 0; top: 0; width: 595.28pt; height: 841.89pt; }
   .content { position: absolute; left: 30pt; top: 30pt; width: 535pt; }
 </style>
@@ -16,6 +17,7 @@
 <body>
 <!-- A generic Mimoto template that scripts/print-check.sh swaps onto the VDR under the credential's template name.
      It prints its marker and every claim Mimoto hands it ($rowProperties: claim -> {display name: text}). -->
+<div class="page">
 #if($backgroundImage && $backgroundImage != "")<img class="background" src="$backgroundImage"/>#end
 <div class="content">
 <p>PRINT-CHECK-TEMPLATE</p>
@@ -26,6 +28,7 @@
 <p>$claim.key: $shown.value</p>
 #end
 #end
+</div>
 </div>
 </body>
 </html>
