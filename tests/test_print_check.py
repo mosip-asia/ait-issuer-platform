@@ -100,11 +100,12 @@ def test_help_without_the_mounted_adapter_module_is_a_one_line_setup_failure() -
 
 
 
-def test_importing_this_test_leaves_the_real_httpx_in_place() -> None:
-    # In a fresh process, so this one's own stand-ins can't count. Without a real httpx there is nothing to replace.
+def test_importing_this_test_leaves_the_real_httpx_in_place_or_no_stub_behind() -> None:
+    # In a fresh process, so this one's own stand-ins can't count. With a real httpx it must still be the real module;
+    # without one, no stand-in may stay in sys.modules. Passes with or without httpx installed.
     code = (f"import sys, importlib.util; sys.path.insert(0, {str(REPO_ROOT / 'tests')!r}); "
-            "real = importlib.util.find_spec('httpx') is not None; import test_print_check, httpx; "
-            "print(not real or hasattr(httpx, 'Client'))")
+            "real = importlib.util.find_spec('httpx') is not None; import test_print_check; "
+            "print(hasattr(sys.modules.get('httpx'), 'Client') if real else 'httpx' not in sys.modules)")
     run = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
     assert run.stdout.strip() == "True", (run.stdout, run.stderr)
 
