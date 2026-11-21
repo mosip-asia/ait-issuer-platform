@@ -146,6 +146,7 @@ docker run --rm --user "$(id -u):$(id -g)" \
   --add-host vdr.localhost:host-gateway --add-host adapter.localhost:host-gateway \
   --add-host mimoto.localhost:host-gateway \
   -v "$PWD/src/tools/print_check.py:/check/print_check.py:ro" \
+  -v "$PWD/mock/adapter/ait_courses.py:/check/ait_courses.py:ro" \
   -v "$PWD/tests/fixtures/print-check-template.html:/check/template.html:ro" \
   -v "$PWD/$INST/smoke.json:/installation/smoke.json:ro" \
   -v "$PWD/$INST/mock/keycloak-realm.json:/installation/mock/keycloak-realm.json:ro" \

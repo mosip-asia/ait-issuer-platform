@@ -105,6 +105,7 @@ run_release_checks() {
     tests/test_issue_and_verify.py \
     tests/test_adapter.py \
     tests/test_courses.py \
+    tests/test_print_check.py \
     src/gateway/tests/test_evaluations.py
   do
     if ! "$test_py" "$t" >/dev/null 2>&1; then

@@ -35,6 +35,8 @@ import zlib
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
 
+from ait_courses import derive_course_rows_from_courses  # the Adapter's rule; print-check.sh mounts it beside this file
+
 try:
     import httpx
     from pypdf import PdfReader
@@ -214,13 +216,13 @@ def context(installation: Path, student: str | None) -> dict:
 
 def expected_grid(courses: list[dict]) -> str:
     """The text the test template's course grid prints for the structured `courses`: a TERM line per term, then a
-    COURSE line per course, each field as the record holds it. It comes from `courses`, not from courseRows, so the
-    check can disagree with the split."""
-    rows = []
-    for term in courses:
-        rows.append(["TERM", *(term[k] for k in ("term", "credits", "gpa", "cumGpa"))])
-        rows += [["COURSE", *(c[k] for k in ("no", "title", "lab", "lec", "credits", "grade"))] for c in term["courses"]]
-    return " ".join(" ".join(" ".join(field.split()) for field in row) for row in rows)
+    COURSE line per course. The fields come from the Adapter's own rule (ait_courses.derive_course_rows_from_courses:
+    an absent value is empty, `|` is `/`), split as the template splits them and whitespace-collapsed as page_text
+    does. It still comes from `courses`, not from the courseRows the Wallet prints, so the check can disagree with
+    the split."""
+    kinds = {"T": "TERM", "C": "COURSE"}
+    rows = (line.split("|") for line in derive_course_rows_from_courses(courses).split("\n"))
+    return " ".join(" ".join(" ".join([kinds[row[0]], *row[1:]]) for row in rows).split())
 
 
 # What the made-up students' grids hold, written out (ticket 03), so an Adapter that served a different record can't
