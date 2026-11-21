@@ -16,7 +16,7 @@ Everything here is local. The Mimoto overlay (`compose.mimoto.yaml`) is never us
 ## What you need
 
 - A Linux shell with these tools on its `PATH`: `bash`, `docker` (with Compose v2 and, if Docker's config names one, its credential helper), `git`, `curl`, `jq`, `openssl`, `python3` (3.8 or later; standard library only), `awk` and the usual coreutils (`sed`, `grep`, `tr`, `cut`, `base64`, `mktemp`, `id`, `wc`, `seq`, `timeout`, `cp`, `chmod`). `jq` is the one most boxes lack: `scripts/deploy.sh` runs a smoke test that exits without it. On Windows, run everything in WSL, from a clone inside WSL's own home folder (bind mounts fail from `/mnt/c`).
-- Ports 80 and 443 free (Traefik takes them), and `*.localhost` names resolving to this machine (Linux and recent Windows do this).
+- Ports 80 and 8088 free (Traefik publishes 80 and its dashboard on `TRAEFIK_DASHBOARD_PORT`, 8088 in `.env.example`), and `*.localhost` names resolving to this machine (Linux and recent Windows do this).
 - The internet. Certify and Mimoto fetch a JSON-LD context from `https://w3id.org` every time they sign or verify, and the print check installs a font from Debian's package mirrors. When w3id.org is slow, a print can fail with `signature_verification_failed`; run it again.
 - One stack at a time: the stack's Compose project is `vc-stack`, with fixed container names and ports.
 
@@ -46,7 +46,7 @@ Then:
 ./scripts/deploy.sh ait --build
 ```
 
-`--build` matters until this branch reaches `dev`: the printed `ghcr.io/mosip-asia/ait-vc` image must hold the print check's tools, and the published one doesn't yet. A check that finds an old image says `FAIL setup: ... isn't in this ait-vc image: rebuild it with scripts/deploy.sh <installation> --build`.
+`--build` matters until PR #21 (`feat/transcript-hardcopy-layout`, which this branch is stacked on) reaches `dev`: that PR adds `pypdf` to `pyproject.toml`, `dev` and `main` don't declare it, and the image installs from `pyproject.toml`, so a `ghcr.io/mosip-asia/ait-vc` image published from `dev` or `main` lacks the print check's PDF reader. This branch adds no dependency of its own. A check that finds an old image says `FAIL setup: ... isn't in this ait-vc image: rebuild it with scripts/deploy.sh <installation> --build`.
 
 ## 2. Start Mimoto
 
