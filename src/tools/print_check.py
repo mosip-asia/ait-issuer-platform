@@ -95,8 +95,12 @@ def sign_in(auth_server: str, client_id: str, redirect_uri: str, scope: str, stu
     return code, verifier
 
 
-# Mimoto 0.21's error codes on /credentials/download, by the step that failed.
+# Mimoto 0.21's error codes on /credentials/download, by the step that failed (each seen on the local stack):
+# the authorization server refusing Mimoto's code exchange, Certify refusing the credential request, and the
+# credential's signature failing. Any other code is reported under issuance, with Mimoto's body.
 ERROR_STEPS = {
+    "invalid_request": "token exchange",
+    "resource_not_found": "issuance",
     "signature_verification_failed": "signature check",
 }
 
