@@ -38,6 +38,14 @@ def test_a_background_under_the_templates_folder_is_ignored() -> None:
         f"{TEMPLATES}/ait-transcript/background.Png",  # any mix of cases
         f"{TEMPLATES}/ait-transcript/b.jPg",
         f"{TEMPLATES}/ait-transcript/b.JpEg",
+        f"{TEMPLATES}/ait-transcript/background.pdf",  # VC Lab's Background is a PDF today
+        f"{TEMPLATES}/ait-transcript/background.PDF",
+        f"{TEMPLATES}/ait-transcript/background.webp",
+        f"{TEMPLATES}/ait-transcript/background.WebP",
+        f"{TEMPLATES}/ait-transcript/background.gif",
+        f"{TEMPLATES}/ait-transcript/background.GIF",
+        f"{TEMPLATES}/ait-transcript/background.svg",
+        f"{TEMPLATES}/ait-transcript/background.SvG",
         "deploy/another-installation/vdr/templates/ait-transcript/background.png",
     ):
         assert ignored(path), f"git doesn't ignore {path}"
@@ -53,6 +61,8 @@ def test_a_font_under_the_templates_folder_is_ignored() -> None:
         f"{TEMPLATES}/fonts/a.woff2",
         f"{TEMPLATES}/fonts/a.TTF",
         f"{TEMPLATES}/fonts/a.Woff2",
+        f"{TEMPLATES}/fonts/a.ttc",
+        f"{TEMPLATES}/fonts/a.TtC",
         f"{TEMPLATES}/a.OtF",
         "deploy/another-installation/vdr/templates/fonts/narrow.ttf",
     ):

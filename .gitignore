@@ -18,9 +18,14 @@ deploy/*/vdr/templates/mosip-cbeff.xsd
 deploy/*/vdr/templates/**/*.[pP][nN][gG]
 deploy/*/vdr/templates/**/*.[jJ][pP][gG]
 deploy/*/vdr/templates/**/*.[jJ][pP][eE][gG]
+deploy/*/vdr/templates/**/*.[pP][dD][fF]
+deploy/*/vdr/templates/**/*.[wW][eE][bB][pP]
+deploy/*/vdr/templates/**/*.[gG][iI][fF]
+deploy/*/vdr/templates/**/*.[sS][vV][gG]
 # A font the template loads through @font-face is published on the VDR like a Background and may carry a licence that
 # forbids redistribution: keep fonts in deploy/<installation>/vdr/templates/fonts/, never committed.
 deploy/*/vdr/templates/**/*.[tT][tT][fF]
+deploy/*/vdr/templates/**/*.[tT][tT][cC]
 deploy/*/vdr/templates/**/*.[oO][tT][fF]
 deploy/*/vdr/templates/**/*.[wW][oO][fF][fF]
 deploy/*/vdr/templates/**/*.[wW][oO][fF][fF]2
