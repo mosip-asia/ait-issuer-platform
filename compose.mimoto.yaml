@@ -26,7 +26,9 @@ services:
     volumes:
       - ./deploy/base/mimoto_init.sql:/docker-entrypoint-initdb.d/mimoto_init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d inji_mimoto"]
+      # Over TCP: the image's init-time server listens on the socket only, so this passes once the real server
+      # runs, after mimoto_init.sql has created inji_mimoto.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d inji_mimoto"]
       interval: 5s
       retries: 30
 
