@@ -60,6 +60,7 @@ python3 src/tools/test_generate_csv.py
 python3 src/tools/test_render_mimoto_issuers_config.py
 python3 src/verifier/test_verifier.py
 python3 tests/test_installations.py
+python3 tests/test_backgrounds_ignored.py
 python3 tests/test_authorization_server.py
 python3 tests/test_inji_web_vc_readiness.py
 .venv/bin/python tests/test_issue_and_verify.py
