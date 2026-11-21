@@ -47,11 +47,15 @@ CLAIM_COLUMNS = [
     "thesisExamination",
 ]
 
+# Served on the record path beside the claims, but no claim of dev's credential file: the Wallet's print copy of
+# `courses` (ask T4, a proposal to SIS). The transcript context defines it so a credential that maps it is signed.
+PRINT_COLUMNS = ["courseRows"]
+
 # Read by the mock adapter (adapter/), not by Certify: the eligibility
 # attributes of contracts.md section 2b. They follow the claims.
 ADAPTER_COLUMNS = ["holds", "conferralStatus", "balance"]
 
-CSV_COLUMNS = ["id", *CLAIM_COLUMNS, *ADAPTER_COLUMNS]
+CSV_COLUMNS = ["id", *CLAIM_COLUMNS, *PRINT_COLUMNS, *ADAPTER_COLUMNS]
 
 
 def load_students(path: Path = STUDENTS_JSON) -> dict:
@@ -77,7 +81,7 @@ def build_rows(students: list[dict]) -> list[dict]:
             }
             enriched = enrich_ait_transcript_subject(subject)
             row = {"id": degree["keycloakId"]}
-            for claim in CLAIM_COLUMNS:
+            for claim in [*CLAIM_COLUMNS, *PRINT_COLUMNS]:
                 row[claim] = str(enriched.get(claim, ""))
             eligibility = degree["eligibility"]
             row.update(
