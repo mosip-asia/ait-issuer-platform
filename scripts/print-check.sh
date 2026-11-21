@@ -16,7 +16,7 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-env_value() { grep -E "^$1=" .env | tail -1 | cut -d= -f2- | tr -d '\r"'; }
+env_value() { { grep -E "^$1=" .env || true; } | tail -1 | cut -d= -f2- | tr -d '\r"'; }  # a missing key is empty, not an exit
 [ -f .env ] || { echo "No .env: bring the regular stack up first (scripts/deploy.sh)." >&2; exit 1; }
 INSTALLATION=$(env_value INSTALLATION)
 IMAGE_TAG=$(env_value IMAGE_TAG)

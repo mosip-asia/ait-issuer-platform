@@ -6,7 +6,10 @@ the test puts stand-ins for them in sys.modules. Run: python3 tests/test_print_c
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 import sys
+import tempfile
 import types
 from pathlib import Path
 
@@ -34,6 +37,22 @@ def test_a_number_or_null_in_the_record_is_a_field_not_an_error() -> None:
     courses = [{"term": "T", "credits": 3, "gpa": None, "cumGpa": 3.5,
                 "courses": [{"no": "A1", "title": "B", "lab": 0, "lec": 45, "credits": 3, "grade": None}]}]
     assert expected_grid(courses) == "TERM T 3 3.5 COURSE A1 B 0 45 3"
+
+
+def test_a_key_missing_from_dot_env_falls_back_instead_of_ending_print_check_sh() -> None:
+    """scripts/print-check.sh runs under `set -euo pipefail`: env_value's grep exits 1 for a missing key, which used to
+    end the script silently before `${IMAGE_TAG:-latest}` could apply."""
+    bash = shutil.which("bash")
+    assert bash, "bash is needed"
+    script = (REPO_ROOT / "scripts" / "print-check.sh").read_text(encoding="utf-8")
+    definition = next(line for line in script.splitlines() if line.startswith("env_value()"))
+    with tempfile.TemporaryDirectory() as tmp:
+        (Path(tmp) / ".env").write_text("INSTALLATION=ait\n", encoding="utf-8")
+        run = subprocess.run(
+            [bash, "-c", f'set -euo pipefail\n{definition}\nIMAGE_TAG=$(env_value IMAGE_TAG)\necho "${{IMAGE_TAG:-latest}}"'],
+            cwd=tmp, capture_output=True, text=True,
+        )
+    assert (run.returncode, run.stdout.strip()) == (0, "latest"), (run.returncode, run.stdout, run.stderr)
 
 
 if __name__ == "__main__":
