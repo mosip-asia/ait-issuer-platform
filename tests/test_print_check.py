@@ -1,7 +1,8 @@
 """The print check's expected course grid must match what the template prints for courseRows.
 
 Host only, no stack: src/tools/print_check.py needs httpx and pypdf at import, and the grid function uses neither, so
-the test puts stand-ins for them in sys.modules. Run: python3 tests/test_print_check.py
+where either is missing the test imports it with a stand-in and takes the stand-in out of sys.modules again.
+Run: python3 tests/test_print_check.py
 """
 
 from __future__ import annotations
@@ -17,14 +18,30 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "mock" / "adapter"))  # print_check.py imports ait_courses, as the image mounts it
 sys.path.insert(0, str(REPO_ROOT / "src" / "tools"))
-for name, attr in (("httpx", None), ("pypdf", "PdfReader")):
-    if name not in sys.modules:
-        stub = types.ModuleType(name)
-        if attr:
-            setattr(stub, attr, object)
-        sys.modules[name] = stub
 
-from print_check import StepFailed, check_grid, expected_grid  # noqa: E402
+
+def _import_print_check():
+    """print_check, with a stand-in only for a dependency that isn't installed; no stand-in stays in sys.modules."""
+    stubs = []
+    for name, attr in (("httpx", None), ("pypdf", "PdfReader")):
+        try:
+            __import__(name)
+        except ImportError:
+            stub = types.ModuleType(name)
+            if attr:
+                setattr(stub, attr, object)
+            sys.modules[name] = stub
+            stubs.append(name)
+    try:
+        import print_check
+    finally:
+        for name in stubs:
+            sys.modules.pop(name, None)
+    return print_check
+
+
+_pc = _import_print_check()
+StepFailed, check_grid, expected_grid = _pc.StepFailed, _pc.check_grid, _pc.expected_grid
 
 
 def test_an_empty_field_and_a_pipe_in_a_title_print_as_the_template_prints_them() -> None:
