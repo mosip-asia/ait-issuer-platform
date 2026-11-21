@@ -70,6 +70,19 @@ def test_a_term_with_no_courses_key_or_a_null_one_is_a_term_without_courses() ->
 
 
 
+def test_help_without_the_mounted_adapter_module_is_a_one_line_setup_failure() -> None:
+    """print_check.py runs in the ait-vc image with ait_courses.py mounted beside it; without the mount it must say so."""
+    with tempfile.TemporaryDirectory() as tmp:
+        shutil.copy(REPO_ROOT / "src" / "tools" / "print_check.py", tmp)
+        (Path(tmp) / "httpx.py").write_text("", encoding="utf-8")  # stand-ins, so only ait_courses is missing
+        (Path(tmp) / "pypdf.py").write_text("PdfReader = object" + chr(10), encoding="utf-8")
+        run = subprocess.run([sys.executable, str(Path(tmp) / "print_check.py"), "--help"],
+                             cwd=tmp, capture_output=True, text=True, env={k: v for k, v in os.environ.items() if k != "PYTHONPATH"})
+    out = run.stdout + run.stderr
+    assert run.returncode == 1 and "FAIL setup" in out and "Traceback" not in out, (run.returncode, out)
+
+
+
 if __name__ == "__main__":
     tests = [v for k, v in list(globals().items()) if k.startswith("test_")]
     for t in tests:
