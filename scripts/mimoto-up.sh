@@ -47,7 +47,7 @@ INSTALLATION=$(env_value INSTALLATION)
 STACK_FILES=$(env_value COMPOSE_FILE)
 [[ :$STACK_FILES: == *:compose.mock.yaml:* ]] \
   || die "the local Keycloak runs from compose.mock.yaml: add it to COMPOSE_FILE in .env and run scripts/deploy.sh"
-compose() { COMPOSE_FILE="$STACK_FILES:compose.mimoto.yaml" docker compose "$@"; }
+compose() { COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE="$STACK_FILES:compose.mimoto.yaml" docker compose "$@"; }
 
 # 1. Certify must trust the local Keycloak, whose issuer is its public base plus the stand-in realm.
 REALM=$(json "deploy/$INSTALLATION/mock/keycloak-realm.json" "d['realm']")
