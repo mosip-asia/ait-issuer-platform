@@ -17,6 +17,11 @@ class PackValidationError(ValueError):
 _COURSE_KEYS = ("no", "title", "lab", "lec", "credits", "grade")
 
 
+def _text(value: Any) -> str:
+    """A field as text: an absent value (None) is empty, not the text "None"."""
+    return "" if value is None else str(value).strip()
+
+
 def parse_courses(raw: Any) -> list[dict[str, Any]]:
     if isinstance(raw, str):
         text = raw.strip()
@@ -34,7 +39,7 @@ def parse_courses(raw: Any) -> list[dict[str, Any]]:
     for i, block in enumerate(data):
         if not isinstance(block, dict):
             raise PackValidationError(f"courses[{i}] must be an object")
-        term = str(block.get("term", "")).strip()
+        term = _text(block.get("term"))
         if not term:
             raise PackValidationError(f"courses[{i}].term is required")
         courses_raw = block.get("courses")
@@ -44,7 +49,7 @@ def parse_courses(raw: Any) -> list[dict[str, Any]]:
         for j, c in enumerate(courses_raw):
             if not isinstance(c, dict):
                 raise PackValidationError(f"courses[{i}].courses[{j}] must be an object")
-            course = {k: str(c.get(k, "")).strip() for k in _COURSE_KEYS}
+            course = {k: _text(c.get(k)) for k in _COURSE_KEYS}
             if not course["no"] or not course["title"]:
                 raise PackValidationError(
                     f"courses[{i}].courses[{j}] needs no and title"
@@ -54,9 +59,9 @@ def parse_courses(raw: Any) -> list[dict[str, Any]]:
             {
                 "term": term,
                 "courses": courses,
-                "credits": str(block.get("credits", "")).strip(),
-                "gpa": str(block.get("gpa", "")).strip(),
-                "cumGpa": str(block.get("cumGpa", "")).strip(),
+                "credits": _text(block.get("credits")),
+                "gpa": _text(block.get("gpa")),
+                "cumGpa": _text(block.get("cumGpa")),
             }
         )
     return semesters
