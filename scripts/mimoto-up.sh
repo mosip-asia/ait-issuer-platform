@@ -44,18 +44,26 @@ wait_for() {  # wait_for URL WHAT: until the URL answers 200
 
 [ -f .env ] || die "no .env: bring the regular stack up first (scripts/deploy.sh)"
 INSTALLATION=$(env_value INSTALLATION)
+[[ -d deploy/$INSTALLATION/vdr/templates ]] \
+  || die "the Installation $INSTALLATION has no VDR templates folder (deploy/$INSTALLATION/vdr/templates), so there's nothing for Mimoto to print"
 STACK_FILES=$(env_value COMPOSE_FILE)
 [[ :$STACK_FILES: == *:compose.mock.yaml:* ]] \
   || die "the local Keycloak runs from compose.mock.yaml: add it to COMPOSE_FILE in .env and run scripts/deploy.sh"
 compose() { COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE="$STACK_FILES:compose.mimoto.yaml" docker compose "$@"; }
 
-# 1. Certify must trust the local Keycloak, whose issuer is its public base plus the stand-in realm.
+# 1. Certify must trust the local Keycloak, whose issuer is its public base plus the stand-in realm. The values
+#    checked are the ones Compose will hand Certify, so a variable exported in the shell, which wins over .env,
+#    counts too.
 REALM=$(json "deploy/$INSTALLATION/mock/keycloak-realm.json" "d['realm']")
 ISSUER="$KEYCLOAK/realms/$REALM"
 JWKS="$ISSUER/protocol/openid-connect/certs"
-if [[ $(env_value AUTH_SERVER_ISSUER) != "$ISSUER" || $(env_value AUTH_SERVER_JWKS_URL) != "$JWKS" ]]; then
+CERTIFY_ENV=$(COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE="$STACK_FILES" docker compose config --format json certify 2>/dev/null \
+  | python3 -c "import json,sys; e=json.load(sys.stdin)['services']['certify']['environment']; print(e.get('AUTH_SERVER_ISSUER') or '', e.get('AUTH_SERVER_JWKS_URL') or '')") \
+  || die "Compose can't resolve the certify service with COMPOSE_FILE=$STACK_FILES"
+if [[ $CERTIFY_ENV != "$ISSUER $JWKS" ]]; then
   echo "mimoto-up: refused: Certify must trust the local Keycloak, so Mimoto never sends a login elsewhere." >&2
-  echo "Set these two lines in .env, then run this again:" >&2
+  echo "Certify would get: ${CERTIFY_ENV:-nothing}" >&2
+  echo "Set these two lines in .env, and unset them in the shell if exported there, then run this again:" >&2
   echo "AUTH_SERVER_ISSUER=$ISSUER" >&2
   echo "AUTH_SERVER_JWKS_URL=$JWKS" >&2
   exit 1
