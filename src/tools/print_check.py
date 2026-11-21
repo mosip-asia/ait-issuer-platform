@@ -199,7 +199,34 @@ def context(installation: Path, student: str | None) -> dict:
         "student": student,
         "password": user["credentials"][0]["value"],
         "name": " ".join(record.json()["fullName"].split()),
+        "courses": record.json()["courses"],
     }
+
+
+def expected_grid(courses: list[dict]) -> str:
+    """The text the test template's course grid prints for the structured `courses`: a TERM line per term, then a
+    COURSE line per course, each field as the record holds it. It comes from `courses`, not from courseRows, so the
+    check can disagree with the split."""
+    rows = []
+    for term in courses:
+        rows.append(["TERM", *(term[k] for k in ("term", "credits", "gpa", "cumGpa"))])
+        rows += [["COURSE", *(c[k] for k in ("no", "title", "lab", "lec", "credits", "grade"))] for c in term["courses"]]
+    return " ".join(" ".join(" ".join(field.split()) for field in row) for row in rows)
+
+
+def check_grid(text: str, courses: list[dict]) -> str:
+    """The page text between the grid's markers holds every term heading and course row, in order and nothing else."""
+    start, end = text.find("COURSE-GRID-START"), text.find("COURSE-GRID-END")
+    if start < 0 or end < start:
+        raise StepFailed("PDF content", "the course grid's markers aren't in the page text")
+    grid = text[start + len("COURSE-GRID-START"):end].strip()
+    terms, rows = len(courses), sum(len(t["courses"]) for t in courses)
+    if grid != expected_grid(courses):
+        raise StepFailed("PDF content", f"the course grid isn't the {terms} term headings and {rows} course rows of "
+                                        f"courses: it printed {grid[:300]!r}"
+                                        + ("" if grid else " (courseRows reached the template empty: is it mapped in the "
+                                           "credential file?)"))
+    return f"{terms} term headings and {rows} course rows, in order"
 
 
 def check_vdr(template: str) -> None:
@@ -236,6 +263,7 @@ def run(installation: Path, templates: Path, test_template: Path, out: Path, stu
         if MARKER not in text:
             raise StepFailed("template fetch", "the print after the swap doesn't carry the test template's marker")
         print(f"PASS template fetch: the swapped template printed at the next print ({MARKER})")
+        print(f"PASS PDF content (swapped): the course grid holds {check_grid(text, ctx['courses'])}")
     finally:
         target.write_bytes(original)
     if target.read_bytes() != original:
