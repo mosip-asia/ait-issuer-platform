@@ -7,6 +7,7 @@ runs inside the repository. Run: python3 tests/test_backgrounds_ignored.py
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -15,8 +16,12 @@ TEMPLATES = "deploy/ait/vdr/templates"
 
 
 def ignored(path: str) -> bool:
-    """Whether git ignores the path (which needn't exist)."""
-    return subprocess.run(["git", "check-ignore", "-q", path], cwd=REPO_ROOT).returncode == 0
+    """Whether the repository's own ignore rules cover the path, which needn't exist. --no-index judges a path git
+    tracks by the rules alone (check-ignore would say "not ignored" for any tracked file, so a rule that hid a
+    committed file could never fail the negative test), and an empty user-level excludes file keeps the answer the
+    same on every machine."""
+    command = ["git", "-c", f"core.excludesFile={os.devnull}", "check-ignore", "--no-index", "-q", path]
+    return subprocess.run(command, cwd=REPO_ROOT).returncode == 0
 
 
 def test_a_background_under_the_templates_folder_is_ignored() -> None:
@@ -26,6 +31,9 @@ def test_a_background_under_the_templates_folder_is_ignored() -> None:
         f"{TEMPLATES}/ait-transcript/background.jpeg",
         f"{TEMPLATES}/background.png",
         f"{TEMPLATES}/a/b/paper.png",
+        f"{TEMPLATES}/ait-transcript/background.PNG",  # Linux is case-sensitive
+        f"{TEMPLATES}/ait-transcript/background.JPG",
+        f"{TEMPLATES}/ait-transcript/background.JPEG",
         "deploy/another-installation/vdr/templates/ait-transcript/background.png",
     ):
         assert ignored(path), f"git doesn't ignore {path}"

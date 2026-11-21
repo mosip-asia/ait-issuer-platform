@@ -99,6 +99,7 @@ run_release_checks() {
     src/vc-lab/test_main.py \
     src/verifier/test_verifier.py \
     tests/test_installations.py \
+    tests/test_backgrounds_ignored.py \
     tests/test_authorization_server.py \
     tests/test_inji_web_vc_readiness.py \
     tests/test_issue_and_verify.py \
