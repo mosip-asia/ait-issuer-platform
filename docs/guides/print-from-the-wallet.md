@@ -109,6 +109,8 @@ The check's first print (`original`, saved as `original.pdf`) is from your templ
 
 Git tracks this file. `git checkout -- deploy/ait/vdr/templates/AITUniversity-ait-transcript-template.html` puts the committed one back, and CD's `git checkout -f` does it at every deploy, so a template placed this way lasts only until then. Real deployments need their own way to place it (T3).
 
+**A `#macro` is the one thing a swap doesn't replace.** Mimoto's Velocity engine is shared by every print, and it registers a template's `#macro` the first time it sees that name: a later template that defines a macro of the same name prints with the first body until Mimoto restarts. Everything else in the template (markup, `#set`, loops) is read fresh at each print. When you change a macro's body, give it a new name, or recreate Mimoto (`docker compose up -d --force-recreate mimoto`, with the command from step 2). Shown with Mimoto's own Velocity 1.7: the first of two templates that define the same macro wins, in either order. The AIT template's `claimValue` macro hit this: the print check's first print had registered the committed template's version, and the AIT template's corrected macro came out wrong until a fresh Mimoto printed it first.
+
 If a run is killed between the swap and the restore, the next check refuses with `FAIL setup: ... is still the print check's test template`; restore with the `git checkout --` it prints.
 
 ## 5. Place a Background
@@ -181,7 +183,7 @@ The generic template the print check uses, `tests/fixtures/print-check-template.
 
 ## T2: Mimoto reads its files from the VDR
 
-**The ask, for whoever runs Mimoto and the VDR on a deployment:** set Mimoto's `config.server.file.storage.uri` to the VDR's `/templates/` (with a trailing `/`), so a template replaced on the VDR prints at the next print with no restart. Three conditions come with it:
+**The ask, for whoever runs Mimoto and the VDR on a deployment:** set Mimoto's `config.server.file.storage.uri` to the VDR's `/templates/` (with a trailing `/`), so a template replaced on the VDR prints at the next print with no restart (a changed `#macro` body is the one exception, see section 4). Three conditions come with it:
 
 1. **Mimoto's own config files are served from the same address.** Mimoto fetches `mimoto-issuers-config.json` and `mimoto-trusted-verifiers.json` from it, and its CBEFF schema `mosip-cbeff.xsd` from `mosip.kernel.xsdstorage-uri`. The VDR's `/templates/` serves them, or something in front of it does. Today VCGA serves the first two.
 2. **`charset=utf-8`.** The VDR's `/templates/` block carries `charset utf-8;` in `deploy/base/vdr-nginx.conf`. Without it Mimoto reads the template as ISO-8859-1 and Thai typed into it prints as `à¸ à¸²à¸©à¸²...`.
@@ -232,3 +234,4 @@ No field may hold `|` or a line break (replace them before sending). A field may
 | The PDF shows Thai as garbage | The VDR doesn't send `charset=utf-8` (T2). |
 | A hand-published credential file is gone | A print check ended and put the committed files back: publish it again. |
 | A change to `mimoto-*.properties` has no effect | Mimoto keeps its settings until it is recreated (step 2). |
+| A swapped template prints with an old macro body | Mimoto registers a `#macro` once; rename it or recreate Mimoto (step 4). |
