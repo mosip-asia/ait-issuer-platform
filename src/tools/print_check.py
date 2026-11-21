@@ -214,12 +214,32 @@ def expected_grid(courses: list[dict]) -> str:
     return " ".join(" ".join(" ".join(field.split()) for field in row) for row in rows)
 
 
-def check_grid(text: str, courses: list[dict]) -> str:
+# What the made-up students' grids hold, written out (ticket 03), so an Adapter that served a different record can't
+# pass by matching its own text: (term headings, course rows).
+GRID_COUNTS = {"st120001": (2, 6)}
+
+
+def check_split_keeps_trailing_field(text: str) -> None:
+    """Java's String.split drops trailing empty strings, so a course with no grade (`C|a|b|c|d|e|`) must be split with
+    a negative limit to keep its 7 fields. The test template splits that literal as the Wallet's convention says."""
+    if "SPLIT-TRAILING-FIELDS 7" not in text:
+        got = text.split("SPLIT-TRAILING-FIELDS", 1)[1].split()[0] if "SPLIT-TRAILING-FIELDS" in text else "no line"
+        raise StepFailed("PDF content", f"splitting 'C|a|b|c|d|e|' gave {got} fields, not 7: the split must keep the "
+                                        "empty last field: use split(\"\\|\", -1)")
+
+
+def check_grid(text: str, courses: list[dict], student: str = "") -> str:
     """The page text between the grid's markers holds every term heading and course row, in order and nothing else."""
     start, end = text.find("COURSE-GRID-START"), text.find("COURSE-GRID-END")
     if start < 0 or end < start:
         raise StepFailed("PDF content", "the course grid's markers aren't in the page text")
     grid = text[start + len("COURSE-GRID-START"):end].strip()
+    if student in GRID_COUNTS:
+        words = grid.split()
+        printed = (words.count("TERM"), words.count("COURSE"))
+        if printed != GRID_COUNTS[student]:
+            raise StepFailed("PDF content", f"{student}'s grid holds {printed[0]} term headings and {printed[1]} course "
+                                            f"rows, not {GRID_COUNTS[student][0]} and {GRID_COUNTS[student][1]}")
     terms, rows = len(courses), sum(len(t["courses"]) for t in courses)
     if grid != expected_grid(courses):
         raise StepFailed("PDF content", f"the course grid isn't the {terms} term headings and {rows} course rows of "
@@ -263,7 +283,9 @@ def run(installation: Path, templates: Path, test_template: Path, out: Path, stu
         if MARKER not in text:
             raise StepFailed("template fetch", "the print after the swap doesn't carry the test template's marker")
         print(f"PASS template fetch: the swapped template printed at the next print ({MARKER})")
-        print(f"PASS PDF content (swapped): the course grid holds {check_grid(text, ctx['courses'])}")
+        check_split_keeps_trailing_field(text)
+        print("PASS PDF content (swapped): a split keeps the empty last field of 'C|a|b|c|d|e|' (7 fields)")
+        print(f"PASS PDF content (swapped): the course grid holds {check_grid(text, ctx['courses'], ctx['student'])}")
     finally:
         target.write_bytes(original)
     if target.read_bytes() != original:

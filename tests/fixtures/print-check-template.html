@@ -16,6 +16,11 @@
 <!-- The course grid (ask T4). Mimoto hands every list of objects to a template as "", so the claim courseRows is
      split here: one line per row, "|" between fields, T for a term heading and C for a course. The words TERM and
      COURSE only make the grid's text countable; print_check.py checks it against the structured courses. -->
+<!-- Java's String.split drops trailing empty strings, so an ungraded course (C|CS701|X|0|45|3|) would split into 6
+     fields, not 7. The literal below is that line: the template must keep the empty last field. -->
+#set($ungraded = "C|a|b|c|d|e|")
+#set($g = $ungraded.split("\|"))
+<p>SPLIT-TRAILING-FIELDS $g.size()</p>
 <p>COURSE-GRID-START</p>
 #set($cr = "")
 #set($crMap = $rowProperties.get("courseRows"))
