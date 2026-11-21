@@ -355,7 +355,6 @@ def run(installation: Path, templates: Path, test_template: Path, out: Path, stu
         raise StepFailed("setup", f"{shown} is still the print check's test template, left by an interrupted run: "
                                   f"restore it with git checkout -- {shown}")
     check_vdr(ctx["template"])
-    check_charset(ctx["template"])
     background = background_file(templates, ctx["background_uri"]) if ctx["background_uri"] else None
     if background is None:
         raise StepFailed("setup", "the published credential file has no display[0].background_image.uri: run "
@@ -382,6 +381,7 @@ def run(installation: Path, templates: Path, test_template: Path, out: Path, stu
             raise StepFailed("template fetch", "the print after the swap doesn't carry the test template's marker")
         print(f"PASS template fetch: the swapped template printed at the next print ({MARKER})")
         check_background_font_and_thai("swapped", (out / "swapped.pdf").read_bytes(), text, ctx)
+        check_charset(ctx["template"])
     finally:
         target.write_bytes(original)
         background.unlink(missing_ok=True)
