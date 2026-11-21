@@ -81,9 +81,9 @@ What it proves:
 - the Background is drawn at the page's full size, a font loaded through `@font-face` is embedded, and Thai text prints, typed in the template and as a claim value;
 - the VDR sends `Content-Type: text/html; charset=utf-8` for the template (T2).
 
-The check also publishes a test copy of the credential files to the local stack for the run: it maps `courseRows`, points `display[0].background_image` at the VDR, and sets a made-up Thai `notes`. When it ends it republishes the files git holds and recreates Certify, so the stack is as committed. Two consequences:
+The check also publishes a test copy of the credential files to the local stack for the run, made from the files git holds: it maps `courseRows`, points `display[0].background_image` at the VDR, and sets a made-up Thai `notes`. When it ends it republishes the files git holds and recreates Certify, so the stack is as committed. Two consequences:
 
-- A credential file you published by hand (below) is replaced by the committed one when a print check ends. Publish it again after the check.
+- A credential file you published by hand (below) takes no part in the check's prints: the copy replaces it when the check starts, and the committed file replaces the copy when it ends. Publish yours again after the check.
 - If the restore fails, the check exits with status 1 and prints the command that does it by hand.
 
 The PDFs of the run are kept in a temporary folder, named on the line `PDFs: <folder>`. `original-*.pdf` is the print of whatever template the VDR held.
@@ -105,7 +105,7 @@ cp my-template.html deploy/ait/vdr/templates/AITUniversity-ait-transcript-templa
 
 Copy over the file; don't edit it with `sed -i`, which replaces the file's inode and leaves the VDR's bind mount holding the old one. The VDR's nginx sends a 7-day `Cache-Control`, which Mimoto ignores; a browser or proxy in front doesn't.
 
-The check's first print (`original`) is from your template, and the check puts it back after its swap. The check asserts the student's name is on the page, so a template of yours must print `fullName`.
+The check's first print (`original`, saved as `original.pdf`) is from your template, with the check's copy of the credential file, and the check puts your template back after its swap. The check asserts the student's name is on the page, so a template of yours must print `fullName`. To print once with a credential file you published yourself, sign in as `st120001` (password `inji`) the way `src/tools/print_check.py` does: its `context()` and `print_once()` functions are that flow.
 
 Git tracks this file. `git checkout -- deploy/ait/vdr/templates/AITUniversity-ait-transcript-template.html` puts the committed one back, and CD's `git checkout -f` does it at every deploy, so a template placed this way lasts only until then. Real deployments need their own way to place it (T3).
 
@@ -171,6 +171,7 @@ What Mimoto does to a credential decides how a template is written (Velocity 1.7
     <!-- layout -->
   </div>
   ```
+- **Place a table through a `<div>`.** iText honours `position: absolute` with `left` and `top` on a `<div>` but not on a `<table>`, which lands at the page's top left. Put the table in an absolutely placed `<div>` and leave the table static.
 - **Images and fonts use absolute addresses.** Mimoto sets no base URL.
 - **Fonts:** only the 14 standard PDF fonts are built in, so Arial and Arial Narrow fall back. Any other font, Thai included, comes through `@font-face` with an absolute URL, for example `src: url("http://vdr.localhost/templates/fonts/Loma.ttf")`. Which font an organisation may publish on its VDR is a licensing question.
 - **Non-ASCII text typed into a template** needs the VDR's `charset=utf-8` (T2), or HTML entities. Claim values are not affected.
