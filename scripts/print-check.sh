@@ -27,6 +27,9 @@ IMAGE=ghcr.io/mosip-asia/ait-vc:${IMAGE_TAG:-latest}
 # and is removed afterwards. src/tools/print_check.py's FONT_NAME and the test template name this font.
 FONT_DIR=$INST/vdr/templates/print-check
 PUBLISHED=0
+# A made-up Thai text for the transcript's notes claim. It goes into the published copy of the credential file only
+# (below), so Certify signs it and Mimoto prints it, and no shared demo data carries Thai.
+THAI_NOTE='ทดสอบภาษาไทย (made-up)'
 
 compose() { docker compose "$@"; }
 quiet() {  # run a command, showing its output only when it fails
@@ -53,11 +56,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# The credential file git tracks has no Background address (a deployment's VDR may hold no Background), so when the
-# published one has none, publish a copy that points display[0].background_image at the VDR's templates folder,
-# where the print check places its made-up Background: <VDR>/templates/<credential configuration id>/background.png.
+# The check publishes a copy of the credential files for the run, and cleanup puts them back as git has them:
+#  - the transcript's notes claim becomes a made-up Thai text (vc_template.credentialSubject.notes);
+#  - the file git tracks has no Background address (a deployment's VDR may hold no Background), so when the published
+#    one has none, display[0].background_image points at the VDR's templates folder, where the print check places its
+#    made-up Background: <VDR>/templates/<credential configuration id>/background.png.
 # The copy is made once (test_credentials) and every edit changes it in place; publish_test_credentials then syncs it
-# and restarts Certify, and cleanup puts the credential files back as git has them.
+# and restarts Certify.
 CREDENTIAL=$(python3 -c "import json,sys; print(next(e['credentialConfig'] for e in json.load(open(sys.argv[1])) if e.get('mimotoTemplate')))" "$INST/smoke.json")   || { echo "FAIL setup: $INST/smoke.json names no mimotoTemplate" >&2; exit 1; }
 published_uri() {
   curl -sf "$CERTIFY/.well-known/openid-credential-issuer" | python3 -c "
@@ -80,6 +85,14 @@ c=json.load(open(p,encoding='utf-8'))
 c['display'][0]['background_image']={'uri':'http://vdr.localhost/templates/'+sys.argv[2]+'/background.png'}
 json.dump(c,open(p,'w',encoding='utf-8'),indent=2)" "$TEST_CREDENTIALS" "$CREDENTIAL"
 }
+set_thai_note() {  # the copy's notes claim: a literal in place of ${notes}, so the Adapter's data is untouched
+  python3 -c "
+import json,sys
+p=sys.argv[1]+'/'+sys.argv[2]+'.json'
+c=json.load(open(p,encoding='utf-8'))
+c['vc_template']['credentialSubject']['notes']=sys.argv[3]
+json.dump(c,open(p,'w',encoding='utf-8'),indent=2,ensure_ascii=False)" "$TEST_CREDENTIALS" "$CREDENTIAL" "$THAI_NOTE"
+}
 publish_test_credentials() {
   PUBLISHED=1
   quiet compose run --rm -T -e CREDENTIALS_DIR=/test-credentials -v "$TEST_CREDENTIALS:/test-credentials:ro" template-sync
@@ -88,12 +101,10 @@ publish_test_credentials() {
 }
 # A failing curl or an unknown credential id must stop the check, not read as "no Background address".
 BACKGROUND_URI=$(published_uri)   || { echo "FAIL setup: couldn't read $CREDENTIAL's display from Certify's metadata at $CERTIFY: is the stack up?" >&2; exit 1; }
-if [[ -z $BACKGROUND_URI ]]; then
-  test_credentials
-  add_background_address
-  publish_test_credentials
-  echo "published a test Background address for $CREDENTIAL (restored afterwards)"
-fi
+test_credentials
+[[ -n $BACKGROUND_URI ]] || add_background_address
+publish_test_credentials
+echo "published a test copy of $CREDENTIAL with a Thai notes claim (restored afterwards)"
 
 # The font, from the Debian package inside the ait-vc image's own base.
 mkdir -p "$FONT_DIR"
@@ -118,7 +129,7 @@ docker run --rm --user "$(id -u):$(id -g)" \
   -v "$OUT:/out" \
   "ghcr.io/mosip-asia/ait-vc:${IMAGE_TAG:-latest}" \
   python /check/print_check.py --installation /installation --templates /templates \
-    --test-template /check/template.html --out /out --templates-shown "$INST/vdr/templates" ${1:+--student "$1"} \
+    --test-template /check/template.html --out /out --templates-shown "$INST/vdr/templates" --thai-note "$THAI_NOTE" ${1:+--student "$1"} \
   && status=0 || status=$?
 echo "PDFs: $OUT"
 exit "$status"

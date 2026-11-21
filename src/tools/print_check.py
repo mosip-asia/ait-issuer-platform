@@ -198,7 +198,6 @@ def context(installation: Path, student: str | None) -> dict:
     display = meta.json()["credential_configurations_supported"][entry["credentialConfig"]]["display"][0]
     return {
         "background_uri": (display.get("background_image") or {}).get("uri", ""),
-        "notes": " ".join(record.json()["notes"].split()),
         "auth_server": auth_server,
         "client_id": issuer["client_id"],
         "redirect_uri": issuer["redirect_uri"],
@@ -323,7 +322,7 @@ def check_background_font_and_thai(label: str, pdf: bytes, text: str, ctx: dict)
     if raw != entity:
         raise StepFailed("template fetch", f"Thai typed into the template prints as {raw!r}, not {entity!r}: "
                                            "the VDR's /templates/ must send charset=utf-8")
-    note = ctx["notes"]
+    note = ctx["thai_note"]
     if f"notes: {note}" not in text:
         raise StepFailed("PDF content", f"the Thai claim value {note!r} isn't in the page text")
     print(f"PASS PDF content ({label}): Thai text is in the page, typed in the template and as a claim value")
@@ -347,8 +346,9 @@ def background_file(templates: Path, uri: str) -> Path:
 
 
 def run(installation: Path, templates: Path, test_template: Path, out: Path, student: str | None,
-        templates_shown: str) -> None:
+        templates_shown: str, thai_note: str) -> None:
     ctx = context(installation, student)
+    ctx["thai_note"] = " ".join(thai_note.split())
     target = templates / ctx["template"]
     if MARKER.encode() in target.read_bytes():
         shown = f"{templates_shown}/{ctx['template']}"
@@ -412,12 +412,14 @@ def main() -> int:
     parser.add_argument("--templates-shown", default="the VDR's templates folder",
                         help="the templates folder as the repository names it, for messages")
     parser.add_argument("--student")
+    parser.add_argument("--thai-note", required=True,
+                        help="the made-up Thai text print-check.sh published as the credential's notes claim")
     args = parser.parse_args()
     # As PID 1 in a container Python ignores SIGTERM; exit on it instead, so `docker stop` still restores the
     # template. A SIGKILL can't be caught: the next run notices the leftover (run()).
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     try:
-        run(args.installation, args.templates, args.test_template, args.out, args.student, args.templates_shown)
+        run(args.installation, args.templates, args.test_template, args.out, args.student, args.templates_shown, args.thai_note)
     except StepFailed as e:
         print(f"FAIL {e}")
         return 1
