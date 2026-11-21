@@ -93,6 +93,22 @@ def test_importing_this_test_leaves_the_real_httpx_in_place() -> None:
 
 
 
+def test_a_dot_env_without_installation_or_compose_file_fails_early_naming_the_key() -> None:
+    """The real scripts/print-check.sh, in a scratch repository root with only a .env: a missing key must be named,
+    not surface later as `deploy//smoke.json names no mimotoTemplate`."""
+    bash = shutil.which("bash")
+    assert bash, "bash is needed"
+    for env, key in (("IMAGE_TAG=v1" + chr(10), "INSTALLATION"), ("INSTALLATION=ait" + chr(10), "COMPOSE_FILE")):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "scripts").mkdir()
+            shutil.copy(REPO_ROOT / "scripts" / "print-check.sh", Path(tmp) / "scripts")
+            (Path(tmp) / ".env").write_text(env, encoding="utf-8")
+            run = subprocess.run([bash, "scripts/print-check.sh"], cwd=tmp, capture_output=True, text=True)
+        out = run.stdout + run.stderr
+        assert run.returncode == 1 and "FAIL setup" in out and f"{key} is not set in .env" in out, (key, run.returncode, out)
+
+
+
 if __name__ == "__main__":
     tests = [v for k, v in list(globals().items()) if k.startswith("test_")]
     for t in tests:
