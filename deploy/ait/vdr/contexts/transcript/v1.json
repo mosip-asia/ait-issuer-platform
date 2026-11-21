@@ -24,6 +24,7 @@
       "@type": "@json"
     },
     "courseList": "ait:courseList",
+    "courseRows": "ait:courseRows",
     "thesisTitle": "ait:thesisTitle",
     "thesisGrade": "ait:thesisGrade",
     "programCommittee": "ait:programCommittee",

@@ -120,12 +120,24 @@ def test_context_v1_signs_every_generated_claim() -> None:
     for claim in gc.CLAIM_COLUMNS:
         want = {"@id": "ait:courses", "@type": "@json"} if claim == "courses" else f"ait:{claim}"
         assert terms.get(claim) == want, (claim, terms.get(claim))
-    assert set(terms) == {"@version", "@protected", "ait", "AitTranscriptCredential", *gc.CLAIM_COLUMNS}
+    # courseRows (ask T4) is a print-only claim: defined, so a credential that carries it signs it.
+    assert terms["courseRows"] == "ait:courseRows"
+    assert set(terms) == {"@version", "@protected", "ait", "AitTranscriptCredential", *gc.CLAIM_COLUMNS, *gc.PRINT_COLUMNS}
 
 
 def test_eligibility_columns_follow_the_claims() -> None:
     # The mock adapter's columns come after the claims; Certify maps by header name and ignores them.
-    assert gc.CSV_COLUMNS == ["id", *gc.CLAIM_COLUMNS, "holds", "conferralStatus", "balance"]
+    assert gc.CSV_COLUMNS == ["id", *gc.CLAIM_COLUMNS, *gc.PRINT_COLUMNS, "holds", "conferralStatus", "balance"]
+
+
+def test_course_rows_is_served_but_not_a_credential_claim() -> None:
+    # courseRows is Thas's print proposal (ask T4): the Adapter serves it and dev's credential file doesn't map it, so
+    # it is a column beside the claims, not one of them (the Certify seed and its template stay as they are).
+    assert gc.PRINT_COLUMNS == ["courseRows"] and "courseRows" not in gc.CLAIM_COLUMNS
+    rows = {r["id"]: r for r in gc.build_rows(gc.load_students()["students"])}
+    kinds = [line[0] for line in rows["st120001"]["courseRows"].split("\n")]
+    assert kinds.count("T") == 2 and kinds.count("C") == 6, kinds
+    assert all(r["courseRows"] for r in rows.values())
 
 
 def test_personas_cover_each_transcript_check() -> None:

@@ -28,6 +28,7 @@ It replaces `vc-stack/config/academic-transcript-context.json`, which scoped eve
 - **`courses` is the one exception: it is typed `@json`.** The whole course record is signed as one `rdf:JSON` literal (its JCS form), so a change to any grade, title or GPA inside it changes the literal and fails verification. The ten inner keys need no term definitions. Keep the values conservative: ASCII keys, numbers with at most seven fraction digits, and no control characters. Both ends' JCS code differs from RFC 8785 at the edges, so an upgrade of one side's Titanium could change how exotic values serialise.
 - **No inner `id` and `type` mappings.** The old context redefined `id` and `type` inside its type-scoped block; with the terms lifted, they come from the VCDM 2.0 base context, which protects them.
 - **No presentation claims.** The pre-rendered HTML course table is gone from the credential; `courseList` stays, as the one-line-per-course summary a wallet card shows.
+- **`courseRows` is defined but not mapped on `dev`.** It is the delimited text copy of `courses` the Wallet's printer splits into a grid (ask T4, a proposal to SIS). The mock Adapter serves it, the context defines it so a credential that carries it is signed, and the credential file `dev` uses does not map it yet, so no issued credential carries it. Adding the term changes no signature already issued.
 - The vocabulary IRI stays the placeholder `https://ait.example/transcript#` until the context moves onto the real VDR host.
 
 ## Who can verify it

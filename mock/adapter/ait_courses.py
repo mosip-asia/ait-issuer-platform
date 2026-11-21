@@ -6,6 +6,7 @@ See docs/concepts/transcript-credential.md.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 
@@ -78,6 +79,23 @@ def derive_course_list_from_courses(semesters: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def _row_field(value: Any) -> str:
+    """One field of a courseRows line: `|` becomes `/` and a line break a space, so a field never splits its row."""
+    return re.sub(r"[\r\n]+", " ", str(value).strip()).replace("|", "/")
+
+
+def derive_course_rows_from_courses(semesters: list[dict[str, Any]]) -> str:
+    """The Wallet's print copy of `courses` (ask T4): a term heading `T|term|credits|gpa|cumGpa`, then one line
+    `C|no|title|lab|lec|credits|grade` per course, joined by `\\n`. Mimoto can't loop over `courses`, so the template
+    splits this text instead."""
+    lines: list[str] = []
+    for block in semesters:
+        lines.append("|".join(["T", *(_row_field(block.get(k, "")) for k in ("term", "credits", "gpa", "cumGpa"))]))
+        for c in block.get("courses") or []:
+            lines.append("|".join(["C", *(_row_field(c.get(k, "")) for k in _COURSE_KEYS)]))
+    return "\n".join(lines)
+
+
 def enrich_ait_transcript_subject(subject: dict[str, Any]) -> dict[str, Any]:
     if "courses" not in subject:
         return subject
@@ -85,4 +103,5 @@ def enrich_ait_transcript_subject(subject: dict[str, Any]) -> dict[str, Any]:
     out = dict(subject)
     out["courses"] = canonicalize_courses_json(semesters)
     out["courseList"] = derive_course_list_from_courses(semesters)
+    out["courseRows"] = derive_course_rows_from_courses(semesters)
     return out

@@ -96,6 +96,10 @@ def check_transcript_rows(get, rows: list[dict]) -> None:
         status, body = get(f"/student/{sub}/transcript")
         assert status == 200 and "id" not in body and not set(ELIGIBILITY) & body.keys(), (sub, status, body)
         assert body["courseList"] == row["courseList"] and "\n" in body["courseList"], sub
+        # courseRows (ask T4) is served beside it, as written: a term heading, then its courses, one line each.
+        assert body["courseRows"] == row["courseRows"] and body["courseRows"].startswith("T|"), sub
+        assert sum(line[0] == "C" for line in body["courseRows"].split("\n")) == sum(
+            len(term["courses"]) for term in body["courses"]), sub
         assert isinstance(body["courses"], list) and body["courses"][0]["term"] and body["courses"][0]["courses"][0]["no"]
         # Every other cell exactly as written, a multiline one included: the adapter neither escapes nor un-escapes.
         verbatim = {k: v for k, v in row.items() if k not in {"id", "courses", *ELIGIBILITY}}
@@ -306,6 +310,7 @@ def test_the_contract_mode_passes_against_the_mock() -> None:
         get = host_get(csv_path)
         for sub in ("st120001", "st120006"):  # st120006: the SIS test student, so issuer-dev can gate it
             check_contract(get, TRANSCRIPT_URL, sub, "ait_transcript_vc_ldp")
+        assert "courseRows" in get("/student/st120001/transcript")[1]  # an extra string field: the contract allows it
         check_contract(get, "/student/{sub}/student-id", "st120001", "ait_student_id_vc_ldp")
         check_contract(get, TRANSCRIPT_URL, "st120001", "openid ait_transcript_vc_ldp")  # the scope claim, whole
         assert get("/student/st120006/eligibility") == (200, {
