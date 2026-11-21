@@ -33,7 +33,7 @@ docker run --rm --user "$(id -u):$(id -g)" \
   -v "$OUT:/out" \
   "ghcr.io/mosip-asia/ait-vc:${IMAGE_TAG:-latest}" \
   python /check/print_check.py --installation /installation --templates /templates \
-    --test-template /check/template.html --out /out ${1:+--student "$1"} \
+    --test-template /check/template.html --out /out --templates-shown "$INST/vdr/templates" ${1:+--student "$1"} \
   && status=0 || status=$?
 echo "PDFs: $OUT"
 exit "$status"

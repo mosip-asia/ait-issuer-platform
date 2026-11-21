@@ -28,12 +28,17 @@ import io
 import json
 import re
 import secrets
+import signal
 import sys
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
 
-import httpx
-from pypdf import PdfReader
+try:
+    import httpx
+    from pypdf import PdfReader
+except ImportError as e:  # an ait-vc image older than this script
+    print(f"FAIL setup: {e.name} isn't in this ait-vc image: rebuild it with scripts/deploy.sh <installation> --build")
+    sys.exit(1)
 
 KEYCLOAK = "http://auth.localhost"
 CERTIFY = "http://issuer.localhost"
@@ -103,6 +108,16 @@ ERROR_STEPS = {
     "resource_not_found": "issuance",
     "signature_verification_failed": "signature check",
 }
+# Mimoto's PDF generation failed. When it got no template from the VDR (neither the credential's nor its fallback
+# credential-template.html), the message is a NullPointerException on the missing template string; a template it
+# fetched but couldn't render (a Velocity error) carries the error's line instead.
+PDF_GENERATION = "RESIDENT-APP-028"
+
+
+def failed_step(code: str, message: str) -> str:
+    if code == PDF_GENERATION:
+        return "template fetch" if "is null" in message else "PDF content"
+    return ERROR_STEPS.get(code, "issuance")
 
 
 def download(issuer_id: str, credential: str, redirect_uri: str, code: str, verifier: str) -> bytes:
@@ -120,8 +135,8 @@ def download(issuer_id: str, credential: str, redirect_uri: str, code: str, veri
         errors = resp.json().get("errors") or []
     except ValueError:
         errors = []
-    code = errors[0].get("errorCode", "") if errors else ""
-    step = ERROR_STEPS.get(code, "issuance")
+    code, message = (errors[0].get("errorCode", ""), errors[0].get("errorMessage", "")) if errors else ("", "")
+    step = failed_step(code, message)
     raise StepFailed(step, f"Mimoto answered {resp.status_code} {resp.headers.get('content-type', '')}: "
                            f"{resp.text[:400]}")
 
@@ -196,8 +211,14 @@ def check_vdr(template: str) -> None:
     print(f"PASS template fetch: the VDR serves {template} and {', '.join(MIMOTO_FILES)}")
 
 
-def run(installation: Path, templates: Path, test_template: Path, out: Path, student: str | None) -> None:
+def run(installation: Path, templates: Path, test_template: Path, out: Path, student: str | None,
+        templates_shown: str) -> None:
     ctx = context(installation, student)
+    target = templates / ctx["template"]
+    if MARKER.encode() in target.read_bytes():
+        shown = f"{templates_shown}/{ctx['template']}"
+        raise StepFailed("setup", f"{shown} is still the print check's test template, left by an interrupted run: "
+                                  f"restore it with git checkout -- {shown}")
     check_vdr(ctx["template"])
     status = _get(f"{MIMOTO}/issuers").status_code
     if status != 200:
@@ -207,7 +228,6 @@ def run(installation: Path, templates: Path, test_template: Path, out: Path, stu
     if MARKER in text:
         raise StepFailed("template fetch", f"the original print already carries {MARKER}")
 
-    target = templates / ctx["template"]
     original = target.read_bytes()
     try:
         target.write_bytes(test_template.read_bytes())  # in place: the VDR's bind mount keeps the same file
@@ -229,10 +249,15 @@ def main() -> int:
     parser.add_argument("--templates", type=Path, required=True, help="the VDR's templates folder (read-write)")
     parser.add_argument("--test-template", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--templates-shown", default="the VDR's templates folder",
+                        help="the templates folder as the repository names it, for messages")
     parser.add_argument("--student")
     args = parser.parse_args()
+    # As PID 1 in a container Python ignores SIGTERM; exit on it instead, so `docker stop` still restores the
+    # template. A SIGKILL can't be caught: the next run notices the leftover (run()).
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     try:
-        run(args.installation, args.templates, args.test_template, args.out, args.student)
+        run(args.installation, args.templates, args.test_template, args.out, args.student, args.templates_shown)
     except StepFailed as e:
         print(f"FAIL {e}")
         return 1
