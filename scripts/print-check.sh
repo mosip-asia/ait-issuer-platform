@@ -75,8 +75,8 @@ trap 'exit 130' INT TERM
 # The check publishes a copy of the credential files for the run, and finish puts them back as git has them:
 #  - the file `dev` uses does not map courseRows yet (ask T4), so the copy maps it (src/tools/map_course_rows.py);
 #  - the transcript's notes claim becomes a made-up Thai text (vc_template.credentialSubject.notes);
-#  - the file git tracks has no Background address (a deployment's VDR may hold no Background), so when the published
-#    one has none, display[0].background_image points at the VDR's templates folder, where the print check places its
+#  - the file git tracks has no Background address (a deployment's VDR may hold no Background), so unless it has one
+#    display[0].background_image points at the VDR's templates folder, where the print check places its
 #    made-up Background: <VDR>/templates/<credential configuration id>/background.png.
 # The copy is made once (test_credentials) and every edit changes it in place; publish_test_credentials then syncs it
 # and restarts Certify.
@@ -97,12 +97,12 @@ map_course_rows() {  # the copy's credentialSubject maps courseRows, after cours
   python3 src/tools/map_course_rows.py --credentials "$TEST_CREDENTIALS" --credential "$CREDENTIAL" \
     --out "$TEST_CREDENTIALS" >/dev/null
 }
-add_background_address() {  # the copy's display[0].background_image, pointing at the VDR's templates folder
+add_background_address() {  # the copy's display[0].background_image when the file git holds has none: the VDR's templates folder
   python3 -c "
 import json,sys
 p=sys.argv[1]+'/'+sys.argv[2]+'.json'
 c=json.load(open(p,encoding='utf-8'))
-c['display'][0]['background_image']={'uri':'http://vdr.localhost/templates/'+sys.argv[2]+'/background.png'}
+c['display'][0].setdefault('background_image',{'uri':'http://vdr.localhost/templates/'+sys.argv[2]+'/background.png'})
 json.dump(c,open(p,'w',encoding='utf-8'),indent=2)" "$TEST_CREDENTIALS" "$CREDENTIAL"
 }
 set_thai_note() {  # the copy's notes claim: a literal in place of ${notes}, so the Adapter's data is untouched
@@ -123,7 +123,7 @@ publish_test_credentials() {
 BACKGROUND_URI=$(published_uri)   || { echo "FAIL setup: couldn't read $CREDENTIAL's display from Certify's metadata at $CERTIFY: is the stack up?" >&2; exit 1; }
 test_credentials
 map_course_rows
-[[ -n $BACKGROUND_URI ]] || add_background_address
+add_background_address
 set_thai_note
 publish_test_credentials
 echo "published a test copy of $CREDENTIAL that maps courseRows, with a Thai notes claim (restored afterwards)"
