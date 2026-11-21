@@ -102,5 +102,6 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=inji_certify
       - VDR_BASE_URL=${VDR_BASE_URL}
+      - CERTIFY_DID=${CERTIFY_DID}
     networks:
       - certify-network
