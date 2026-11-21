@@ -29,6 +29,10 @@ FONT_DIR=$INST/vdr/templates/print-check
 PUBLISHED=0
 
 compose() { docker compose "$@"; }
+quiet() {  # run a command, showing its output only when it fails
+  local output
+  output=$("$@" 2>&1) || { echo "$output" >&2; return 1; }
+}
 wait_certify() {
   for _ in $(seq 1 60); do
     curl -sf -o /dev/null "$CERTIFY/.well-known/openid-credential-issuer" && return 0
@@ -40,7 +44,7 @@ wait_certify() {
 cleanup() {
   rm -rf "$FONT_DIR"
   if [[ $PUBLISHED == 1 ]]; then  # put the credential file back as git has it
-    compose run --rm -T template-sync >/dev/null 2>&1 && compose restart certify >/dev/null 2>&1 && wait_certify \
+    quiet compose run --rm -T template-sync && quiet compose restart certify && wait_certify \
       && echo "restored the published credential file" \
       || echo "could not restore the published credential file: run scripts/deploy.sh $INSTALLATION" >&2
   fi
@@ -68,8 +72,8 @@ c['display'][0]['background_image']={'uri':'http://vdr.localhost/templates/'+sys
 json.dump(c,open(p,'w',encoding='utf-8'),indent=2)" "$TEST_CREDENTIALS" "$CREDENTIAL"
   chmod -R a+rX "$TEST_CREDENTIALS"
   PUBLISHED=1
-  compose run --rm -T -e CREDENTIALS_DIR=/test-credentials -v "$TEST_CREDENTIALS:/test-credentials:ro" template-sync >/dev/null
-  compose restart certify >/dev/null
+  quiet compose run --rm -T -e CREDENTIALS_DIR=/test-credentials -v "$TEST_CREDENTIALS:/test-credentials:ro" template-sync
+  quiet compose restart certify
   wait_certify
   echo "published a test Background address for $CREDENTIAL (restored afterwards)"
 fi
