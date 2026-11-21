@@ -1,0 +1,71 @@
+# ==============================================================================
+# Mimoto overlay: the Wallet's printer beside the regular local stack (local only)
+# ==============================================================================
+# The real Mimoto 0.21, the service that turns a credential into the Wallet's PDF, with its own database. CD and
+# every deployment never use this file. Start it with scripts/mimoto-up.sh, which adds this file to .env's
+# COMPOSE_FILE for its own commands, and print with scripts/print-check.sh.
+#
+# Mimoto reaches Certify, Keycloak and the VDR as a browser does: through Traefik on the host, by their *.localhost
+# names. It reads its template, issuers list and trusted verifiers from the VDR's /templates/ (ask T2), so this file
+# also places the Installation's issuers list, the trusted verifiers and the CBEFF schema there, under the names
+# Mimoto asks for. Docker can't create a file inside the VDR's read-only templates mount, so mimoto-up.sh first
+# creates the three empty, git-ignored files these mounts land on.
+# ==============================================================================
+services:
+  vdr:
+    volumes:
+      - ./deploy/${INSTALLATION}/vcga/issuers.json:/usr/share/nginx/html/templates/mimoto-issuers-config.json:ro
+      - ./deploy/base/vcga/trusted-verifiers.json:/usr/share/nginx/html/templates/mimoto-trusted-verifiers.json:ro
+      - ./deploy/base/mosip-cbeff.xsd:/usr/share/nginx/html/templates/mosip-cbeff.xsd:ro
+
+  mimoto-db:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - ./deploy/base/mimoto_init.sql:/docker-entrypoint-initdb.d/mimoto_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d inji_mimoto"]
+      interval: 5s
+      retries: 30
+
+  mimoto:
+    image: injistack/mimoto:0.21.0
+    user: root
+    environment:
+      - container_user=mosip
+      - active_profile_env=default
+      - SPRING_CONFIG_NAME=mimoto
+      - SPRING_CONFIG_LOCATION=/home/mosip/
+      - SPRING_CLOUD_BOOTSTRAP_LOCATION=/home/mosip/mimoto-bootstrap.properties
+      # The local test keystore's password; mimoto-up.sh generates the keystore with the same one.
+      - oidc_p12_password=local-mimoto
+      - WALLET_BINDING_PARTNER_API_KEY=unused
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://mimoto-db:5432/inji_mimoto
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - GOOGLE_OAUTH_CLIENT_ID=unused
+      - GOOGLE_OAUTH_CLIENT_SECRET=unused
+      - SPRING_CLOUD_LOADBALANCER_ENABLED=false
+      - SPRING_CLOUD_DISCOVERY_ENABLED=false
+    extra_hosts:
+      - "auth.localhost:host-gateway"
+      - "issuer.localhost:host-gateway"
+      - "vdr.localhost:host-gateway"
+      - "wallet.localhost:host-gateway"
+    volumes:
+      - ./deploy/base/mimoto-default.properties:/home/mosip/mimoto-default.properties:ro
+      - ./deploy/base/mimoto-bootstrap.properties:/home/mosip/mimoto-bootstrap.properties:ro
+      # The client keystore mimoto-up.sh generates (git-ignored). Mimoto's key manager also writes its own keys
+      # into it, so it's mounted read-write.
+      - ./deploy/${INSTALLATION}/mimoto:/home/mosip/certs
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mimoto.rule=Host(`mimoto.localhost`)"
+      - "traefik.http.services.mimoto.loadbalancer.server.port=8099"
+    depends_on:
+      mimoto-db:
+        condition: service_healthy
+      vdr:
+        condition: service_started

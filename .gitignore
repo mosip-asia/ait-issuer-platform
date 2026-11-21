@@ -7,6 +7,11 @@ src/issuer/target/
 target/
 deploy/data/
 deploy/*/private_key/
+# The local Mimoto overlay (compose.mimoto.yaml): its client keystore, and the empty files its VDR mounts land on.
+deploy/*/mimoto/
+deploy/*/vdr/templates/mimoto-issuers-config.json
+deploy/*/vdr/templates/mimoto-trusted-verifiers.json
+deploy/*/vdr/templates/mosip-cbeff.xsd
 *.p12
 portal/*.db
 src/portal/*.db
