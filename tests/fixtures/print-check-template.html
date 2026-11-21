@@ -3,15 +3,29 @@
 <head>
 <meta charset="UTF-8"/>
 <title>Print check</title>
+<style>
+  /* A font loaded from the VDR by absolute address (print-check.sh puts it there for the run), a page without
+     margins so the Background reaches the paper's edge, and the Background as an image under the layout. */
+  @font-face { font-family: "PrintCheckThai"; src: url("http://vdr.localhost/templates/print-check/thai-font.ttf"); }
+  @page { size: A4; margin: 0; }
+  body { margin: 0; font-family: PrintCheckThai, Helvetica, sans-serif; font-size: 9pt; }
+  .background { position: absolute; left: 0; top: 0; width: 595.28pt; height: 841.89pt; }
+  .content { position: absolute; left: 30pt; top: 30pt; width: 535pt; }
+</style>
 </head>
 <body>
 <!-- A generic Mimoto template that scripts/print-check.sh swaps onto the VDR under the credential's template name.
      It prints its marker and every claim Mimoto hands it ($rowProperties: claim -> {display name: text}). -->
+#if($backgroundImage && $backgroundImage != "")<img class="background" src="$backgroundImage"/>#end
+<div class="content">
 <p>PRINT-CHECK-TEMPLATE</p>
+<p>PRINT-CHECK-THAI-ENTITY: &#x0E20;&#x0E32;&#x0E29;&#x0E32;&#x0E44;&#x0E17;&#x0E22;</p>
+<p>PRINT-CHECK-THAI-RAW: ภาษาไทย</p>
 #foreach($claim in $rowProperties.entrySet())
 #foreach($shown in $claim.value.entrySet())
 <p>$claim.key: $shown.value</p>
 #end
 #end
+</div>
 </body>
 </html>

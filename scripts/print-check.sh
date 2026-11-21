@@ -19,6 +19,70 @@ INSTALLATION=$(env_value INSTALLATION)
 IMAGE_TAG=$(env_value IMAGE_TAG)
 INST=deploy/$INSTALLATION
 OUT=$(mktemp -d)
+CERTIFY=http://issuer.localhost
+IMAGE=ghcr.io/mosip-asia/ait-vc:${IMAGE_TAG:-latest}
+# The Thai font the test template loads through @font-face. It is TLWG's Loma, freely licensed (GPL-2+ with a font
+# exception; the package's copyright file is kept next to the font for the run), taken from Debian's
+# fonts-tlwg-loma-ttf at run time, so no font is committed. It lives in a git-ignored folder of the VDR's templates
+# and is removed afterwards. src/tools/print_check.py's FONT_NAME and the test template name this font.
+FONT_DIR=$INST/vdr/templates/print-check
+PUBLISHED=0
+
+compose() { docker compose "$@"; }
+wait_certify() {
+  for _ in $(seq 1 60); do
+    curl -sf -o /dev/null "$CERTIFY/.well-known/openid-credential-issuer" && return 0
+    sleep 3
+  done
+  echo "FAIL setup: Certify didn't come back within 180s" >&2
+  return 1
+}
+cleanup() {
+  rm -rf "$FONT_DIR"
+  if [[ $PUBLISHED == 1 ]]; then  # put the credential file back as git has it
+    compose run --rm -T template-sync >/dev/null 2>&1 && compose restart certify >/dev/null 2>&1 && wait_certify \
+      && echo "restored the published credential file" \
+      || echo "could not restore the published credential file: run scripts/deploy.sh $INSTALLATION" >&2
+  fi
+}
+trap cleanup EXIT
+
+# The credential file git tracks has no Background address (a deployment's VDR may hold no Background), so when the
+# published one has none, publish a copy that points display[0].background_image at the VDR's templates folder,
+# where the print check places its made-up Background: <VDR>/templates/<credential configuration id>/background.png.
+CREDENTIAL=$(python3 -c "import json,sys; print(next(e['credentialConfig'] for e in json.load(open(sys.argv[1])) if e.get('mimotoTemplate')))" "$INST/smoke.json")
+published_uri() {
+  curl -sf "$CERTIFY/.well-known/openid-credential-issuer" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)['credential_configurations_supported'][sys.argv[1]]['display'][0]
+print((d.get('background_image') or {}).get('uri',''))" "$CREDENTIAL"
+}
+if [[ -z $(published_uri) ]]; then
+  TEST_CREDENTIALS=$(mktemp -d)
+  cp "$INST"/certify/credentials/*.json "$TEST_CREDENTIALS"/
+  python3 -c "
+import json,sys
+p=sys.argv[1]+'/'+sys.argv[2]+'.json'
+c=json.load(open(p,encoding='utf-8'))
+c['display'][0]['background_image']={'uri':'http://vdr.localhost/templates/'+sys.argv[2]+'/background.png'}
+json.dump(c,open(p,'w',encoding='utf-8'),indent=2)" "$TEST_CREDENTIALS" "$CREDENTIAL"
+  chmod -R a+rX "$TEST_CREDENTIALS"
+  PUBLISHED=1
+  compose run --rm -T -e CREDENTIALS_DIR=/test-credentials -v "$TEST_CREDENTIALS:/test-credentials:ro" template-sync >/dev/null
+  compose restart certify >/dev/null
+  wait_certify
+  echo "published a test Background address for $CREDENTIAL (restored afterwards)"
+fi
+
+# The font, from the Debian package inside the ait-vc image's own base.
+mkdir -p "$FONT_DIR"
+docker run --rm --user root -v "$PWD/$FONT_DIR:/font" -e "OWNER=$(id -u):$(id -g)" "$IMAGE" sh -c '
+  apt-get update -qq >/dev/null && apt-get install -y -qq --no-install-recommends fonts-tlwg-loma-ttf >/dev/null &&
+  cp /usr/share/fonts/truetype/tlwg/Loma.ttf /font/thai-font.ttf &&
+  cp /usr/share/doc/fonts-tlwg-loma-ttf/copyright /font/thai-font.copyright &&
+  chown -R "$OWNER" /font' >/dev/null \
+  || { echo "FAIL setup: couldn't take the Thai font from Debian's fonts-tlwg-loma-ttf (is the network up?)" >&2; exit 1; }
+echo "Thai font: $(wc -c < "$FONT_DIR/thai-font.ttf") bytes from Debian's fonts-tlwg-loma-ttf"
 
 docker run --rm --user "$(id -u):$(id -g)" \
   --add-host auth.localhost:host-gateway --add-host issuer.localhost:host-gateway \
