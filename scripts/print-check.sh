@@ -103,6 +103,7 @@ publish_test_credentials() {
 BACKGROUND_URI=$(published_uri)   || { echo "FAIL setup: couldn't read $CREDENTIAL's display from Certify's metadata at $CERTIFY: is the stack up?" >&2; exit 1; }
 test_credentials
 [[ -n $BACKGROUND_URI ]] || add_background_address
+set_thai_note
 publish_test_credentials
 echo "published a test copy of $CREDENTIAL with a Thai notes claim (restored afterwards)"
 
