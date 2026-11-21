@@ -251,7 +251,7 @@ def check_grid(text: str, courses: list[dict], student: str = "") -> str:
         if printed != GRID_COUNTS[student]:
             raise StepFailed("PDF content", f"{student}'s grid holds {printed[0]} term headings and {printed[1]} course "
                                             f"rows, not {GRID_COUNTS[student][0]} and {GRID_COUNTS[student][1]}")
-    terms, rows = len(courses), sum(len(t["courses"]) for t in courses)
+    terms, rows = len(courses), sum(len(t.get("courses") or []) for t in courses)
     if grid != expected_grid(courses):
         raise StepFailed("PDF content", f"the course grid isn't the {terms} term headings and {rows} course rows of "
                                         f"courses: it printed {grid[:300]!r}"
