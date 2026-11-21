@@ -78,9 +78,9 @@ def test_a_term_with_no_courses_key_or_a_null_one_is_a_term_without_courses() ->
     # The Adapter's rule: `block.get("courses") or []`. A record's term without courses must not end in a KeyError.
     for term in ({"term": "T", "credits": "1", "gpa": "", "cumGpa": ""},
                  {"term": "T", "credits": "1", "gpa": "", "cumGpa": "", "courses": None}):
-        assert check_grid("COURSE-GRID-START TERM T 1 COURSE-GRID-END", [term]) == "1 term headings and 0 course rows, in order"
+        assert check_grid("COURSE-GRID-START TERM T 1 COURSE-GRID-END", record_courses([term])) == "1 term headings and 0 course rows, in order"
         try:
-            check_grid("COURSE-GRID-START TERM X 1 COURSE-GRID-END", [term])
+            check_grid("COURSE-GRID-START TERM X 1 COURSE-GRID-END", record_courses([term]))
         except StepFailed:
             pass
         else:

@@ -213,8 +213,28 @@ def context(installation: Path, student: str | None) -> dict:
         "student": student,
         "password": user["credentials"][0]["value"],
         "name": " ".join(record.json()["fullName"].split()),
-        "courses": record.json()["courses"],
+        "courses": record_courses(record.json().get("courses")),
     }
+
+
+def record_courses(raw: object) -> list[dict]:
+    """The one place the Adapter record's `courses` enters the check: a list of terms, each a dict, each with a list
+    of course dicts (a missing or null `courses` is a term without courses). Anything else is one StepFailed, so the
+    grid code below trusts this shape. The fields inside stay as the record has them: the Adapter's own rule
+    (ait_courses.row_field) reads any value, and the contract says they are strings."""
+    if not isinstance(raw, list):
+        raise StepFailed("setup", f"the record's courses is {type(raw).__name__}, not a list of terms")
+    terms = []
+    for i, term in enumerate(raw):
+        if not isinstance(term, dict):
+            raise StepFailed("setup", f"the record's courses[{i}] is {type(term).__name__}, not a term")
+        courses = term.get("courses")
+        if courses is None:
+            courses = []
+        if not isinstance(courses, list) or not all(isinstance(c, dict) for c in courses):
+            raise StepFailed("setup", f"the record's courses[{i}].courses is not a list of courses")
+        terms.append({**term, "courses": courses})
+    return terms
 
 
 def expected_grid(courses: list[dict]) -> str:
@@ -224,7 +244,10 @@ def expected_grid(courses: list[dict]) -> str:
     does. It still comes from `courses`, not from the courseRows the Wallet prints, so the check can disagree with
     the split."""
     kinds = {"T": "TERM", "C": "COURSE"}
-    rows = (line.split("|") for line in derive_course_rows_from_courses(courses).split("\n"))
+    text = derive_course_rows_from_courses(courses)
+    if not text:  # no terms: no grid
+        return ""
+    rows = (line.split("|") for line in text.split("\n"))
     return " ".join(" ".join(" ".join([kinds[row[0]], *row[1:]]) for row in rows).split())
 
 
@@ -254,7 +277,7 @@ def check_grid(text: str, courses: list[dict], student: str = "") -> str:
         if printed != GRID_COUNTS[student]:
             raise StepFailed("PDF content", f"{student}'s grid holds {printed[0]} term headings and {printed[1]} course "
                                             f"rows, not {GRID_COUNTS[student][0]} and {GRID_COUNTS[student][1]}")
-    terms, rows = len(courses), sum(len(t.get("courses") or []) for t in courses)
+    terms, rows = len(courses), sum(len(t["courses"]) for t in courses)
     if grid != expected_grid(courses):
         raise StepFailed("PDF content", f"the course grid isn't the {terms} term headings and {rows} course rows of "
                                         f"courses: it printed {grid[:300]!r}"
