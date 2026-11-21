@@ -18,6 +18,9 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 env_value() { { grep -E "^$1=" .env || true; } | tail -1 | cut -d= -f2- | tr -d '\r"'; }  # a missing key is empty, not an exit
 [ -f .env ] || { echo "No .env: bring the regular stack up first (scripts/deploy.sh)." >&2; exit 1; }
+for key in INSTALLATION COMPOSE_FILE; do
+  [ -n "$(env_value "$key")" ] || { echo "FAIL setup: $key is not set in .env: see .env.example." >&2; exit 1; }
+done
 INSTALLATION=$(env_value INSTALLATION)
 IMAGE_TAG=$(env_value IMAGE_TAG)
 INST=deploy/$INSTALLATION
