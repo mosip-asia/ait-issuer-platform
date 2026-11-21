@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"/>
+<title>Print check</title>
+</head>
+<body>
+<!-- A generic Mimoto template that scripts/print-check.sh swaps onto the VDR under the credential's template name.
+     It prints its marker and every claim Mimoto hands it ($rowProperties: claim -> {display name: text}). -->
+<p>PRINT-CHECK-TEMPLATE</p>
+#foreach($claim in $rowProperties.entrySet())
+#foreach($shown in $claim.value.entrySet())
+<p>$claim.key: $shown.value</p>
+#end
+#end
+</body>
+</html>
