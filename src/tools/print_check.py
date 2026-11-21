@@ -35,13 +35,16 @@ import zlib
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
 
-from ait_courses import derive_course_rows_from_courses  # the Adapter's rule; print-check.sh mounts it beside this file
-
 try:
     import httpx
     from pypdf import PdfReader
 except ImportError as e:  # an ait-vc image older than this script
     print(f"FAIL setup: {e.name} isn't in this ait-vc image: rebuild it with scripts/deploy.sh <installation> --build")
+    sys.exit(1)
+try:
+    from ait_courses import derive_course_rows_from_courses  # the Adapter's rule; print-check.sh mounts it beside this file
+except ImportError:
+    print("FAIL setup: ait_courses.py isn't beside print_check.py: run it through scripts/print-check.sh, which mounts it")
     sys.exit(1)
 
 KEYCLOAK = "http://auth.localhost"
