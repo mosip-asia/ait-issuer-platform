@@ -29,7 +29,9 @@ import json
 import re
 import secrets
 import signal
+import struct
 import sys
+import zlib
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
 
@@ -49,6 +51,11 @@ ADAPTER = "http://adapter.localhost"
 MIMOTO_FILES = ("mimoto-issuers-config.json", "mimoto-trusted-verifiers.json", "mosip-cbeff.xsd")
 MARKER = "PRINT-CHECK-TEMPLATE"
 TIMEOUT = 120
+# The font the test template loads through @font-face (scripts/print-check.sh puts it on the VDR for the run) and
+# the name it embeds under: TLWG's Loma, from Debian's fonts-tlwg-loma-ttf.
+FONT_NAME = "Loma"
+# The made-up Background's size in pixels: A4's proportions, so it can't be mistaken for the page.
+BACKGROUND_PX = (413, 585)
 
 
 class StepFailed(Exception):
@@ -188,7 +195,9 @@ def context(installation: Path, student: str | None) -> dict:
     record = _get(f"{ADAPTER}/student/{student}/transcript")
     if record.status_code != 200:
         raise StepFailed("setup", f"the mock Adapter has no record for {student} ({record.status_code})")
+    display = meta.json()["credential_configurations_supported"][entry["credentialConfig"]]["display"][0]
     return {
+        "background_uri": (display.get("background_image") or {}).get("uri", ""),
         "auth_server": auth_server,
         "client_id": issuer["client_id"],
         "redirect_uri": issuer["redirect_uri"],
@@ -258,15 +267,150 @@ def check_vdr(template: str) -> None:
     print(f"PASS template fetch: the VDR serves {template} and {', '.join(MIMOTO_FILES)}")
 
 
+def make_background_png(width: int, height: int) -> bytes:
+    """A made-up Background: white with a light grid and a darker band along the top."""
+    rows = []
+    for y in range(height):
+        row = bytearray([0])
+        for x in range(width):
+            v = 170 if y < 30 else 200 if x % 40 == 0 or y % 40 == 0 else 255
+            row += bytes([v, v, v])
+        rows.append(bytes(row))
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(b"".join(rows), 9)) + chunk(b"IEND", b""))
+
+
+def _then(m: list[float], n: list[float]) -> list[float]:
+    """The matrix that applies m first, then n, both as PDF's [a b c d e f]."""
+    return [m[0] * n[0] + m[1] * n[2], m[0] * n[1] + m[1] * n[3], m[2] * n[0] + m[3] * n[2],
+            m[2] * n[1] + m[3] * n[3], m[4] * n[0] + m[5] * n[2] + n[4], m[4] * n[1] + m[5] * n[3] + n[5]]
+
+
+def drawn_images(reader: PdfReader) -> list[dict]:
+    """Every image the first page draws: its pixel size and the rectangle it covers on the page, in points."""
+    from pypdf.generic import ContentStream
+
+    page = reader.pages[0]
+    found: list[dict] = []
+
+    def walk(content, resources, base: list[float]) -> None:
+        ctm, saved = base, []
+        for operands, op in ContentStream(content, reader).operations:
+            if op == b"q":
+                saved.append(ctm)
+            elif op == b"Q" and saved:
+                ctm = saved.pop()
+            elif op == b"cm":
+                ctm = _then([float(v) for v in operands], ctm)
+            elif op == b"Do":
+                xobject = (resources.get("/XObject") or {}).get(operands[0])
+                if xobject is None:
+                    continue
+                xobject = xobject.get_object()
+                if xobject.get("/Subtype") == "/Image":
+                    # An image is drawn into the unit square, so the CTM is its rectangle.
+                    found.append({"px": (int(xobject["/Width"]), int(xobject["/Height"])),
+                                  "x": ctm[4], "y": ctm[5], "w": ctm[0], "h": ctm[3]})
+                elif xobject.get("/Subtype") == "/Form":
+                    matrix = [float(v) for v in xobject.get("/Matrix", [1, 0, 0, 1, 0, 0])]
+                    walk(xobject, xobject.get("/Resources") or resources, _then(matrix, ctm))
+
+    walk(page.get_contents(), page.get("/Resources") or {}, [1, 0, 0, 1, 0, 0])
+    return found
+
+
+def embedded_fonts(reader: PdfReader) -> set[str]:
+    """The names of the fonts whose programs the PDF carries, without the subset prefix."""
+    names: set[str] = set()
+    for page in reader.pages:
+        for font in ((page.get("/Resources") or {}).get("/Font") or {}).values():
+            font = font.get_object()
+            for face in [font, *(d.get_object() for d in font.get("/DescendantFonts", []))]:
+                descriptor = face["/FontDescriptor"].get_object() if "/FontDescriptor" in face else {}
+                if any(k in descriptor for k in ("/FontFile", "/FontFile2", "/FontFile3")):
+                    names.add(str(face.get("/BaseFont", "")).lstrip("/").split("+")[-1])
+    return names
+
+
+def line_after(text: str, label: str) -> str | None:
+    found = re.search(re.escape(label) + r":\s*(.+?)(?=\s+PRINT-CHECK-|\s+\w+:\s|$)", text)
+    return found.group(1).strip() if found else None
+
+
+def check_background_font_and_thai(label: str, pdf: bytes, text: str, ctx: dict) -> None:
+    """The swapped print carries the Background at the page's full size, the @font-face font, and Thai text."""
+    reader = PdfReader(io.BytesIO(pdf))
+    page_w, page_h = (float(v) for v in reader.pages[0].mediabox[2:])
+    images = drawn_images(reader)
+    full = [i for i in images if i["px"] == BACKGROUND_PX and abs(i["x"]) < 1.5 and abs(i["y"]) < 1.5
+            and abs(i["w"] - page_w) < 1.5 and abs(i["h"] - page_h) < 1.5]
+    if not full:
+        shown = [(i["px"], round(i["x"]), round(i["y"]), round(i["w"]), round(i["h"])) for i in images]
+        raise StepFailed("PDF content", f"the Background isn't drawn at the page's full size ({page_w:.0f} x "
+                                        f"{page_h:.0f} pt, from {ctx['background_uri']}); the PDF's images (pixels, "
+                                        f"x, y, w, h): {shown}")
+    print(f"PASS PDF content ({label}): the Background ({BACKGROUND_PX[0]}x{BACKGROUND_PX[1]} px) is drawn at the "
+          f"page's full size, {page_w:.0f} x {page_h:.0f} pt")
+
+    fonts = embedded_fonts(reader)
+    if FONT_NAME not in fonts:
+        raise StepFailed("PDF content", f"the @font-face font {FONT_NAME} isn't embedded; embedded fonts: "
+                                        f"{sorted(fonts)}")
+    print(f"PASS PDF content ({label}): the @font-face font {FONT_NAME} is embedded")
+
+    entity = line_after(text, "PRINT-CHECK-THAI-ENTITY")
+    raw = line_after(text, "PRINT-CHECK-THAI-RAW")
+    if not entity or not re.search(r"[฀-๿]", entity):
+        raise StepFailed("PDF content", f"Thai written as HTML entities isn't in the page text (got {entity!r})")
+    if raw != entity:
+        raise StepFailed("template fetch", f"Thai typed into the template prints as {raw!r}, not {entity!r}: "
+                                           "the VDR's /templates/ must send charset=utf-8")
+    note = ctx["thai_note"]
+    if f"notes: {note}" not in text:
+        raise StepFailed("PDF content", f"the Thai claim value {note!r} isn't in the page text")
+    print(f"PASS PDF content ({label}): Thai text is in the page, typed in the template and as a claim value")
+
+
+def check_charset(template: str) -> None:
+    """The VDR's /templates/ declares UTF-8 for an HTML template, which Mimoto otherwise reads as ISO-8859-1."""
+    kind = _get(f"{VDR_TEMPLATES}/{template}").headers.get("content-type", "")
+    if kind.replace(" ", "").lower() != "text/html;charset=utf-8":
+        raise StepFailed("template fetch", f"the VDR answers Content-Type {kind!r} for /templates/{template}, "
+                                           "not 'text/html; charset=utf-8'")
+    print(f"PASS template fetch: the VDR sends Content-Type {kind} for the template")
+
+
+def background_file(templates: Path, uri: str) -> Path:
+    """Where the Background goes in the VDR's templates folder, from the address the credential file publishes."""
+    if not uri.startswith(f"{VDR_TEMPLATES}/"):
+        raise StepFailed("setup", f"the published Background address {uri!r} isn't under {VDR_TEMPLATES}/: run "
+                                  "scripts/print-check.sh, which publishes a test address")
+    return templates / uri[len(VDR_TEMPLATES) + 1:]
+
+
 def run(installation: Path, templates: Path, test_template: Path, out: Path, student: str | None,
-        templates_shown: str) -> None:
+        templates_shown: str, thai_note: str) -> None:
     ctx = context(installation, student)
+    ctx["thai_note"] = " ".join(thai_note.split())
     target = templates / ctx["template"]
     if MARKER.encode() in target.read_bytes():
         shown = f"{templates_shown}/{ctx['template']}"
         raise StepFailed("setup", f"{shown} is still the print check's test template, left by an interrupted run: "
                                   f"restore it with git checkout -- {shown}")
     check_vdr(ctx["template"])
+    background = background_file(templates, ctx["background_uri"]) if ctx["background_uri"] else None
+    if background is None:
+        raise StepFailed("setup", "the published credential file has no display[0].background_image.uri: run "
+                                  "scripts/print-check.sh, which publishes a test address for the run")
+    made_up = make_background_png(*BACKGROUND_PX)
+    kept = background.read_bytes() if background.exists() else None  # a real Background published here stays
+    if kept == made_up:
+        raise StepFailed("setup", f"{ctx['background_uri']}'s file is still the print check's made-up Background, left "
+                                  "by an interrupted run: delete it, and publish the real one again if there was one")
     status = _get(f"{MIMOTO}/issuers").status_code
     if status != 200:
         raise StepFailed("setup", f"Mimoto's issuers list answered {status}: run scripts/mimoto-up.sh")
@@ -276,9 +420,14 @@ def run(installation: Path, templates: Path, test_template: Path, out: Path, stu
         raise StepFailed("template fetch", f"the original print already carries {MARKER}")
 
     original = target.read_bytes()
+    made_dirs = [d for d in reversed(background.parents) if d != templates and templates in d.parents
+                 and not d.exists()]
     try:
+        background.parent.mkdir(parents=True, exist_ok=True)
+        background.write_bytes(made_up)
         target.write_bytes(test_template.read_bytes())  # in place: the VDR's bind mount keeps the same file
-        print(f"swapped the test template onto the VDR as {ctx['template']}; Mimoto keeps running")
+        print(f"swapped the test template onto the VDR as {ctx['template']}, and a made-up Background to "
+              f"{ctx['background_uri']}; Mimoto keeps running")
         text = print_once("swapped", ctx, out)
         if MARKER not in text:
             raise StepFailed("template fetch", "the print after the swap doesn't carry the test template's marker")
@@ -286,8 +435,19 @@ def run(installation: Path, templates: Path, test_template: Path, out: Path, stu
         check_split_keeps_trailing_field(text)
         print("PASS PDF content (swapped): a split keeps the empty last field of 'C|a|b|c|d|e|' (7 fields)")
         print(f"PASS PDF content (swapped): the course grid holds {check_grid(text, ctx['courses'], ctx['student'])}")
+        check_background_font_and_thai("swapped", (out / "swapped.pdf").read_bytes(), text, ctx)
+        check_charset(ctx["template"])
     finally:
         target.write_bytes(original)
+        if kept is None:
+            background.unlink(missing_ok=True)
+        else:
+            background.write_bytes(kept)  # exactly as it was: it's git-ignored, so nothing else holds it
+        for d in reversed(made_dirs):
+            try:
+                d.rmdir()
+            except OSError:
+                pass
     if target.read_bytes() != original:
         raise StepFailed("setup", f"{ctx['template']} wasn't restored: git checkout it")
     print(f"restored the original {ctx['template']}")
@@ -302,12 +462,14 @@ def main() -> int:
     parser.add_argument("--templates-shown", default="the VDR's templates folder",
                         help="the templates folder as the repository names it, for messages")
     parser.add_argument("--student")
+    parser.add_argument("--thai-note", required=True,
+                        help="the made-up Thai text print-check.sh published as the credential's notes claim")
     args = parser.parse_args()
     # As PID 1 in a container Python ignores SIGTERM; exit on it instead, so `docker stop` still restores the
     # template. A SIGKILL can't be caught: the next run notices the leftover (run()).
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     try:
-        run(args.installation, args.templates, args.test_template, args.out, args.student, args.templates_shown)
+        run(args.installation, args.templates, args.test_template, args.out, args.student, args.templates_shown, args.thai_note)
     except StepFailed as e:
         print(f"FAIL {e}")
         return 1
