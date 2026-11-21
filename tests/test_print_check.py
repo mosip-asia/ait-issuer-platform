@@ -6,6 +6,7 @@ the test puts stand-ins for them in sys.modules. Run: python3 tests/test_print_c
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -23,7 +24,7 @@ for name, attr in (("httpx", None), ("pypdf", "PdfReader")):
             setattr(stub, attr, object)
         sys.modules[name] = stub
 
-from print_check import expected_grid  # noqa: E402
+from print_check import StepFailed, check_grid, expected_grid  # noqa: E402
 
 
 def test_an_empty_field_and_a_pipe_in_a_title_print_as_the_template_prints_them() -> None:
@@ -53,6 +54,20 @@ def test_a_key_missing_from_dot_env_falls_back_instead_of_ending_print_check_sh(
             cwd=tmp, capture_output=True, text=True,
         )
     assert (run.returncode, run.stdout.strip()) == (0, "latest"), (run.returncode, run.stdout, run.stderr)
+
+
+def test_a_term_with_no_courses_key_or_a_null_one_is_a_term_without_courses() -> None:
+    # The Adapter's rule: `block.get("courses") or []`. A record's term without courses must not end in a KeyError.
+    for term in ({"term": "T", "credits": "1", "gpa": "", "cumGpa": ""},
+                 {"term": "T", "credits": "1", "gpa": "", "cumGpa": "", "courses": None}):
+        assert check_grid("COURSE-GRID-START TERM T 1 COURSE-GRID-END", [term]) == "1 term headings and 0 course rows, in order"
+        try:
+            check_grid("COURSE-GRID-START TERM X 1 COURSE-GRID-END", [term])
+        except StepFailed:
+            pass
+        else:
+            raise AssertionError("a wrong grid must be a StepFailed")
+
 
 
 if __name__ == "__main__":
