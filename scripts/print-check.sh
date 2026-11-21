@@ -75,17 +75,17 @@ trap 'exit 130' INT TERM
 # The check publishes a copy of the credential files for the run, and finish puts them back as git has them:
 #  - the file `dev` uses does not map courseRows yet (ask T4), so the copy maps it (src/tools/map_course_rows.py);
 #  - the transcript's notes claim becomes a made-up Thai text (vc_template.credentialSubject.notes);
-#  - the file git tracks has no Background address (a deployment's VDR may hold no Background), so unless it has one
+#  - the file git tracks may have no Background address (a deployment's VDR may hold no Background), or one that isn't
+#    on the local VDR (null, empty, another host), so unless it has an address on the local VDR,
 #    display[0].background_image points at the VDR's templates folder, where the print check places its
 #    made-up Background: <VDR>/templates/<credential configuration id>/background.png.
 # The copy is made once (test_credentials) and every edit changes it in place; publish_test_credentials then syncs it
 # and restarts Certify.
 CREDENTIAL=$(python3 -c "import json,sys; print(next(e['credentialConfig'] for e in json.load(open(sys.argv[1])) if e.get('mimotoTemplate')))" "$INST/smoke.json")   || { echo "FAIL setup: $INST/smoke.json names no mimotoTemplate" >&2; exit 1; }
-published_uri() {
+certify_reports_display() {  # succeeds when Certify's metadata gives the credential's display (it is up and knows the id)
   curl -sf "$CERTIFY/.well-known/openid-credential-issuer" | python3 -c "
 import json,sys
-d=json.load(sys.stdin)['credential_configurations_supported'][sys.argv[1]]['display'][0]
-print((d.get('background_image') or {}).get('uri',''))" "$CREDENTIAL"
+json.load(sys.stdin)['credential_configurations_supported'][sys.argv[1]]['display'][0]" "$CREDENTIAL"
 }
 test_credentials() {
   [[ -z $TEST_CREDENTIALS ]] || return 0
@@ -97,12 +97,15 @@ map_course_rows() {  # the copy's credentialSubject maps courseRows, after cours
   python3 src/tools/map_course_rows.py --credentials "$TEST_CREDENTIALS" --credential "$CREDENTIAL" \
     --out "$TEST_CREDENTIALS" >/dev/null
 }
-add_background_address() {  # the copy's display[0].background_image when the file git holds has none: the VDR's templates folder
+add_background_address() {  # the copy's display[0].background_image, unless the file git holds has an address on the local VDR
   python3 -c "
 import json,sys
 p=sys.argv[1]+'/'+sys.argv[2]+'.json'
 c=json.load(open(p,encoding='utf-8'))
-c['display'][0].setdefault('background_image',{'uri':'http://vdr.localhost/templates/'+sys.argv[2]+'/background.png'})
+vdr='http://vdr.localhost/templates/'
+uri=(c['display'][0].get('background_image') or {}).get('uri')
+if not (isinstance(uri,str) and uri.startswith(vdr)):
+    c['display'][0]['background_image']={'uri':vdr+sys.argv[2]+'/background.png'}
 json.dump(c,open(p,'w',encoding='utf-8'),indent=2)" "$TEST_CREDENTIALS" "$CREDENTIAL"
 }
 set_thai_note() {  # the copy's notes claim: a literal in place of ${notes}, so the Adapter's data is untouched
@@ -119,8 +122,8 @@ publish_test_credentials() {
   quiet compose restart certify
   wait_certify
 }
-# A failing curl or an unknown credential id must stop the check, not read as "no Background address".
-BACKGROUND_URI=$(published_uri)   || { echo "FAIL setup: couldn't read $CREDENTIAL's display from Certify's metadata at $CERTIFY: is the stack up?" >&2; exit 1; }
+# Stop before anything is published when Certify is down or doesn't know the credential id.
+certify_reports_display   || { echo "FAIL setup: couldn't read $CREDENTIAL's display from Certify's metadata at $CERTIFY: is the stack up?" >&2; exit 1; }
 test_credentials
 map_course_rows
 add_background_address
