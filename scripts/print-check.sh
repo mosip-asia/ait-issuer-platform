@@ -35,17 +35,27 @@ wait_certify() {
   echo "print-check: Certify didn't answer within 300s" >&2; return 1
 }
 PUBLISHED=
-restore() {  # the committed credential files back into Certify
+# The command that puts the committed credential files back into Certify, as printed when restore() fails.
+RESTORE_COMMAND="COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=$(env_value COMPOSE_FILE):compose.mimoto.yaml docker compose up -d --force-recreate template-sync certify"
+restore() {  # the committed credential files back into Certify; fails when it can't
   [ -n "$PUBLISHED" ] || return 0
   PUBLISHED=
   if compose up -d --force-recreate template-sync certify >/dev/null 2>&1 && wait_certify; then
     echo "restored the committed credential file in Certify"
   else
-    echo "print-check: couldn't restore Certify's credential file: run scripts/mimoto-up.sh" >&2
+    echo "print-check: Certify may still hold the mapped copy of the credential file. From the repository root, run:" >&2
+    echo "  $RESTORE_COMMAND" >&2
+    return 1
   fi
 }
 MAPPED=
-trap 'restore; rm -rf "$MAPPED"' EXIT
+finish() {  # the exit status stays the check's own, or becomes 1 when the restore failed
+  local rc=$?
+  restore || [ "$rc" -ne 0 ] || rc=1
+  rm -rf "$MAPPED"
+  exit "$rc"
+}
+trap finish EXIT
 trap 'exit 130' INT TERM
 
 MAPPED=$(mktemp -d)
