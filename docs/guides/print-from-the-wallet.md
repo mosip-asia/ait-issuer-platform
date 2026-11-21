@@ -171,6 +171,7 @@ What Mimoto does to a credential decides how a template is written (Velocity 1.7
     <!-- layout -->
   </div>
   ```
+- **`#set` with a missing claim keeps the old value.** Velocity 1.7 leaves a variable as it was when `#set` is given null, so `#set($v = $rowProperties.get("department"))` for a claim the credential lacks leaves `$v` holding the previous claim's text: the box prints the wrong value. Set the variable to `""` first, as the `#set($cr = "")` above does, and test `#if($v && $v.size() > 0)` after.
 - **Place a table through a `<div>`.** iText honours `position: absolute` with `left` and `top` on a `<div>` but not on a `<table>`, which lands at the page's top left. Put the table in an absolutely placed `<div>` and leave the table static.
 - **Images and fonts use absolute addresses.** Mimoto sets no base URL.
 - **Fonts:** only the 14 standard PDF fonts are built in, so Arial and Arial Narrow fall back. Any other font, Thai included, comes through `@font-face` with an absolute URL, for example `src: url("http://vdr.localhost/templates/fonts/Loma.ttf")`. Which font an organisation may publish on its VDR is a licensing question.
