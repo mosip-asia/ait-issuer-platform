@@ -17,9 +17,10 @@
      split here: one line per row, "|" between fields, T for a term heading and C for a course. The words TERM and
      COURSE only make the grid's text countable; print_check.py checks it against the structured courses. -->
 <!-- Java's String.split drops trailing empty strings, so an ungraded course (C|CS701|X|0|45|3|) would split into 6
-     fields, not 7. The literal below is that line: the template must keep the empty last field. -->
+     fields, not 7. The literal below is that line: the template splits with a limit of -1 to keep the empty last field,
+     and so must every template that reads the last field of a row. -->
 #set($ungraded = "C|a|b|c|d|e|")
-#set($g = $ungraded.split("\|"))
+#set($g = $ungraded.split("\|", -1))
 <p>SPLIT-TRAILING-FIELDS $g.size()</p>
 <p>COURSE-GRID-START</p>
 #set($cr = "")
@@ -27,7 +28,7 @@
 #if($crMap)#foreach($e in $crMap.entrySet())#set($cr = $e.value)#end#end
 <table>
 #foreach($row in $cr.split("\n"))
-#set($f = $row.split("\|"))
+#set($f = $row.split("\|", -1))
 #if($f.size() > 1)
 <tr>#if($f.get(0) == "T")<td>TERM</td>#{else}<td>COURSE</td>#end#foreach($x in $f)#if($velocityCount > 1)<td>$x</td>#end#end</tr>
 #end
