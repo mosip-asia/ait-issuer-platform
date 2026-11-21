@@ -106,6 +106,18 @@ def test_subject_without_courses_passthrough() -> None:
     assert out == subject
 
 
+def test_a_null_in_the_record_is_no_text_through_the_real_entry_point() -> None:
+    # enrich_ait_transcript_subject is what the Adapter calls: parse_courses must not turn None into "None" before
+    # the row, list or canonical JSON are derived.
+    out = enrich_ait_transcript_subject(
+        {"courses": [{"term": "T", "credits": "1", "gpa": None, "cumGpa": "3.5",
+                      "courses": [{"no": "X1", "title": "Y", "lab": None, "lec": "3", "credits": "3", "grade": None}]}]}
+    )
+    assert out["courseRows"] == "T|T|1||3.5\nC|X1|Y||3|3|", out["courseRows"]
+    assert out["courseList"] == "Y", out["courseList"]
+    assert "None" not in out["courses"], out["courses"]
+
+
 if __name__ == "__main__":
     tests = [v for k, v in list(globals().items()) if k.startswith("test_")]
     for t in tests:
