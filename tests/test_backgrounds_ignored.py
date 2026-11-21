@@ -43,6 +43,22 @@ def test_a_background_under_the_templates_folder_is_ignored() -> None:
         assert ignored(path), f"git doesn't ignore {path}"
 
 
+def test_a_font_under_the_templates_folder_is_ignored() -> None:
+    """A font the template loads through @font-face is published on the VDR like a Background, and may carry a licence
+    that forbids redistribution, so it stays out of git too."""
+    for path in (
+        f"{TEMPLATES}/fonts/narrow.ttf",
+        f"{TEMPLATES}/fonts/thai.otf",
+        f"{TEMPLATES}/fonts/a.woff",
+        f"{TEMPLATES}/fonts/a.woff2",
+        f"{TEMPLATES}/fonts/a.TTF",
+        f"{TEMPLATES}/fonts/a.Woff2",
+        f"{TEMPLATES}/a.OtF",
+        "deploy/another-installation/vdr/templates/fonts/narrow.ttf",
+    ):
+        assert ignored(path), f"git doesn't ignore {path}"
+
+
 def test_the_print_checks_font_folder_is_ignored() -> None:
     assert ignored(f"{TEMPLATES}/print-check/thai-font.ttf")
 

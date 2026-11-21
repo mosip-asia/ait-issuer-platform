@@ -18,6 +18,12 @@ deploy/*/vdr/templates/mosip-cbeff.xsd
 deploy/*/vdr/templates/**/*.[pP][nN][gG]
 deploy/*/vdr/templates/**/*.[jJ][pP][gG]
 deploy/*/vdr/templates/**/*.[jJ][pP][eE][gG]
+# A font the template loads through @font-face is published on the VDR like a Background and may carry a licence that
+# forbids redistribution: keep fonts in deploy/<installation>/vdr/templates/fonts/, never committed.
+deploy/*/vdr/templates/**/*.[tT][tT][fF]
+deploy/*/vdr/templates/**/*.[oO][tT][fF]
+deploy/*/vdr/templates/**/*.[wW][oO][fF][fF]
+deploy/*/vdr/templates/**/*.[wW][oO][fF][fF]2
 # The print check's font, taken from Debian for the run (scripts/print-check.sh).
 deploy/*/vdr/templates/print-check/
 *.p12
