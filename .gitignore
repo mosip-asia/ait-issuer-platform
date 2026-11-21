@@ -14,13 +14,10 @@ deploy/*/vdr/templates/mimoto-trusted-verifiers.json
 deploy/*/vdr/templates/mosip-cbeff.xsd
 # An organisation's Background (its paper) is published on its own VDR, never committed: any image under an
 # Installation's VDR templates folder. Brand assets (logos) live in vdr/assets/ and are committed.
-deploy/*/vdr/templates/**/*.png
-deploy/*/vdr/templates/**/*.jpg
-deploy/*/vdr/templates/**/*.jpeg
-# Linux matches extensions case-sensitively.
-deploy/*/vdr/templates/**/*.PNG
-deploy/*/vdr/templates/**/*.JPG
-deploy/*/vdr/templates/**/*.JPEG
+# Linux matches extensions case-sensitively, so each letter takes both cases.
+deploy/*/vdr/templates/**/*.[pP][nN][gG]
+deploy/*/vdr/templates/**/*.[jJ][pP][gG]
+deploy/*/vdr/templates/**/*.[jJ][pP][eE][gG]
 # The print check's font, taken from Debian for the run (scripts/print-check.sh).
 deploy/*/vdr/templates/print-check/
 *.p12
