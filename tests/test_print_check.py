@@ -42,6 +42,7 @@ def _import_print_check():
 
 _pc = _import_print_check()
 StepFailed, check_grid, expected_grid = _pc.StepFailed, _pc.check_grid, _pc.expected_grid
+record_courses = getattr(_pc, "record_courses", None)
 
 
 def test_an_empty_field_and_a_pipe_in_a_title_print_as_the_template_prints_them() -> None:
@@ -85,6 +86,68 @@ def test_a_term_with_no_courses_key_or_a_null_one_is_a_term_without_courses() ->
         else:
             raise AssertionError("a wrong grid must be a StepFailed")
 
+
+
+def test_whatever_the_record_holds_for_courses_ends_in_a_pass_or_a_step_failure() -> None:
+    """The record's `courses` enters the check once, through record_courses; what it returns is what the grid code
+    trusts. Each odd input is a StepFailed or a correct pass, never another exception."""
+    assert record_courses is not None, "print_check has no record_courses boundary"
+    grid = "COURSE-GRID-START COURSE-GRID-END"
+    assert check_grid(grid, record_courses([])) == "0 term headings and 0 course rows, in order"
+    for bad in (None, "ab", {"term": "T"}, 3, [None], ["ab"], [[]], [{"term": "T", "courses": "ab"}],
+                [{"term": "T", "courses": [None]}], [{"term": "T", "courses": ["x"]}], [{"term": "T", "courses": {}}]):
+        try:
+            check_grid(grid, record_courses(bad))
+        except StepFailed as e:
+            assert str(e).strip(), bad
+        else:
+            raise AssertionError(f"{bad!r} must be a StepFailed")
+
+
+def test_an_empty_course_list_is_an_empty_grid() -> None:
+    assert expected_grid([]) == ""
+
+
+def test_the_record_boundary_keeps_terms_and_adds_the_missing_courses_list() -> None:
+    assert record_courses is not None, "print_check has no record_courses boundary"
+    term = {"term": "T", "credits": "1", "gpa": "", "cumGpa": ""}
+    assert record_courses([term, {**term, "courses": None}]) == [{**term, "courses": []}, {**term, "courses": []}]
+    assert check_grid("COURSE-GRID-START TERM T 1 COURSE-GRID-END", record_courses([term])) == "1 term headings and 0 course rows, in order"
+
+
+def test_context_reads_the_record_through_the_boundary() -> None:
+    """The wiring: a null courses cell (the mock Adapter's rendering of an empty cell) fails in context(), as a StepFailed."""
+    import json
+    meta = {"authorization_servers": ["http://auth.localhost/realms/r"], "credential_configurations_supported": {"c": {"display": [{}]}}}
+
+    class Reply:
+        status_code = 200
+        def __init__(self, body): self.body = body
+        def json(self): return self.body
+
+    def run_with(courses):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "mock").mkdir()
+            (root / "vcga").mkdir()
+            (root / "smoke.json").write_text(json.dumps([{"mimotoTemplate": "t", "eligible": "s1", "credentialConfig": "c", "scope": "x"}]), encoding="utf-8")
+            (root / "mock" / "keycloak-realm.json").write_text(json.dumps({"users": [{"username": "s1", "credentials": [{"value": "p"}]}]}), encoding="utf-8")
+            (root / "vcga" / "issuers.json").write_text(json.dumps({"issuers": [{"client_id": "a", "redirect_uri": "b", "issuer_id": "c"}]}), encoding="utf-8")
+            original = _pc._get
+            _pc._get = lambda url, **kw: Reply(meta if "well-known" in url else {"fullName": "A B", "courses": courses})
+            try:
+                return _pc.context(root, None)
+            finally:
+                _pc._get = original
+
+    for bad in (None, "ab", [None]):
+        try:
+            run_with(bad)
+        except StepFailed:
+            pass
+        else:
+            raise AssertionError(f"{bad!r} must be a StepFailed")
+    assert run_with([])["courses"] == []
 
 
 def test_help_without_the_mounted_adapter_module_is_a_one_line_setup_failure() -> None:
