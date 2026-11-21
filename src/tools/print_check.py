@@ -359,6 +359,11 @@ def run(installation: Path, templates: Path, test_template: Path, out: Path, stu
     if background is None:
         raise StepFailed("setup", "the published credential file has no display[0].background_image.uri: run "
                                   "scripts/print-check.sh, which publishes a test address for the run")
+    made_up = make_background_png(*BACKGROUND_PX)
+    kept = background.read_bytes() if background.exists() else None  # a real Background published here stays
+    if kept == made_up:
+        raise StepFailed("setup", f"{ctx['background_uri']}'s file is still the print check's made-up Background, left "
+                                  "by an interrupted run: delete it, and publish the real one again if there was one")
     status = _get(f"{MIMOTO}/issuers").status_code
     if status != 200:
         raise StepFailed("setup", f"Mimoto's issuers list answered {status}: run scripts/mimoto-up.sh")
@@ -372,7 +377,7 @@ def run(installation: Path, templates: Path, test_template: Path, out: Path, stu
                  and not d.exists()]
     try:
         background.parent.mkdir(parents=True, exist_ok=True)
-        background.write_bytes(make_background_png(*BACKGROUND_PX))
+        background.write_bytes(made_up)
         target.write_bytes(test_template.read_bytes())  # in place: the VDR's bind mount keeps the same file
         print(f"swapped the test template onto the VDR as {ctx['template']}, and a made-up Background to "
               f"{ctx['background_uri']}; Mimoto keeps running")
@@ -384,7 +389,10 @@ def run(installation: Path, templates: Path, test_template: Path, out: Path, stu
         check_charset(ctx["template"])
     finally:
         target.write_bytes(original)
-        background.unlink(missing_ok=True)
+        if kept is None:
+            background.unlink(missing_ok=True)
+        else:
+            background.write_bytes(kept)  # exactly as it was: it's git-ignored, so nothing else holds it
         for d in reversed(made_dirs):
             try:
                 d.rmdir()

@@ -43,10 +43,12 @@ wait_certify() {
 }
 cleanup() {
   rm -rf "$FONT_DIR"
+  [[ -z ${TEST_CREDENTIALS:-} ]] || { [[ $PUBLISHED == 1 ]] || rm -rf "$TEST_CREDENTIALS"; }
   if [[ $PUBLISHED == 1 ]]; then  # put the credential file back as git has it
     quiet compose run --rm -T template-sync && quiet compose restart certify && wait_certify \
       && echo "restored the published credential file" \
       || echo "could not restore the published credential file: run scripts/deploy.sh $INSTALLATION" >&2
+    rm -rf "$TEST_CREDENTIALS"
   fi
 }
 trap cleanup EXIT
@@ -54,27 +56,42 @@ trap cleanup EXIT
 # The credential file git tracks has no Background address (a deployment's VDR may hold no Background), so when the
 # published one has none, publish a copy that points display[0].background_image at the VDR's templates folder,
 # where the print check places its made-up Background: <VDR>/templates/<credential configuration id>/background.png.
-CREDENTIAL=$(python3 -c "import json,sys; print(next(e['credentialConfig'] for e in json.load(open(sys.argv[1])) if e.get('mimotoTemplate')))" "$INST/smoke.json")
+# The copy is made once (test_credentials) and every edit changes it in place; publish_test_credentials then syncs it
+# and restarts Certify, and cleanup puts the credential files back as git has them.
+CREDENTIAL=$(python3 -c "import json,sys; print(next(e['credentialConfig'] for e in json.load(open(sys.argv[1])) if e.get('mimotoTemplate')))" "$INST/smoke.json")   || { echo "FAIL setup: $INST/smoke.json names no mimotoTemplate" >&2; exit 1; }
 published_uri() {
   curl -sf "$CERTIFY/.well-known/openid-credential-issuer" | python3 -c "
 import json,sys
 d=json.load(sys.stdin)['credential_configurations_supported'][sys.argv[1]]['display'][0]
 print((d.get('background_image') or {}).get('uri',''))" "$CREDENTIAL"
 }
-if [[ -z $(published_uri) ]]; then
+TEST_CREDENTIALS=""
+test_credentials() {
+  [[ -z $TEST_CREDENTIALS ]] || return 0
   TEST_CREDENTIALS=$(mktemp -d)
   cp "$INST"/certify/credentials/*.json "$TEST_CREDENTIALS"/
+  chmod -R a+rX "$TEST_CREDENTIALS"
+}
+add_background_address() {  # the copy's display[0].background_image, pointing at the VDR's templates folder
   python3 -c "
 import json,sys
 p=sys.argv[1]+'/'+sys.argv[2]+'.json'
 c=json.load(open(p,encoding='utf-8'))
 c['display'][0]['background_image']={'uri':'http://vdr.localhost/templates/'+sys.argv[2]+'/background.png'}
 json.dump(c,open(p,'w',encoding='utf-8'),indent=2)" "$TEST_CREDENTIALS" "$CREDENTIAL"
-  chmod -R a+rX "$TEST_CREDENTIALS"
+}
+publish_test_credentials() {
   PUBLISHED=1
   quiet compose run --rm -T -e CREDENTIALS_DIR=/test-credentials -v "$TEST_CREDENTIALS:/test-credentials:ro" template-sync
   quiet compose restart certify
   wait_certify
+}
+# A failing curl or an unknown credential id must stop the check, not read as "no Background address".
+BACKGROUND_URI=$(published_uri)   || { echo "FAIL setup: couldn't read $CREDENTIAL's display from Certify's metadata at $CERTIFY: is the stack up?" >&2; exit 1; }
+if [[ -z $BACKGROUND_URI ]]; then
+  test_credentials
+  add_background_address
+  publish_test_credentials
   echo "published a test Background address for $CREDENTIAL (restored afterwards)"
 fi
 
