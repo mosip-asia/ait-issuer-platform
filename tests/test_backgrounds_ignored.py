@@ -19,8 +19,9 @@ def ignored(path: str) -> bool:
     """Whether the repository's own ignore rules cover the path, which needn't exist. --no-index judges a path git
     tracks by the rules alone (check-ignore would say "not ignored" for any tracked file, so a rule that hid a
     committed file could never fail the negative test), and an empty user-level excludes file keeps the answer the
-    same on every machine."""
-    command = ["git", "-c", f"core.excludesFile={os.devnull}", "check-ignore", "--no-index", "-q", path]
+    same on every machine. core.ignorecase=false makes the match case-sensitive as on Linux, whatever the checkout's own
+    setting (Windows checkouts default to true, which would hide a rule that misses an extension's case)."""
+    command = ["git", "-c", f"core.excludesFile={os.devnull}", "-c", "core.ignorecase=false", "check-ignore", "--no-index", "-q", path]
     return subprocess.run(command, cwd=REPO_ROOT).returncode == 0
 
 
@@ -34,6 +35,9 @@ def test_a_background_under_the_templates_folder_is_ignored() -> None:
         f"{TEMPLATES}/ait-transcript/background.PNG",  # Linux is case-sensitive
         f"{TEMPLATES}/ait-transcript/background.JPG",
         f"{TEMPLATES}/ait-transcript/background.JPEG",
+        f"{TEMPLATES}/ait-transcript/background.Png",  # any mix of cases
+        f"{TEMPLATES}/ait-transcript/b.jPg",
+        f"{TEMPLATES}/ait-transcript/b.JpEg",
         "deploy/another-installation/vdr/templates/ait-transcript/background.png",
     ):
         assert ignored(path), f"git doesn't ignore {path}"
