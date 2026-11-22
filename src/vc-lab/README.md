@@ -19,14 +19,11 @@ Uploading a file replaces that slot only; uploading a zip from Download replaces
 
 1. The record is the sample's `credentialSubject`, or the whole sample.
 2. The mapping is evaluated against the record. `${name}`, `$name` and dotted paths (`${thesis.title}`) read the record; a value that is exactly one reference passes a list or object through unchanged. Certify's own variables (`${_holderId}`, `${_issuer}`, any name starting with `_`) get placeholders. The result is the credential's claims, keyed by the mapping's left side.
-3. The template sees Mimoto's variables (`titleName`, `logoUrl`, `backgroundColor`, `textColor` from the credential file's first `display` entry, a mock `qrCodeImage`, `credentialValidity`) plus every claim that holds a list, or text holding a JSON list, under its claim name, so `#foreach($t in $terms)` with `$t.field` and nested loops works.
-4. `#claimValue("name")` reads the claims last, and loop values are escaped (`$` and `#` included), so data is never read as template code.
-
-**Wallet view** renders the same way, but every list claim is `""` and no list reaches the template, as Mimoto 0.21 does. A template that loops over a list should keep an `#else` for the Wallet's copy.
+3. VC Lab sends the template, the claims, the credential file and the Background (if any) to the renderer, which hands the template Mimoto's variables (`$rowProperties`, `$titleName`, `$logoUrl`, `$textColor`, `$backgroundColor`, `$qrCodeImage`, `$backgroundImage`, and the rest) exactly as Mimoto 0.21 does, and draws the PDF. A list of objects reaches the template as `""` and a list of text joined with `", "`, as in the Wallet; see [the renderer's README](../renderer/README.md).
 
 ## Dashboard and API
 
-The dashboard (`/`) has a file input per slot (or one for a zip), the list of loaded files, the preview (the PDF from `/preview.pdf`, or its error in red), and Export PDF with a Lab/Wallet switch, Download, Remove background and Clear.
+The dashboard (`/`) has a file input per slot (or one for a zip), the list of loaded files, the preview (the PDF from `/preview.pdf`, or its error in red), Download, Remove background and Clear.
 
 | Call | Does |
 |---|---|
@@ -35,16 +32,10 @@ The dashboard (`/`) has a file input per slot (or one for a zip), the list of lo
 | `DELETE /api/set` | clears the set |
 | `DELETE /api/set/background` | removes the background only |
 | `GET /preview.pdf` | the PDF the Wallet prints from the set, drawn by the renderer. The renderer's refusals pass through with its reason: 422 when the set doesn't print (a Velocity error names its line), 400 when it can't read the credential file, 503 when it runs out of memory |
-| `GET /preview?view=lab\|wallet` | the rendered HTML, never with the background; 422 when the template's `#if`/`#foreach`/`#macro` blocks don't balance |
-| `GET /export.pdf?view=lab\|wallet` | the old renderer's PDF; 422 while a background image is loaded (it can't draw one), and for unbalanced blocks, as `/preview` |
 | `GET /download` | a zip with `template/`, `credential/`, `sample/` and `background/`, each file as uploaded |
 | `GET /health` | liveness |
 
-Rendering needs the template, the credential file and the sample; without them the previews and export answer 409, naming what is missing. `/preview.pdf` answers 503 without `RENDERER_URL`, and 502 when the renderer can't be reached or answers anything else. A wrong file answers 400 with the reason.
-
-## The hard copy (`hardcopy.py`)
-
-`render_pdf(html, background=None)` renders the template through WeasyPrint for the old `/export.pdf`, which passes no background now (the Background slot holds an image, which `render_pdf` can't lay). `make_background`, which fitted an uploaded PDF, is no longer called. Both go with the old path.
+Rendering needs the template, the credential file and the sample; without them `/preview.pdf` answers 409, naming what is missing. `/preview.pdf` answers 503 without `RENDERER_URL`, and 502 when the renderer can't be reached or answers anything else. A wrong file answers 400 with the reason.
 
 > **A background may be confidential** (an organisation's watermark, seal and signature). VC Lab keeps it in memory only, but has no login: anyone who can reach a deployed VC Lab can download it. Upload one only on a VC Lab running on your own machine.
 
@@ -65,12 +56,11 @@ docker compose up -d vc-lab   # starts the renderer first; then open http://lab.
 python3 src/vc-lab/main.py    # or locally, on port 4200 (set RENDERER_URL for /preview.pdf)
 ```
 
-Tests (script-style). The `/preview.pdf` tests need the renderer and the `/export.pdf` tests need WeasyPrint's system libraries, so they run in the `ait-vc` image through Compose and skip on a host:
+Tests (script-style). The tests that need a real renderer run in the `ait-vc` image through Compose and skip on a host; the rest use a stand-in renderer and run anywhere:
 
 ```bash
 docker compose build renderer vc-lab
 docker compose run --rm vc-lab python src/vc-lab/test_main.py  # the web API, with small made-up sets
-.venv/bin/python src/vc-lab/test_template_engine.py            # Velocity details
 ```
 
 ## Layout
@@ -79,8 +69,6 @@ docker compose run --rm vc-lab python src/vc-lab/test_main.py  # the web API, wi
 src/vc-lab/
 ├── main.py                  # the web app: dashboard and API over the one set
 ├── labset.py                # the set: its slots, upload parsing and validation, the zip
-├── template_engine.py       # pure: mapping, template context and the Velocity subset
-├── hardcopy.py              # the background page and the PDF
-├── test_main.py             # API tests
-└── test_template_engine.py  # Velocity tests
+├── template_engine.py       # pure: the claim mapping (the credential file's vc_template)
+└── test_main.py             # API tests
 ```

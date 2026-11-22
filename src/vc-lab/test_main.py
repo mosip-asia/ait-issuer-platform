@@ -5,8 +5,8 @@ Run, with the renderer beside VC Lab (the /preview.pdf tests need it):
 On a host, without Compose:
     python3 src/vc-lab/test_main.py
 
-The /preview.pdf tests skip without RENDERER_URL, and the /export.pdf tests need WeasyPrint's system libraries
-(Pango): both run in the ait-vc image through Compose and skip on a host.
+The /preview.pdf tests that need a real renderer skip without RENDERER_URL (a host run); they run in the ait-vc
+image through Compose. The rest, which use a stand-in renderer, run anywhere.
 """
 
 from __future__ import annotations
@@ -978,23 +978,6 @@ def test_background_survives_download_and_upload_back() -> bool:
     return True
 
 
-def test_export_pdf_refuses_an_image_background() -> bool:
-    """The old Export PDF can't lay an image under its page: it says so, and works again without one."""
-    try:
-        import weasyprint  # noqa: F401
-    except Exception as e:  # Pango missing on this host; the ait-vc image has it
-        print(f"SKIP test_export_pdf_refuses_an_image_background ({type(e).__name__})")
-        return False
-    _upload_set()
-    assert len(_pages("/export.pdf")) == 2
-    assert _upload(background=("paper.png", _png(20, 30))).status_code == 200
-    res = client.get("/export.pdf")
-    assert res.status_code == 422 and "Export PDF" in res.json()["detail"] and "preview.pdf" in res.json()["detail"], res.text
-    assert client.delete("/api/set/background").status_code == 200
-    assert len(_pages("/export.pdf")) == 2
-    return True
-
-
 def _snapshot() -> dict[str, tuple[int, int]]:
     roots = [REPO_ROOT / "deploy", VC_LAB_DIR]
     return {
@@ -1033,7 +1016,6 @@ def main() -> None:
         test_an_old_zip_with_a_pdf_background_says_what_to_do,
         test_the_renderer_is_sent_the_uploaded_background,
         test_the_worst_accepted_background_prints_four_at_once,
-        test_export_pdf_refuses_an_image_background,
         test_background_png_lands_as_the_pages_image,
         test_background_jpeg_lands_as_the_pages_image,
         test_no_background_uploaded_uses_the_credential_files_address,

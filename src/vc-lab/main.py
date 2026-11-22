@@ -1,4 +1,4 @@
-"""VC Lab: render a credential template from uploaded files, and export its hard copy as a PDF.
+"""VC Lab: preview a credential template as the PDF the Wallet prints, from uploaded files.
 
 VC Lab knows nothing about any organisation and reads nothing from the repo. The user uploads one set (the
 template, Certify's credential file, the Adapter's sample response and an optional background image, PNG or JPEG); VC Lab
@@ -14,16 +14,15 @@ from __future__ import annotations
 import dataclasses
 import os
 from pathlib import Path
-from typing import Any, AsyncGenerator, Literal
+from typing import Any, AsyncGenerator
 from urllib.parse import quote
 
 import httpx
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 from starlette.datastructures import UploadFile
 from starlette.formparsers import MultiPartException, MultiPartParser
 
-import hardcopy
 import labset
 import template_engine
 from labset import MAX_UPLOAD, LabSet
@@ -32,8 +31,6 @@ app = FastAPI(title="VC Lab", description="Render a credential template from upl
 
 # The one set, replaced whole on every change. Memory only, on purpose: see the README's note on backgrounds.
 _lab = LabSet()
-
-View = Literal["lab", "wallet"]
 
 # The renderer: Mimoto 0.21's print path as a service (src/renderer). Compose sets it.
 RENDERER_URL = os.environ.get("RENDERER_URL", "").rstrip("/")
@@ -87,27 +84,6 @@ def remove_background() -> dict[str, Any]:
     global _lab
     _lab = dataclasses.replace(_lab, background=None)
     return _status()
-
-
-@app.get("/preview", response_class=HTMLResponse)
-def preview(view: View = Query("lab")) -> HTMLResponse:
-    """The rendered template as HTML. Never with the background: the PDF is where the background shows."""
-    return HTMLResponse(_render(_lab, view))
-
-
-@app.get("/export.pdf")
-def export_pdf(view: View = Query("lab")) -> Response:
-    """The rendered template as a PDF. The old renderer can't draw an image under it: it refuses one (the Wallet's
-    print, /preview.pdf, is where the Background shows)."""
-    lab = _lab  # one set for the whole request, even if an upload replaces it meanwhile
-    html = _render(lab, view)
-    if lab.background:
-        raise HTTPException(
-            status_code=422,
-            detail="Export PDF can't draw the Background image: see /preview.pdf, or remove the Background first",
-        )
-    pdf = hardcopy.render_pdf(html)
-    return _inline_pdf(pdf, f"{Path(lab.template.filename).stem}-{view}.pdf")
 
 
 @app.get("/preview.pdf")
@@ -168,17 +144,6 @@ def _status() -> dict[str, Any]:
 def _require_complete(lab: LabSet) -> None:
     if missing := lab.missing():
         raise HTTPException(status_code=409, detail=f"upload these first: {', '.join(missing)}")
-
-
-def _render(lab: LabSet, view: View) -> str:
-    _require_complete(lab)
-    try:  # the old Velocity subset needs balanced blocks; uploads no longer check them
-        template_engine.check_template(lab.template.value)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    return template_engine.render_credential(
-        lab.template.value, lab.credential.value, lab.sample.value, wallet=view == "wallet"
-    )
 
 
 async def _read_files(request: Request) -> dict[str, tuple[str, bytes]]:
@@ -245,8 +210,6 @@ _DASHBOARD = """<!DOCTYPE html>
     button:disabled { opacity: .45; cursor: default; }
     .warn { font-size: 12px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 8px; margin-top: 6px; }
     #error { font-size: 13px; color: #b91c1c; white-space: pre-wrap; }
-    .viewer-head { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-    .views label { display: inline; margin: 0 0 0 12px; font-weight: 400; }
     iframe { width: 100%; height: 860px; border: 1px solid var(--border); border-radius: 6px; background: #fff; }
     #empty { color: var(--muted); font-size: 14px; padding: 40px 0; text-align: center; }
   </style>
@@ -293,7 +256,6 @@ _DASHBOARD = """<!DOCTYPE html>
         </div>
         <div id="error"></div>
         <div class="row">
-          <button id="exportPdf">Export PDF</button>
           <button id="download">Download</button>
         </div>
         <div class="row">
@@ -303,27 +265,15 @@ _DASHBOARD = """<!DOCTYPE html>
       </div>
     </div>
     <div class="card">
-      <div class="viewer-head">
-        <h2 style="margin:0">Preview: the PDF the Wallet prints</h2>
-        <div class="views">
-          <label><input type="radio" name="view" value="lab" checked> Lab</label>
-          <label><input type="radio" name="view" value="wallet"> Wallet (as Mimoto prints it)</label>
-        </div>
-      </div>
+      <h2>Preview: the PDF the Wallet prints</h2>
       <div class="note" id="backgroundNote"></div>
-      <div class="hint" id="viewHint"></div>
       <div id="empty"></div>
       <iframe id="preview" hidden></iframe>
     </div>
   </main>
   <script>
-    const view = () => document.querySelector('input[name=view]:checked').value;
     const showError = (text) => { document.getElementById('error').textContent = text || ''; };
 
-    const VIEW_HINTS = {
-      lab: 'Lab and Wallet apply to Export PDF only (the old renderer). Lab: lists are drawn.',
-      wallet: 'Lab and Wallet apply to Export PDF only (the old renderer). Wallet: lists come through empty.',
-    };
     const NAMES = {template: 'template', credential: 'credential file', sample: 'data'};
 
     async function show(status) {
@@ -336,11 +286,9 @@ _DASHBOARD = """<!DOCTYPE html>
       const note = document.getElementById('backgroundNote');
       note.className = 'note' + (background ? ' strong' : '');
       note.textContent = background
-        ? 'Background loaded (' + background + '). The preview draws it as $backgroundImage. Export PDF cannot draw it.'
+        ? 'Background loaded (' + background + '). The preview draws it as $backgroundImage.'
         : 'The preview draws background_image from the credential file, if it has one.';
-      document.getElementById('viewHint').textContent = VIEW_HINTS[view()];
       const ready = status.missing.length === 0;
-      document.getElementById('exportPdf').disabled = !ready;
       document.getElementById('removeBackground').disabled = !status.loaded.background;
       document.getElementById('empty').textContent = ready ? '' : 'Upload these to see the preview: ' + status.missing.map(s => NAMES[s]).join(', ') + '.';
       const frame = document.getElementById('preview');
@@ -379,10 +327,6 @@ _DASHBOARD = """<!DOCTYPE html>
         input.value = '';
       });
     }
-    for (const radio of document.querySelectorAll('input[name=view]')) {
-      radio.addEventListener('change', () => call('GET', '/api/set'));
-    }
-    document.getElementById('exportPdf').onclick = () => window.open('/export.pdf?view=' + view(), '_blank');
     document.getElementById('download').onclick = () => { window.location = '/download'; };
     document.getElementById('removeBackground').onclick = () => call('DELETE', '/api/set/background');
     document.getElementById('clear').onclick = () => call('DELETE', '/api/set');
