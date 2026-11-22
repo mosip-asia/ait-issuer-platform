@@ -27,6 +27,7 @@ import subprocess
 import sys
 import zipfile
 from pathlib import Path
+from urllib.parse import urlsplit
 
 VDR_TEMPLATES = "http://vdr.localhost/templates"  # template-sync rewrites it for each stack's VDR (VDR_BASE_URL)
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
@@ -98,13 +99,18 @@ def for_template_sync(the_set: Set) -> dict:
 
 
 def names_published_background(the_set: Set) -> bool:
-    """True when the credential file's display[0].background_image.uri is the address a Background is published at
-    (on any VDR host): paper placed by hand, which has no copy in git."""
+    """True when the credential file's display[0].background_image.uri is the address a Background is published at:
+    the local VDR's host (template-sync rewrites it for each stack) and /templates/<id>/background.png, whatever the
+    query or the spaces around it. That is paper placed by hand, which has no copy in git."""
     display = the_set.parsed.get("display")
     first = display[0] if isinstance(display, list) and display and isinstance(display[0], dict) else {}
     image = first.get("background_image")
     uri = image.get("uri") if isinstance(image, dict) else None
-    return isinstance(uri, str) and uri.endswith(f"/templates/{the_set.config_id}/background.png")
+    if not isinstance(uri, str):
+        return False
+    address = urlsplit(uri.strip())
+    return (address.hostname == urlsplit(VDR_TEMPLATES).hostname
+            and address.path == f"{urlsplit(VDR_TEMPLATES).path}/{the_set.config_id}/background.png")
 
 
 def tracked(path: Path) -> bool:
