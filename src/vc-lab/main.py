@@ -122,16 +122,29 @@ def preview_pdf() -> Response:
         res = httpx.post(f"{RENDERER_URL}/render", json=request, timeout=120)
     except httpx.HTTPError as e:
         raise HTTPException(status_code=502, detail=f"the renderer at {RENDERER_URL} can't be reached: {e}")
-    if res.status_code in (400, 422):  # the set is at fault (422: the template, with its line): pass the reason on
-        raise HTTPException(status_code=res.status_code, detail=res.json()["error"])
+    # 400: the request or the credential file is wrong. 422: the set doesn't print, a template error with its line,
+    # or a credential file fault with none. 503: the renderer is out of memory. Each reason reaches the designer.
+    if res.status_code in (400, 422, 503):
+        raise HTTPException(status_code=res.status_code, detail=_renderer_reason(res))
     if res.status_code != 200:
         raise HTTPException(status_code=502, detail=f"the renderer answered {res.status_code}: {res.text}")
     return _inline_pdf(res.content, f"{Path(lab.template.filename).stem}.pdf")
 
 
+def _renderer_reason(res: httpx.Response) -> str:
+    """The renderer's {"error": ...}, or the body as text when something else answered."""
+    try:
+        return str(res.json()["error"])
+    except (ValueError, KeyError, TypeError):
+        return res.text
+
+
 def _inline_pdf(pdf: bytes, name: str) -> Response:
-    """A PDF the browser shows, named in RFC 6266's filename* form, so a name in any script fits the header."""
-    return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f"inline; filename*=UTF-8''{quote(name)}"})
+    """A PDF the browser shows. RFC 6266's filename* carries a name in any script; filename is its ASCII stand-in
+    for clients that don't read filename*."""
+    ascii_name = name.encode("ascii", "replace").decode("ascii").replace("?", "_")
+    disposition = f"inline; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(name)}"
+    return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": disposition})
 
 
 @app.get("/download")
