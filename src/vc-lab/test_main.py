@@ -658,6 +658,99 @@ def test_preview_pdf_prints_mapped_values() -> bool:
     return True
 
 
+# Prints every claim as its UTF-8 bytes, so the PDF's text is ASCII whatever the claim holds (the 14 standard fonts
+# have no Thai glyphs) and an empty claim shows as nothing between its name and END.
+CLAIM_BYTES_TEMPLATE = """<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>claims</title></head><body>
+#foreach($e in $rowProperties.entrySet())#foreach($v in $e.value.values())
+<p>CLAIM $e.key #foreach($b in $v.getBytes("UTF-8"))$b #end END</p>
+#end#end
+</body></html>
+"""
+
+# What Certify 0.14 signs on this platform, from Certify's own code: the Data-provider plugin's shape() on the record,
+# then Velocity 1.7 and org.json 20241224 on the vc_template text template-sync stores. Each expected value was
+# produced by that code (Certify's jars and the baked plugin from ghcr.io/mosip-asia/ait-certify; the harness is in
+# the PR's notes). A record or a vc_template Certify can't sign is refused, with the reason.
+CERTIFY_CASES = {
+    "a field the record lacks": (
+        {"name": "Ada"},
+        {"whole": "${country}", "inText": "x ${country} y", "quiet": "$!{country}", "bare": "$country",
+         "quietBare": "$!country"},
+        {"whole": "${country}", "inText": "x ${country} y", "quiet": "", "bare": "$country", "quietBare": ""}),
+    "a hyphen is part of a Velocity name": (
+        {"name": "Ada", "no": "7", "first-name": "Ada"},
+        {"a": "$name-$no", "b": "${first-name}", "c": "${name}-${no}"},
+        {"a": "$name-7", "b": "Ada", "c": "Ada-7"}),
+    "a name followed by Thai": (
+        {"name": "Ada", "amount": "50"},
+        {"a": "คุณ$nameครับ", "b": "$amountบาท", "c": "${amount}บาท"},
+        {"a": "คุณAdaครับ", "b": "50บาท", "c": "50บาท"}),
+    "a # and a directive": (
+        {"no": "12", "name": "Ada"},
+        {"a": "Room #${no}", "c": "$name's", "e": "#if($name)yes#end"},
+        {"a": "Room #12", "c": "Ada's", "e": "yes"}),
+    "Java methods on a value": (
+        {"name": "Ada"},
+        {"a": "${name.toUpperCase()}", "c": "$name.length()", "k": "${name.class}"},
+        {"a": "ADA", "c": "3", "k": "class java.lang.String"}),
+    "the plugin escapes text before Velocity sees it": (
+        {"name": "ก\"x\ny"},
+        {"a": "${name}", "len": "${name.length()}"},
+        {"a": "ก\"x\ny", "len": "12"}),
+    "numbers and booleans": (
+        {"amount": 50, "ok": True},
+        {"a": "${amount}", "b": "$ok"},
+        {"a": "50", "b": "true"}),
+    "courses, unquoted by template-sync, and Certify's own variable": (
+        {"courses": [{"code": "X1", "credits": 3}]},
+        {"courses": "${courses}", "holder": "${_holderId}"},
+        {"courses": "", "holder": "did:example:holder"}),  # Mimoto prints a list of objects as ""
+}
+CERTIFY_REFUSALS = {
+    "a null field": ({"name": "Ada", "country": None}, {"whole": "${country}"}, "null for country"),
+    "a list that isn't courses": ({"name": "Ada", "tags": ["x", "y"]}, {"a": "$tags[0]"}, "tags"),
+    "an object": ({"student": {"class": "2026"}}, {"a": "${student.class}"}, "student"),
+    "## starts a Velocity comment": ({"name": "Ada"}, {"b": "## note $name"}, "Unterminated string"),
+}
+
+
+def _upload_certify_case(record: dict, mapping: dict) -> None:
+    credential = {**PRINT_CREDENTIAL, "display_order": [],
+                  "vc_template": {**PRINT_CREDENTIAL["vc_template"], "credentialSubject": mapping}}
+    client.delete("/api/set")
+    res = _upload(template=("claims.html", CLAIM_BYTES_TEMPLATE.encode()), credential=("c.json", _json(credential)),
+                  sample=("record.json", _json(record)))
+    assert res.status_code == 200, res.text
+
+
+def _printed_claims() -> dict[str, str]:
+    """The claims the loaded set prints, read back from CLAIM_BYTES_TEMPLATE's bytes."""
+    words = " ".join(p.extract_text() for p in _pages("/preview.pdf")).split()
+    claims: dict[str, str] = {}
+    while "CLAIM" in words:
+        start = words.index("CLAIM")
+        end = words.index("END", start)
+        claims[words[start + 1]] = bytes(int(b) & 0xFF for b in words[start + 2:end]).decode("utf-8")
+        words = words[end + 1:]
+    return claims
+
+
+def test_preview_pdf_maps_claims_as_certify_does() -> bool:
+    """The preview's claims are the ones Certify signs: the plugin's escaping, Velocity 1.7 and org.json on the
+    vc_template text template-sync stores. A record or vc_template Certify refuses is refused with the reason."""
+    if _no_renderer("test_preview_pdf_maps_claims_as_certify_does"):
+        return False
+    for label, (record, mapping, signed) in CERTIFY_CASES.items():
+        _upload_certify_case(record, mapping)
+        assert _printed_claims() == signed, label
+    for label, (record, mapping, reason) in CERTIFY_REFUSALS.items():
+        _upload_certify_case(record, mapping)
+        res = client.get("/preview.pdf")
+        assert res.status_code == 422 and reason in res.json()["detail"], (label, res.status_code, res.text[:300])
+    return True
+
+
 def test_preview_pdf_prints_data_as_written() -> bool:
     """A claim that looks like template code prints as text: the data is never read as Velocity."""
     if _no_renderer("test_preview_pdf_prints_data_as_written"):
@@ -1060,6 +1153,7 @@ def main() -> None:
         test_rejects_wrong_files,
         test_large_upload_stays_in_memory,
         test_preview_pdf_prints_mapped_values,
+        test_preview_pdf_maps_claims_as_certify_does,
         test_preview_pdf_prints_data_as_written,
         test_preview_pdf_flattens_claims_as_mimoto_does,
         test_preview_pdf_hands_every_claim_in_display_order,
