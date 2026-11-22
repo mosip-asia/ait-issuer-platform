@@ -50,6 +50,7 @@ public class CredentialPDFGeneratorService {
     private final Integer qrCodeWidth = 400;
     // What Mimoto's download endpoint passes when the Wallet sends no vcStorageExpiryLimitInTimes.
     private final String credentialValidity = "-1";
+    private final LdpVcCredentialFormatHandler processor = new LdpVcCredentialFormatHandler();
     private static final String PLACEHOLDER_QR_DATA = "VC Lab preview: the Wallet's QR code holds the credential";
 
     /**
@@ -59,13 +60,8 @@ public class CredentialPDFGeneratorService {
     public byte[] generatePdf(String credentialTemplate, Map<String, Object> credentialProperties,
                               CredentialsSupportedResponse credentialsSupportedResponse, String backgroundImage,
                               String locale) throws IOException, WriterException {
-        LinkedHashMap<String, Map<CredentialIssuerDisplayResponse, Object>> displayProperties = new LinkedHashMap<>();
-        credentialProperties.forEach((key, value) -> {
-            CredentialIssuerDisplayResponse display = new CredentialIssuerDisplayResponse();
-            display.setName(key);
-            display.setLocale("en");
-            displayProperties.put(key, Map.of(display, value));
-        });
+        LinkedHashMap<String, Map<CredentialIssuerDisplayResponse, Object>> displayProperties =
+                processor.loadDisplayPropertiesFromWellknown(credentialProperties, credentialsSupportedResponse, locale);
         Map<String, Object> data = getPdfResourceFromVcProperties(displayProperties, credentialsSupportedResponse,
                 credentialProperties);
         if (backgroundImage != null) {
