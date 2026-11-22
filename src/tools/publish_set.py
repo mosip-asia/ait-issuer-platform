@@ -71,7 +71,7 @@ class Set:
         self.credential = files["credential"][0]
         self.background = files["background"][0] if files["background"] else None
         try:
-            parsed = json.loads(self.credential.decode("utf-8"))
+            parsed = json.loads(self.credential.decode("utf-8-sig"))
         except ValueError:
             raise Refused("the credential file isn't JSON") from None
         config_id = parsed.get("credential_config_key_id") if isinstance(parsed, dict) else None
