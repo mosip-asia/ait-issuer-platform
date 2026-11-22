@@ -1000,12 +1000,13 @@ def test_background_survives_download_and_upload_back() -> bool:
 def test_preview_pdf_of_the_committed_transcript_template_leaves_a_missing_claim_empty() -> bool:
     """The committed AIT template's claimValue macro must print nothing for a claim the credential lacks. Velocity 1.7
     keeps a variable's old value when #set is given null, so without a reset in the macro, a missing claim printed the
-    one before it. Made-up data: no country and no option, each printed straight after a claim with its own value."""
+    one before it. Made-up data: country and option are null (a claim the signed credential lacks, which Mimoto leaves out of
+    $rowProperties), each printed straight after a claim with its own value."""
     if _no_renderer("test_preview_pdf_of_the_committed_transcript_template_leaves_a_missing_claim_empty"):
         return False
     template = Path(os.environ.get("TEMPLATES_DIR") or REPO_ROOT / "deploy/ait/vdr/templates") / "AITUniversity-ait-transcript-template.html"
     credential = Path(os.environ.get("CREDENTIALS_DIR") or REPO_ROOT / "deploy/ait/certify/credentials") / "ait-transcript.json"
-    record = {"fullName": "Mina Example", "dateOfBirth": "1999-01-02", "registrationNo": "st000001",
+    record = {"fullName": "Mina Example", "dateOfBirth": "1999-01-02", "country": None, "option": None, "registrationNo": "st000001",
               "dateAdmitted": "2020-03-04", "degreeAwarded": "Master of Examples", "academicProgram": "M.Ex Fixtures"}
     client.delete("/api/set")
     res = _upload(template=(template.name, template.read_bytes()), credential=(credential.name, credential.read_bytes()),
@@ -1013,8 +1014,8 @@ def test_preview_pdf_of_the_committed_transcript_template_leaves_a_missing_claim
     assert res.status_code == 200, res.text
     text, _ = _printed()
     assert "Mina Example" in text and "1999-01-02" in text and "2020-03-04" in text, "the claims it has print"
-    assert text.count("1999-01-02") == 1, "the date of birth printed once: country has no value"
-    assert text.count("2020-03-04") == 1, "the date admitted printed once: option has no value"
+    assert text.count("1999-01-02") == 1, "the date of birth printed once: country is null"
+    assert text.count("2020-03-04") == 1, "the date admitted printed once: option is null"
     return True
 
 
