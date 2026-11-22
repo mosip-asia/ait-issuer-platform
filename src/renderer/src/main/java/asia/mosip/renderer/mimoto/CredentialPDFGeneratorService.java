@@ -6,7 +6,8 @@
  * HTML path of generatePdfForVerifiableCredential (getPdfResourceFromVcProperties, extractFace, formatValue,
  * renderVCInCredentialTemplate, constructQRCode) and Utilities.encodeToString. Changed: no Spring; the template, the
  * claims and the issuer's metadata are passed in instead of fetched; the QR holds placeholder text, as no credential
- * is signed; logoUrl comes from the credential file's display entry, as no issuers list is read. Left out: the SVG
+ * is signed; logoUrl comes from the credential file's display entry, as no issuers list is read; a new Velocity
+ * engine renders each print. Left out: the SVG
  * path, SD-JWT disclosures (an ldp_vc credential has none) and the data-share and OVP QR codes.
  */
 package asia.mosip.renderer.mimoto;
@@ -24,7 +25,7 @@ import com.itextpdf.html2pdf.HtmlConverter;
 import com.itextpdf.html2pdf.resolver.font.DefaultFontProvider;
 import com.itextpdf.kernel.pdf.PdfWriter;
 import org.apache.velocity.VelocityContext;
-import org.apache.velocity.app.Velocity;
+import org.apache.velocity.app.VelocityEngine;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -172,11 +173,14 @@ public class CredentialPDFGeneratorService {
         Properties props = new Properties();
         props.setProperty("resource.loader", "class");
         props.setProperty("class.resource.loader.class", "org.apache.velocity.runtime.resource.loader.ClasspathResourceLoader");
-        Velocity.init(props);
+        // Changed: a new engine per print, with the properties Mimoto passes to the Velocity singleton. A macro a
+        // template defines stays in the singleton for good, so each preview would otherwise depend on the ones
+        // before it; this gives every preview Mimoto's first print after a restart.
+        VelocityEngine velocity = new VelocityEngine(props);
         VelocityContext velocityContext = new VelocityContext(data);
 
         StringWriter writer = new StringWriter();
-        Velocity.evaluate(velocityContext, writer, "Credential Template", credentialTemplate);
+        velocity.evaluate(velocityContext, writer, "Credential Template", credentialTemplate);
 
         String mergedHtml = writer.toString();
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
