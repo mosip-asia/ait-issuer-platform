@@ -138,7 +138,7 @@ Set `@page { margin: 0 }` and `body { margin: 0 }`, or the printer's default 36 
 
 **Keep the layout out of the page box's flow.** A flowing block such as a `<p>` with a top margin, placed as a child of `.page`, has that margin collapse through the box and push the whole box, Background included, down (a 12 pt margin moved the image 12 pt off the top). Put the layout in an absolutely placed box, as `.content` is above, whose margins stay inside it. Nothing then sits in `.page` but the image and that box.
 
-**The page is one page.** An absolutely placed box never breaks onto a second page: what doesn't fit is cut off, with no error (120 course rows gave one page with about 37 of them visible). Design for the longest record you expect, and check it in the preview.
+**The page is one page.** An absolutely placed box never breaks onto a second page: what doesn't fit is cut off, with no error (120 course rows gave one page with only the first part of them visible; how many depends on the layout). Design for the longest record you expect, and check it in the preview.
 
 ### Rows: delimited text and the split idiom
 
