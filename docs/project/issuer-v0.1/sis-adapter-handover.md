@@ -9,7 +9,7 @@ tags:
 
 # SIS Adapter handover
 
-Written 2026-11-03 for the infra team and the SIS Adapter's builders (Jo and Boss). The two master files are still [`src/adapter/openapi.yaml`](../../../src/adapter/openapi.yaml) and [`docs/schemas/ait-transcript-credential.v2.schema.json`](../../schemas/ait-transcript-credential.v2.schema.json). This page says the same things in plain words, plus what the schemas can't say. If this page and the master files disagree, the master files win; tell Thas so the page gets fixed.
+Written 2026-11-03 for the infra team and the SIS Adapter's builders (Jo and Boss). The two master files are still [`docs/contracts/adapter-openapi.yaml`](../../contracts/adapter-openapi.yaml) and [`docs/schemas/ait-transcript-credential.v2.schema.json`](../../schemas/ait-transcript-credential.v2.schema.json). This page says the same things in plain words, plus what the schemas can't say. If this page and the master files disagree, the master files win; tell Thas so the page gets fixed.
 
 ## What the Issuer asks for
 
@@ -47,7 +47,7 @@ What must match:
 
 ## What a transcript answer looks like
 
-A JSON object holding the 24 fields `TranscriptRecord` lists in `adapter/openapi.yaml`. The rules:
+A JSON object holding the 24 fields `TranscriptRecord` lists in `docs/contracts/adapter-openapi.yaml`. The rules:
 
 - **Every field is present, and none is `null`.** The Issuer refuses a record with a `null` among the 24 fields. A `null` inside `courses`, or a field missing altogether, is caught only by the contract check below, not at issuance (see "Known gaps"), so it is the Adapter's job never to send one.
 - **Every value is a string, numbers included.** The only exception is `courses`, which is a list.
@@ -106,10 +106,10 @@ If campus's `sub` is an internal account id they don't want stored, they need to
 
 ## How to check an Adapter
 
-Run the contract check against the real Adapter. It needs Python 3 with the packages in `portal/requirements.txt`:
+Run the contract check against the real Adapter. It needs Python 3 with the packages in `src/portal/requirements.txt`:
 
 ```sh
-python3 adapter/test_adapter.py --contract 'http://<sis-adapter-host>:<port>/student/{sub}/transcript' <a real sub> ait_transcript_vc_ldp
+python3 tests/test_adapter.py --contract 'http://<sis-adapter-host>:<port>/student/{sub}/transcript' <a real sub> ait_transcript_vc_ldp
 ```
 
 It fetches that student's record and checks every rule above that a schema can state: fields, types, dates, numbers, forbidden keys. It also checks that an unknown `sub` gets a `404`. It can't check meaning, such as whether a GPA is right or the course order matches the printed transcript.

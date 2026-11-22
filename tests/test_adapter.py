@@ -1,14 +1,14 @@
-"""Tests for the mock adapter and the Adapter contract (adapter/openapi.yaml).
+"""Tests for the mock adapter and the Adapter contract (docs/contracts/adapter-openapi.yaml).
 
-Run: python3 adapter/test_adapter.py                      on the host, no Docker: a temp CSV from the generator,
+Run: python3 tests/test_adapter.py                        on the host, no Docker: a temp CSV from the generator,
                                                           then a temp copy of the hackathon roster, and the
                                                           contract's own checks
-     python3 adapter/test_adapter.py URL CSV COPY_URL COPY_CSV
+     python3 tests/test_adapter.py URL CSV COPY_URL COPY_CSV
                                                           against the running containers (smoke.sh): the reads at
                                                           URL, the adapter serving CSV (the transcript CSV or a
                                                           roster), and the edit case at COPY_URL, a second adapter
                                                           serving COPY_CSV, a copy, so CSV is never rewritten
-     python3 adapter/test_adapter.py --contract URL SUB SCOPE
+     python3 tests/test_adapter.py --contract URL SUB SCOPE
                                                           the contract mode, against any Adapter: URL is the
                                                           record URL as CERTIFY_RECORD_URL sets it, `{sub}`
                                                           included; SUB's record against SCOPE's record schema

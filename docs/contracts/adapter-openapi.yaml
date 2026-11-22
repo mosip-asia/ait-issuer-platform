@@ -5,9 +5,9 @@ info:
   description: |
     The Adapter contract: the API any Adapter serves to the Issuer, read-only. This file and
     `docs/schemas/ait-transcript-credential.v2.schema.json` are the master files: the transcript record here holds
-    exactly the credential subject that schema signs, less the holder's `id`, and `adapter/test_adapter.py` holds the
-    two equal. Jo and Boss build the SIS Adapter for the AIT installation. Thas's mock in `adapter/main.py` serves it
-    from a CSV for both installations. `python3 adapter/test_adapter.py --contract URL SUB SCOPE` checks any Adapter
+    exactly the credential subject that schema signs, less the holder's `id`, and `tests/test_adapter.py` holds the
+    two equal. Jo and Boss build the SIS Adapter for the AIT installation. Thas's mock in `mock/adapter/main.py` serves it
+    from a CSV for both installations. `python3 tests/test_adapter.py --contract URL SUB SCOPE` checks any Adapter
     against this file.
 
     The Issuer needs one value from the Authorization Server and sends it to the Adapter: the access token's `sub`,
@@ -38,7 +38,7 @@ info:
     value other than an array `courses`; the Gateway refuses with `gateway_error` an answer its eligibility schema does
     not parse. The plugin does not check each claim's type or format, or what is inside `courses`, at issuance: an
     Adapter that breaks this file there gets its values signed as sent, so holding the record to this file is the
-    Adapter's job, and `adapter/test_adapter.py --contract` proves it. The Adapter keeps `sub` out of its storage and
+    Adapter's job, and `tests/test_adapter.py --contract` proves it. The Adapter keeps `sub` out of its storage and
     access logs. There is no secret on either hop: the network is the boundary.
 servers:
   - url: http://adapter:8000
