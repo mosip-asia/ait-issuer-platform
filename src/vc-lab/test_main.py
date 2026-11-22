@@ -425,7 +425,8 @@ def test_preview_pdf_template_error_is_422_with_its_line() -> bool:
         "a directive Velocity can't parse": ("<html><body>\n<p>fine</p>\n<p>#set($x = )</p>\n</body></html>\n", "line 3"),
         # Java's split drops trailing empty fields: without -1 an ungraded course has 6 fields, not 7.
         "a field past the end of a split row": (
-            '<html><body>\n#set($f = "C|XY102|Seams|0|45|3|".split("\\|"))<p>$f.get(6)</p>\n</body></html>\n', "line 2"),
+            '<html><body>\n#set($row = "C|XY102|Seams|0|45|3|")\n#set($f = $row.split("\\|"))<p>$f.get(6)</p>\n</body></html>\n',
+            "line 3"),
     }
     for case, (template, line) in cases.items():
         _upload_print_set(template)
