@@ -30,7 +30,7 @@ SIS response ──(credential file: vc_template)──► claims ──(templat
 |---|---|---|---|
 | Template | `.html`, A4 | HTML with Velocity | nothing renders |
 | Credential file | `.json` | Certify's credential file; `vc_template.credentialSubject` is the mapping, `display` and `display_order` shape the print | nothing renders |
-| Data (the API's `sample`) | `.json` | one record, as the Adapter sends it, with or without a `credentialSubject` envelope | nothing renders; a field it lacks prints empty |
+| Data (the API's `sample`) | `.json` | one record, as the Adapter sends it, with or without a `credentialSubject` envelope | nothing renders; a `${field}` it lacks is signed and printed as the literal text `${field}`, a `$!{field}` as nothing |
 | Background | `.png` or `.jpg` | a picture of the organisation's paper (watermark, seal, signature) | optional: the preview uses the credential file's `display[0].background_image.uri`, or draws none |
 
 The Background reaches the template as `$backgroundImage`. A Background may be confidential and VC Lab has no login: upload it only on a VC Lab on your own machine, and never commit it.
@@ -203,9 +203,9 @@ VC Lab prints raw Thai correctly, because it hands the renderer the file as UTF-
 ## Adding or changing a box
 
 1. **The template:** place `#claimText("newClaim")` where the value goes.
-2. **The credential file:** add `"newClaim": "${sisField}"` to `vc_template.credentialSubject` (and to `credential_subject` for its display name), and add the claim to `display_order`.
+2. **The credential file:** add `"newClaim": "${sisField}"` (`"$!{sisField}"` when the Adapter may not send the field yet, see step 4) to `vc_template.credentialSubject` (and to `credential_subject` for its display name), and add the claim to `display_order`.
 3. **The context:** a new claim name needs a term in the installation's JSON-LD context (`deploy/<installation>/vdr/contexts/`), which lists every claim. Keep today's claim names where possible.
-4. **SIS:** if the response has no field for it, the box stays empty until the Adapter team adds one. Ask in their field names.
+4. **SIS:** if the response has no field for it yet, write the reference quiet: `"newClaim": "$!{sisField}"`. Certify gives a quiet reference nothing when the field is missing, and a plain `${sisField}` would sign the literal text `${sisField}` (VC Lab previews it the same way). The box stays empty until the Adapter team adds the field. Ask in their field names.
 
 Check it in VC Lab with data that has the field.
 
