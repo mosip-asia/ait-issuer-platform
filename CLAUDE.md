@@ -67,6 +67,7 @@ python3 tests/test_inji_web_vc_readiness.py
 .venv/bin/python tests/test_adapter.py
 .venv/bin/python tests/test_courses.py
 python3 tests/test_print_check.py
+.venv/bin/python tests/test_parity_check.py
 python3 tests/test_publish_set.py
 .venv/bin/python src/gateway/tests/test_evaluations.py
 bash scripts/check-data-guard.sh
@@ -84,7 +85,7 @@ bash scripts/check-data-guard.sh
 - `compose.verify.yaml`: Inji Verify UI and verification backend.
 - `compose.trust.yaml`: VDR schema context registry and VCGA issuer catalog.
 - `compose.traefik.yaml`: Ingress router for local/dev domain routing.
-- `compose.mimoto.yaml`: Local only, never CD: the real Mimoto 0.21 (the Wallet's printer) beside the local stack. Start it with `scripts/mimoto-up.sh`; check a print with `scripts/print-check.sh`; publish a VC Lab set with `scripts/publish-set.sh`.
+- `compose.mimoto.yaml`: Local only, never CD: the real Mimoto 0.21 (the Wallet's printer) beside the local stack. Start it with `scripts/mimoto-up.sh`; check a print with `scripts/print-check.sh`; publish a VC Lab set with `scripts/publish-set.sh`; check that VC Lab shows what the Wallet prints with `scripts/parity-check.sh`.
 
 ### Day-0 Deployment Guides:
 - **Roadmap**: [`docs/guides/day-0-deployment.md`](docs/guides/day-0-deployment.md)

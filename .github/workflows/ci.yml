@@ -38,7 +38,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          pip install -r src/portal/requirements.txt -r src/gateway/requirements.txt tzdata typer pyyaml jinja2 cryptography python-multipart itsdangerous
+          pip install -r src/portal/requirements.txt -r src/gateway/requirements.txt tzdata typer pyyaml jinja2 cryptography python-multipart itsdangerous pypdf
 
       - name: 🛡️ Verify Sensitive Data Guard
         run: bash scripts/check-data-guard.sh
@@ -60,6 +60,7 @@ jobs:
             src/portal/test_requests.py \
             tests/test_courses.py \
             tests/test_print_check.py \
+            tests/test_parity_check.py \
             tests/test_publish_set.py \
             tests/test_adapter.py \
             src/gateway/tests/test_credential_types.py \
