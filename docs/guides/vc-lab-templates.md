@@ -20,7 +20,7 @@ SIS response ──(credential file: vc_template)──► claims ──(templat
 | Template | `.html`, A4 | HTML with Velocity: `#claimValue("name")` for a value, `#foreach` for a table, `#if`/`#else` | the page layout | nothing renders |
 | Credential file | `.json` | Certify's credential file (as in `deploy/<installation>/certify/credentials/`); `vc_template.credentialSubject` is the mapping | the claims, plus the title, logo and colours from `display` | nothing renders |
 | Data (the API's `sample`) | `.json` | one record, exactly as the Adapter sends it, with or without a `credentialSubject` envelope | the values | nothing renders; a field it lacks prints empty |
-| Background | `.pdf`, A4 | the pre-printed paper (watermark, seal, signature, image); page 1, fitted on portrait A4 | the paper under page 1 of the PDF | optional: the PDF is the text alone, for pre-printed paper |
+| Background | `.png` or `.jpg` | the organisation's paper (watermark, seal, signature) | `$backgroundImage` in the template, in the preview PDF | optional: the preview uses the credential file's `display[0].background_image.uri`, or draws no Background when it has none |
 
 The background may be confidential and VC Lab has no login: upload it only on a VC Lab on your own machine, and never commit it.
 

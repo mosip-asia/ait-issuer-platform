@@ -11,9 +11,9 @@ What each file is, and how a value travels from SIS to the page, is in [the temp
 | `template` | the HTML (Velocity) render template | the whole file |
 | `credential` | Certify's whole credential configuration file | `vc_template.credentialSubject` (the mapping) and the first `display` entry |
 | `sample` | the Adapter's response, exactly as the Adapter sends it | its `credentialSubject`, or the whole file when it has none |
-| `background` (optional) | a PDF page, such as the organisation's pre-printed paper | page 1 |
+| `background` (optional) | a PNG or JPEG of the organisation's paper | the whole image: the preview hands it to the template as `$backgroundImage`, overriding `display[0].background_image.uri` |
 
-Uploading a file replaces that slot only; uploading a zip from Download replaces the whole set. Each file is checked when it is uploaded: the background must be a PDF, the credential file JSON with a `vc_template` object (holding a `credentialSubject` object), the sample a JSON object, and the template UTF-8 text. Velocity itself checks the template when it renders: `/preview.pdf` answers a template error with 422 and its line. One request may carry at most 8 MB.
+Uploading a file replaces that slot only; uploading a zip from Download replaces the whole set. Each file is checked when it is uploaded: the background must be a PNG or JPEG (read from its first bytes, not its name; nothing else is accepted), the credential file JSON with a `vc_template` object (holding a `credentialSubject` object), the sample a JSON object, and the template UTF-8 text. Velocity itself checks the template when it renders: `/preview.pdf` answers a template error with 422 and its line. One request may carry at most 8 MB. The background is kept in memory only, as the image uploaded; Download gives it back as that image, and uploading the zip restores the same preview. With no background, the preview uses the credential file's `display[0].background_image.uri` as it is (VC Lab doesn't rewrite addresses; on the local stack the renderer reaches `vdr.localhost` through `host-gateway`).
 
 ## From sample to page
 
@@ -36,7 +36,7 @@ The dashboard (`/`) has a file input per slot (or one for a zip), the list of lo
 | `DELETE /api/set/background` | removes the background only |
 | `GET /preview.pdf` | the PDF the Wallet prints from the set, drawn by the renderer. The renderer's refusals pass through with its reason: 422 when the set doesn't print (a Velocity error names its line), 400 when it can't read the credential file, 503 when it runs out of memory |
 | `GET /preview?view=lab\|wallet` | the rendered HTML, never with the background; 422 when the template's `#if`/`#foreach`/`#macro` blocks don't balance |
-| `GET /export.pdf?view=lab\|wallet` | the PDF, with the background under page 1 when one is loaded; 422 for unbalanced blocks, as `/preview` |
+| `GET /export.pdf?view=lab\|wallet` | the old renderer's PDF; 422 while a background image is loaded (it can't draw one), and for unbalanced blocks, as `/preview` |
 | `GET /download` | a zip with `template/`, `credential/`, `sample/` and `background/`, each file as uploaded |
 | `GET /health` | liveness |
 
@@ -44,7 +44,7 @@ Rendering needs the template, the credential file and the sample; without them t
 
 ## The hard copy (`hardcopy.py`)
 
-`make_background(filename, data)` takes page 1 of an uploaded PDF, with its own `/Rotate` and crop box respected, and fits it on a portrait A4 page without redrawing it. `render_pdf(html, background=None)` renders the template through WeasyPrint and lays that page under page 1 only, so later pages (the verification QR) print clean. Without a background the PDF is the information alone, for printing on pre-printed paper. The Admin Portal's hard copy can use `render_pdf` the same way.
+`render_pdf(html, background=None)` renders the template through WeasyPrint for the old `/export.pdf`, which passes no background now (the Background slot holds an image, which `render_pdf` can't lay). `make_background`, which fitted an uploaded PDF, is no longer called. Both go with the old path.
 
 > **A background may be confidential** (an organisation's watermark, seal and signature). VC Lab keeps it in memory only, but has no login: anyone who can reach a deployed VC Lab can download it. Upload one only on a VC Lab running on your own machine.
 
