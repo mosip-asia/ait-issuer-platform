@@ -37,6 +37,12 @@ public class CredentialPDFGeneratorService {
 
     private record SelectedFace(String key, String face) {}
 
+    static {
+        // Changed: ImageIO.write keeps its stream cache in memory. By default it writes a temporary file, which the
+        // renderer's read-only filesystem refuses (and which would put a QR code on disk).
+        ImageIO.setUseCache(false);
+    }
+
     // Mimoto's settings: its defaults, and deploy/base/mimoto-default.properties for the QR size.
     private final String faceImageLookupKeys = "image,face,photo,picture,portrait";
     private final boolean maskDisclosures = true;
