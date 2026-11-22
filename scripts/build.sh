@@ -228,8 +228,8 @@ build_or_retag_image "ait-verify-ui" "src/verifier/Dockerfile" "." "src/verifier
 # 3. Unified AIT Verifiable Credential Platform: ait-vc (Gateway, Portal, Tools CLI, VC Lab, Template Sync)
 build_or_retag_image "ait-vc" "docker/Dockerfile.ait-vc" "." "src" "mock/adapter" "pyproject.toml" "uv.lock" "docker/Dockerfile.ait-vc"
 
-# 4. The renderer: VC Lab's preview as Mimoto 0.21 prints it (watched: src/renderer and Dockerfile.renderer)
-build_or_retag_image "ait-renderer" "docker/Dockerfile.renderer" "." "src/renderer" "docker/Dockerfile.renderer"
+# 4. The renderer: VC Lab's preview as Mimoto 0.21 prints it (watched: src/renderer, TemplateRecord.java and Dockerfile.renderer)
+build_or_retag_image "ait-renderer" "docker/Dockerfile.renderer" "." "src/renderer" "src/issuer/src/main/java/asia/mosip/issuer/plugin/TemplateRecord.java" "docker/Dockerfile.renderer"
 
 # Compatibility tags for standalone image names
 alias_image() {
