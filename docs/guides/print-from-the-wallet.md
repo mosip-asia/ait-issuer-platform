@@ -208,7 +208,7 @@ Locally the three mount points are empty files that `mimoto-up.sh` creates first
 
 ## T3: A place for the template and the Background on each VDR
 
-**The ask, for infra:** give each deployment a way to place two files on its VDR by hand. The template comes from VC Lab's download. The Background is a PNG or JPEG of the organisation's paper, and VC Lab's download holds it as uploaded. Neither comes from git, and CD's `git checkout -f` puts back any tracked file replaced in the checkout.
+**The ask, for infra:** give each deployment a way to place two files on its VDR by hand. The template comes from VC Lab's download. The Background is a PNG or JPEG of the organisation's paper, and VC Lab's download holds it as uploaded, under the name it was uploaded with: rename it to `background.png` when placing it, whatever its type, because the printer reads the type from the bytes. Neither comes from git, and CD's `git checkout -f` puts back any tracked file replaced in the checkout.
 
 - The template: `<VDR>/templates/AITUniversity-ait-transcript-template.html`. Mimoto fixes this name and looks only at the top of its template address.
 - The Background: `<VDR>/templates/ait-transcript/background.png`. The credential file's `display[0].background_image.uri` points there; `template-sync` rewrites that address for each deployment's VDR (`VDR_BASE_URL`).
