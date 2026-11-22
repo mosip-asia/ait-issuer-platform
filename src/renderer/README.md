@@ -18,17 +18,17 @@ POST /render  application/json  ->  200 application/pdf  |  422 {"error": "<mess
 }
 ```
 
-- `record` and `vcTemplate` give the claims, mapped as Certify maps them. VC Lab makes `vcTemplate` with template-sync's own function (`build_vc_template_base64` in `src/certify_template_sync/sync.py`), so it holds template-sync's rewrites (`"courses": ${courses}` unquoted).
+- `record` and `vcTemplate` give the claims, mapped as Certify maps them. VC Lab makes `vcTemplate` with template-sync's own function (`build_vc_template_base64` in `src/certify_template_sync/sync.py`), so it holds that function's one change (`"courses": ${courses}` unquoted). Template-sync's file-level rewrites (`${CERTIFY_DID}`, `${VDR_BASE_URL}`, `${CDN_BASE_URL}`, `http://vdr.localhost`, `http://cdn.localhost`) are not applied to it.
 - `credentialFile` is Certify's credential file. The renderer reads it the way Certify publishes it and Mimoto reads it: `display`, `display_order` as `order`, and `credential_subject` as `credential_definition.credentialSubject`. For the claims it reads `credential_type`, `context` and `credential_status_purpose`.
 - `backgroundImage`, when not null, replaces `display[0].background_image.uri`.
-- A record or `vcTemplate` that Certify would not sign answers 422 with the reason: the plugin refuses the record (a `null`, or a list or object other than `courses`), Velocity can't evaluate the text, or org.json can't read what it makes (`json_processing_error`, as in Certify).
+- A record or `vcTemplate` the renderer can't map answers 422 with the reason: `shape` refuses the record (a `null`, or a list or object other than `courses`), Velocity can't evaluate the text, or org.json can't read what it makes (`json_processing_error`, as in Certify). The renderer does not refuse everything Certify refuses: see "Where it differs from Certify".
 - A template that Velocity or iText can't render answers 422. A Velocity error names its line and column; a template nested too deep to parse says so.
 - A body that isn't the request above, or a credential file it can't read, answers 400.
 - Running out of memory answers 503. `GET /health` answers 200.
 
 ## How it maps the claims
 
-`CertifyMapping.java` does what Certify 0.14 does for an `ldp_vc` credential, read from the bytecode of `certify-service.jar` in `ghcr.io/mosip-asia/ait-certify` (`CertifyIssuanceServiceImpl.getVerifiableCredential` and `VelocityTemplatingEngineImpl.format`), on Certify's library versions (`BOOT-INF/lib`): Velocity 1.7 and org.json 20241224.
+`CertifyMapping.java` follows the steps Certify 0.14 takes for an `ldp_vc` credential, apart from the differences under "Where it differs from Certify", read from the bytecode of `certify-service.jar` in `ghcr.io/mosip-asia/ait-certify` (`CertifyIssuanceServiceImpl.getVerifiableCredential` and `VelocityTemplatingEngineImpl.format`), on Certify's library versions (`BOOT-INF/lib`): Velocity 1.7 and org.json 20241224.
 
 1. The record goes through this platform's Data-provider plugin: `TemplateRecord.shape`, the plugin's own file (`src/issuer/.../TemplateRecord.java`, which `docker/Dockerfile.renderer` copies into the build). Every string is JSON-escaped, `courses` becomes its JSON text, and a `null` or any other list or object is refused (`adapter_error`).
 2. Certify's variables are added, as Certify adds them. The values are fixed placeholders, since VC Lab issues nothing:
@@ -43,12 +43,21 @@ POST /render  application/json  ->  200 application/pdf  |  422 {"error": "<mess
    | `validFrom`, `validUntil` | the issuance time, and it plus `P730D` | `2000-01-01T00:00:00.000Z`, `2001-12-31T00:00:00.000Z` |
    | `_dateTool`, `_esc` | velocity-tools `DateTool` and `EscapeTool` | the same tools, from velocity-tools 2.0 (Certify has 3.1) |
 
-   Not added, because this platform's Certify doesn't set them: `credentialId` (no `id-field-prefix-uri`) and `renderingTemplateId` (`rendering-template-id` is empty).
+   Not added: `credentialId` (both Installations set `mosip.certify.data-provider-plugin.id-field-prefix-uri`, so Certify adds it; the renderer does not) and `renderingTemplateId` (`rendering-template-id` is empty here).
 3. A new Velocity engine with Certify's two settings (`input.encoding` and `output.encoding` UTF-8) evaluates `vcTemplate` with those variables, and org.json reads the result. Its `credentialSubject` is the claims, handed to Mimoto's print as Mimoto would read them from the signed credential (Jackson, in org.json's order).
 
 So a `${field}` the record lacks stays the text `${field}`, `$!{field}` gives nothing, `$name-$id` reads a variable `$name-` (a Velocity name may hold `-`), and `${name.toUpperCase()}` calls Java, all as in Certify.
 
-Not repeated: the plugin's checks before `shape` (strict JSON, no reserved key such as `id`), since VC Lab's sample is no HTTP answer and the Adapter contract already excludes those keys. And Certify has one Velocity engine for every issuance, so a `#macro` in a `vc_template` would stay defined there, while the renderer starts a new engine per call.
+Certify has one Velocity engine for every issuance, so a `#macro` in a `vc_template` would stay defined there, while the renderer starts a new engine per call.
+
+### Where it differs from Certify
+
+The preview can print a record or mapping that Certify signs differently or refuses. What a designer would see:
+
+- The plugin's checks before `shape` are not repeated (reserved keys such as `id`, duplicate keys, a `credentialSubject` envelope, strict JSON), so the preview prints a record Certify refuses.
+- Certify's `toJsonMap` and its extra variables (`rootContext`, `envConfigs`, `claim_169_values`, `credentialId`) are not reproduced: a mapping that uses them, or `$type` in quotes, previews differently from what Certify signs.
+- Number literals: Certify signs the Adapter's literal (`4.00`, `1E+5`) and the preview shows Jackson's (`4.0`, `100000.0`), so send numbers whose form matters as text.
+- Template-sync's file-level rewrites (`${CERTIFY_DID}`, `${VDR_BASE_URL}`, `${CDN_BASE_URL}`, `http://vdr.localhost`, `http://cdn.localhost`) are not applied to the preview's mapping, so they show literally inside a claim.
 
 ## What it repeats from Mimoto 0.21
 

@@ -22,7 +22,7 @@ SIS response ──(credential file: vc_template)──► claims ──(templat
 
 1. **Certify** reads the Adapter's (SIS's) response and fills the credential file's `vc_template` with it (Apache Velocity). The right side names a field of the response (`${studentId}`); the left side is the claim name the issued credential carries (`registrationNo`).
 2. **Mimoto**, the Wallet's backend, prints the credential with your template (Velocity 1.7, then iText html2pdf 5.0.3). The template reads claim names, the left side of the mapping, never SIS field names.
-3. **VC Lab** has the renderer map the uploaded data to claims with Certify's own steps (the Data-provider plugin's escaping, then Velocity 1.7 and org.json on the `vc_template` text the sync tool stores) and print them, so you can check a template without issuing anything. Data or a `vc_template` that Certify would refuse is refused in VC Lab too, with the reason.
+3. **VC Lab** has the renderer map the uploaded data to claims with Certify's own steps (the Data-provider plugin's escaping, then Velocity 1.7 and org.json on the `vc_template` text the sync tool stores) and print them, so you can check a template without issuing anything. Data or a `vc_template` the renderer can't map is refused with the reason; it does not refuse everything Certify refuses (see Known limits).
 
 ## The four files
 
@@ -236,6 +236,11 @@ What each step does, and how to put the committed files back: [Publish a set](./
 
 ## Known limits
 
-- **Certify takes only flat fields.** Its data-provider plugin refuses any list or object in the Adapter's response except `courses` (and the lists named in `mosip.certify.adapter.structured-keys`, default `courses`); it does not unwrap `credentialSubject`. VC Lab refuses the same lists and objects (it knows only the default, `courses`), but it does unwrap a `credentialSubject` envelope in the data.
+- **Certify takes only flat fields.** Its data-provider plugin refuses any list or object in the Adapter's response except `courses` (and the lists named in `mosip.certify.adapter.structured-keys`, default `courses`); it does not unwrap `credentialSubject`. The preview refuses the lists and objects too (it knows only the default, `courses`), but it does unwrap a `credentialSubject` envelope in the data.
+- **Four preview-vs-Certify differences** ([the renderer's README](../../src/renderer/README.md#where-it-differs-from-certify)):
+  - The plugin's checks before `shape` are not repeated (reserved keys such as `id`, duplicate keys, a `credentialSubject` envelope, strict JSON), so the preview prints a record Certify refuses.
+  - Certify's `toJsonMap` and its extra variables (`rootContext`, `envConfigs`, `claim_169_values`, `credentialId`) are not reproduced: a mapping that uses them, or `$type` in quotes, previews differently.
+  - Number literals: Certify signs the Adapter's literal (`4.00`, `1E+5`) and the preview shows Jackson's (`4.0`, `100000.0`), so send numbers whose form matters as text.
+  - Template-sync's file-level rewrites (`${CERTIFY_DID}`, `${VDR_BASE_URL}`, `${CDN_BASE_URL}`, `http://vdr.localhost`, `http://cdn.localhost`) are not applied to the preview's mapping, so those show literally inside a claim.
 - **VC Lab's preview is the renderer's copy of Mimoto's print**, not Mimoto itself. [The renderer's README](../../src/renderer/README.md) lists what it repeats and where it differs: the QR code is a placeholder, the logo comes from the credential file, the locale is fixed to `en`, each print gets a new Velocity engine so a `#macro` body is never stale, and the order of claims outside `display_order` is not checked against the Wallet's. Certify's own variables (`${_holderId}`, `${validFrom}` and the rest) get fixed placeholders.
 - **Issuing with a credential file from VC Lab:** run the sync tool with its folder mounted; see [VC Lab's README](../../src/vc-lab/README.md#issuing-with-a-credential-file-from-vc-lab).
