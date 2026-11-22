@@ -12,11 +12,19 @@ import dataclasses
 import io
 import json
 import re
+import struct
 import zipfile
 from dataclasses import dataclass
 from typing import Any, Callable, Generic, TypeVar
 
 MAX_UPLOAD = 8 * 1024 * 1024  # bytes: one request, and the files unpacked from one zip
+# The files of a set together, so that Download's zip (the files plus its own headers) is a request VC Lab takes
+# back. The slack is far above a zip's headers and deflate's worst case on an incompressible PNG.
+MAX_SET = MAX_UPLOAD - 64 * 1024
+# The biggest Background, in pixels. A4 at 300 dpi is 2480 x 3508 = 8.7 million, so this keeps 15% above print
+# quality. The renderer decodes the image, 4 bytes a pixel, inside a 640 MB heap shared by up to four prints: a
+# file's size says little (a PNG of one colour is tiny), so the size in its header is what's bounded.
+MAX_PIXELS = 10_000_000
 REQUIRED = ("template", "credential", "sample")
 
 T = TypeVar("T")
@@ -46,7 +54,13 @@ class LabSet:
 
     def replace(self, files: dict[str, tuple[str, bytes]]) -> LabSet:
         """This set with the given slots replaced by the parsed files ({slot: (filename, data)})."""
-        return dataclasses.replace(self, **{slot: parse(slot, name, data) for slot, (name, data) in files.items()})
+        new = dataclasses.replace(self, **{slot: parse(slot, name, data) for slot, (name, data) in files.items()})
+        total = sum(len(f.data) for slot in SLOTS if (f := getattr(new, slot)) is not None)
+        if total > MAX_SET:
+            mb = 1024 * 1024
+            raise ValueError(f"the set would hold {total / mb:.1f} MB of files in all; it can hold {MAX_SET / mb:.1f} MB "
+                             "in all, so that Download's zip uploads back")
+        return new
 
 
 SLOTS = tuple(f.name for f in dataclasses.fields(LabSet))
@@ -68,13 +82,54 @@ def _template(name: str, data: bytes) -> str:
     return source  # Velocity checks the rest when it renders: /preview.pdf answers 422 with the line
 
 
-_IMAGE_SIGNATURES = ((b"\x89PNG\r\n\x1a\n", "image/png"), (b"\xff\xd8\xff", "image/jpeg"))
+def _png_size(data: bytes) -> tuple[int, int] | None:
+    """(width, height) from the IHDR chunk, which a PNG starts with; None when it isn't there."""
+    if len(data) < 24 or data[12:16] != b"IHDR":
+        return None
+    return struct.unpack(">II", data[16:24])
+
+
+def _jpeg_size(data: bytes) -> tuple[int, int] | None:
+    """(width, height) from the first start-of-frame marker (SOF0 to SOF15, not DHT, JPG or DAC); None when the
+    marker segments end, or run past the data, before one."""
+    i = 2  # after SOI
+    while i + 4 <= len(data):
+        if data[i] != 0xFF:
+            return None
+        marker = data[i + 1]
+        if marker == 0xFF:  # fill byte
+            i += 1
+        elif marker == 0x01 or 0xD0 <= marker <= 0xD8:  # markers with no segment
+            i += 2
+        elif marker in (0xD9, 0xDA):  # the image ends, or its data starts, with no size given
+            return None
+        else:
+            length = int.from_bytes(data[i + 2:i + 4], "big")
+            if 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC):
+                if length < 8 or i + 9 > len(data):
+                    return None
+                height, width = struct.unpack(">HH", data[i + 5:i + 9])
+                return width, height
+            if length < 2:
+                return None
+            i += 2 + length
+    return None
+
+
+_IMAGES = ((b"\x89PNG\r\n\x1a\n", "image/png", _png_size), (b"\xff\xd8\xff", "image/jpeg", _jpeg_size))
 
 
 def _background(name: str, data: bytes) -> str:
-    """The image as a data: URI. Its kind is read from its first bytes, never from its file name."""
-    for signature, media_type in _IMAGE_SIGNATURES:
+    """The image as a data: URI. Its kind and size are read from the file's own header, never from its name; a file
+    whose header can't be read, or whose image is over MAX_PIXELS, is refused."""
+    for signature, media_type, read_size in _IMAGES:
         if data.startswith(signature):
+            size = read_size(data)
+            if size is None or 0 in size:
+                break
+            if size[0] * size[1] > MAX_PIXELS:
+                raise ValueError(f"background {name!r} is {size[0]} x {size[1]} pixels; VC Lab takes at most "
+                                 f"{MAX_PIXELS:,} (A4 at 300 dpi is 2480 x 3508): scale the image down")
             return f"data:{media_type};base64,{base64.b64encode(data).decode('ascii')}"
     raise ValueError(f"background {name!r} is not a PNG or JPEG image; upload the organisation's paper as PNG or JPEG")
 
@@ -151,4 +206,9 @@ def from_zip(data: bytes) -> LabSet:
             files[slot] = (name, z.read(m))
     if not files:
         raise ValueError("bundle holds no files")
-    return LabSet().replace(files)
+    try:
+        return LabSet().replace(files)
+    except ValueError as e:
+        if "background" in files and str(e).startswith("background"):
+            raise ValueError(f"{e}; remove background/ from the zip, or upload the files one at a time") from None
+        raise
