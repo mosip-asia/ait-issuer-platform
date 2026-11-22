@@ -444,6 +444,20 @@ def test_preview_pdf_template_error_is_422_with_its_line() -> bool:
     return True
 
 
+def test_preview_pdf_takes_a_redefined_macro() -> bool:
+    """Each preview is a first print: a macro that a replaced template redefines prints its new body, even one
+    the earlier tests' template (PRINT_TEMPLATE) defined too."""
+    if _no_renderer("test_preview_pdf_takes_a_redefined_macro"):
+        return False
+    printed = []
+    for body in ("FIRST", "SECOND"):
+        _upload_print_set(f'<html><body>\n#macro(claimValue $n){body}-$n#end\n<p>#claimValue("x")</p>\n</body></html>\n')
+        printed.append(_printed()[0])
+    assert "FIRST-x" in printed[0], printed[0]
+    assert "SECOND-x" in printed[1], printed[1]
+    return True
+
+
 def test_preview_pdf_splits_course_rows() -> bool:
     if _no_renderer("test_preview_pdf_splits_course_rows"):
         return False
@@ -535,6 +549,7 @@ def main() -> None:
         test_preview_pdf_template_error_is_422_with_its_line,
         test_preview_pdf_splits_course_rows,
         test_preview_pdf_uses_only_the_standard_fonts,
+        test_preview_pdf_takes_a_redefined_macro,
         test_export_pdf_lays_the_background_under_page_one,
         test_background_with_its_own_rotation_comes_out_portrait,
     ]
