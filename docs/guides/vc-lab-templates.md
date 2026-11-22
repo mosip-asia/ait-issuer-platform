@@ -36,7 +36,7 @@ A small set to start from (made-up data). The credential file:
   "display": [
     { "name": "Example Card", "locale": "en", "text_color": "#000000", "background_color": "#ffffff" }
   ],
-  "display_order": ["registrationNo", "fullName"],
+  "display_order": ["registrationNo", "fullName", "honours", "courses", "courseRows"],
   "credential_subject": {
     "registrationNo": { "display": [{ "name": "Registration No.", "locale": "en" }] },
     "fullName": { "display": [{ "name": "Full Name", "locale": "en" }] },
@@ -72,7 +72,7 @@ The data:
 Mimoto prepares the claims before your template sees them. Write the template for what it hands over, not for what the credential holds.
 
 - **Every claim is there.** The template gets all of them as `$rowProperties`: claim name, to display name, to text. A claim with no display name in the credential file still arrives, under its name in title case (`courseRows` shows as `Course Rows`).
-- **`display_order` sets the order** of `$rowProperties`: the claims it lists come first, in its order, then the rest. A loop over `$rowProperties` prints them in that order.
+- **`display_order` sets the order** of `$rowProperties`: the claims it lists come first, in its order. **Name every claim a template loops over in `display_order`.** The claims it leaves out reach the Wallet in Certify's internal (HashMap) order, but reach VC Lab in the credential file's order, so a `#foreach` over `$rowProperties` prints them in a different order after the listed ones. A claim read by name (`#claimValue("fullName")`) is not affected.
 - **`formatValue` flattens each value to text:**
   - text and numbers stay as they are (`3.0` prints `3.0`);
   - an object becomes its `value` field;
@@ -150,6 +150,14 @@ A list of objects reaches the template as `""`, so a template can't loop over `c
 - **Place a table through a `<div>`.** iText honours `position: absolute` with `left` and `top` on a `<div>`. On a `<table>` it honours `left` but ignores `top`: the table lands at the top of the box it sits in. Put the table in an absolutely placed `<div>` and leave the table static.
 
 For the transcript, the Adapter's `courseRows` format and what the template does with it are in [print from the Wallet](./print-from-the-wallet.md#t4-courserows-a-text-copy-of-the-course-grid) (an AIT example).
+
+### The QR code
+
+Mimoto 0.21 hands the template `$qrCodeImage` (a bare base64 PNG, so the `src` needs the `data:image/png;base64,` prefix) only when the credential's data is under 4096 bytes. Above that the Wallet prints no QR, and a long credential (a transcript with many courses) can pass it. VC Lab always draws a placeholder QR, so its preview can show one where the Wallet prints none. Guard it, and design the page so it looks right without it:
+
+```velocity
+#if($qrCodeImage && $qrCodeImage != "")<img src="data:image/png;base64,$qrCodeImage" style="width:80pt; height:80pt"/>#end
+```
 
 ### Absolute addresses
 
