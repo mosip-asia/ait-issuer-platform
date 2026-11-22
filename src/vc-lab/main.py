@@ -308,8 +308,8 @@ _DASHBOARD = """<!DOCTYPE html>
       const note = document.getElementById('backgroundNote');
       note.className = 'note' + (background ? ' strong' : '');
       note.textContent = background
-        ? 'Background loaded (' + background + '). It shows only in Export PDF; the preview draws the credential file's background_image.'
-        : 'The preview draws the credential file's background_image, if it has one.';
+        ? 'Background loaded (' + background + '). It shows only in Export PDF; the preview draws background_image from the credential file.'
+        : 'The preview draws background_image from the credential file, if it has one.';
       document.getElementById('viewHint').textContent = VIEW_HINTS[view()];
       const ready = status.missing.length === 0;
       document.getElementById('exportPdf').disabled = !ready;
