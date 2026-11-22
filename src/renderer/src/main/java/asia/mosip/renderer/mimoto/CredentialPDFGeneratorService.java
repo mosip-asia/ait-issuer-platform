@@ -105,7 +105,8 @@ public class CredentialPDFGeneratorService {
 
             valueMap.forEach((display, val) -> {
                 String displayName = display.getName();
-                String strVal = formatValue(val);
+                String locale = display.getLocale();
+                String strVal = formatValue(val, locale);
                 if (!isFaceKey && displayName != null) {
                     rowProperties.put(key, Map.of(displayName, strVal));
                 }
@@ -143,7 +144,31 @@ public class CredentialPDFGeneratorService {
         return new SelectedFace(null, null);
     }
 
-    private String formatValue(Object val) {
+    private String formatValue(Object val, String locale) {
+        if (val instanceof Map) {
+            return Optional.ofNullable(((Map<?, ?>) val).get("value")).map(Object::toString).orElse("");
+        } else if (val instanceof List) {
+            List<?> list = (List<?>) val;
+            if (list.isEmpty()) return "";
+            if (list.getFirst() instanceof String) {
+                return String.join(", ", (List<String>) list);
+            } else if (list.getFirst() instanceof Map<?, ?>) {
+                return list.stream()
+                        .filter(Objects::nonNull)
+                        .map(item -> (Map<?, ?>) item)
+                        .filter(m -> {
+                            Object lang = m.get("language");  // Safely get language
+                            return lang != null && LocaleUtils.matchesLocale(lang.toString(), locale);
+                        })
+                        .map(m -> {
+                            Object value = m.get("value");  // Safely get value
+                            return value != null ? value.toString() : null;
+                        })
+                        .filter(Objects::nonNull)
+                        .findFirst()
+                        .orElse("");
+            }
+        }
         return val != null ? val.toString() : "";
     }
 
