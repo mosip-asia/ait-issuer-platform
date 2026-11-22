@@ -112,6 +112,7 @@ PRINT_TEMPLATE = """<!DOCTYPE html>
 <p>Thesis: #claimValue("thesisTitle")</p>
 <p>Records: [#claimValue("terms")]</p>
 <p>Majors: [#claimValue("majors")]</p>
+<p>Honours: #claimValue("honours")</p>
 <p>Note: #claimValue("printNote")</p>
 <p>Order: #foreach($e in $rowProperties.entrySet())$e.key #end</p>
 <p>Names: #foreach($e in $rowProperties.entrySet())#foreach($n in $e.value.keySet())$n; #end#end</p>
@@ -138,6 +139,7 @@ PRINT_CREDENTIAL = {
         "thesisTitle": {"display": [{"name": "Thesis", "locale": "en"}]},
         "terms": {"display": [{"name": "Terms", "locale": "en"}]},
         "majors": {"display": [{"name": "Majors", "locale": "en"}]},
+        "honours": {"display": [{"name": "Honours", "locale": "en"}]},
     },
     "vc_template": {
         "@context": ["https://www.w3.org/ns/credentials/v2"],
@@ -149,6 +151,7 @@ PRINT_CREDENTIAL = {
             "thesisTitle": "${thesis.title}",
             "terms": "${records}",
             "majors": "${majors}",
+            "honours": "${honours}",
             "courseRows": "${courseRows}",
             "printNote": "${note}",
         },
@@ -158,6 +161,7 @@ PRINT_CREDENTIAL = {
 PRINT_SUBJECT = {
     **SUBJECT,
     "majors": ["Fixtures", "Seams"],
+    "honours": {"value": "With distinction", "language": "en"},
     # One term heading, a graded course and an ungraded one (its last field is empty).
     "courseRows": "T|Term One|6|3.50|3.50\nC|XY101|Fixture Design|0|45|3|A\nC|XY102|Seams|0|45|3|",
     "note": "Printed from made-up data",
@@ -390,6 +394,17 @@ def test_preview_pdf_prints_mapped_values() -> bool:
     return True
 
 
+def test_preview_pdf_flattens_claims_as_mimoto_does() -> bool:
+    if _no_renderer("test_preview_pdf_flattens_claims_as_mimoto_does"):
+        return False
+    _upload_print_set()
+    text, _ = _printed()
+    assert "Records: []" in text, "a list of objects (terms) prints as nothing"
+    assert "Majors: [Fixtures, Seams]" in text, "a list of text prints as one ', '-joined string"
+    assert "Honours: With distinction" in text, "an object prints as its value"
+    return True
+
+
 def test_export_pdf_lays_the_background_under_page_one() -> bool:
     try:
         import weasyprint  # noqa: F401
@@ -453,6 +468,7 @@ def main() -> None:
         test_rejects_wrong_files,
         test_large_upload_stays_in_memory,
         test_preview_pdf_prints_mapped_values,
+        test_preview_pdf_flattens_claims_as_mimoto_does,
         test_export_pdf_lays_the_background_under_page_one,
         test_background_with_its_own_rotation_comes_out_portrait,
     ]
