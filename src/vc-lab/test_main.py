@@ -17,7 +17,9 @@ import json
 import os
 import sys
 import tempfile
+import threading
 import zipfile
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Callable
 
@@ -478,7 +480,42 @@ def test_preview_pdf_names_a_thai_file() -> bool:
     assert _upload(template=("ใบ.html", PRINT_TEMPLATE.encode())).status_code == 200
     res = client.get("/preview.pdf")
     assert res.status_code == 200, res.text
-    assert "filename*=UTF-8''%E0%B9%83%E0%B8%9A.pdf" in res.headers["content-disposition"], res.headers
+    disposition = res.headers["content-disposition"]
+    assert "filename*=UTF-8''%E0%B9%83%E0%B8%9A.pdf" in disposition, res.headers
+    assert 'filename="__.pdf"' in disposition, "an ASCII name for clients that don't read filename*"
+    return True
+
+
+def test_preview_pdf_reports_any_renderer_refusal() -> bool:
+    """A refusal that isn't the renderer's JSON (from a proxy in between, say) still reaches the designer as text,
+    and the renderer's 503 stays a 503. A stand-in renderer answers here, so this runs without Compose too."""
+    answers = [(400, b"plain refusal", "text/plain"), (503, b'{"error": "out of memory"}', "application/json")]
+
+    class StandIn(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            self.rfile.read(int(self.headers["Content-Length"]))
+            status, body, kind = answers.pop(0)
+            self.send_response(status)
+            self.send_header("Content-Type", kind)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args: object) -> None:
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), StandIn)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    saved, vc_lab.RENDERER_URL = vc_lab.RENDERER_URL, f"http://127.0.0.1:{server.server_port}"
+    try:
+        _upload_print_set()
+        res = client.get("/preview.pdf")
+        assert (res.status_code, res.json()["detail"]) == (400, "plain refusal"), (res.status_code, res.text)
+        res = client.get("/preview.pdf")
+        assert (res.status_code, res.json()["detail"]) == (503, "out of memory"), (res.status_code, res.text)
+    finally:
+        vc_lab.RENDERER_URL = saved
+        server.shutdown()
     return True
 
 
@@ -606,6 +643,7 @@ def main() -> None:
         test_preview_pdf_names_a_thai_file,
         test_preview_pdf_passes_on_what_the_renderer_refuses,
         test_preview_pdf_answers_a_template_too_deep_to_print,
+        test_preview_pdf_reports_any_renderer_refusal,
         test_export_pdf_lays_the_background_under_page_one,
         test_background_with_its_own_rotation_comes_out_portrait,
     ]
