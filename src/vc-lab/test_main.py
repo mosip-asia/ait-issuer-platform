@@ -12,6 +12,7 @@ The /preview.pdf tests skip without RENDERER_URL, and the /export.pdf tests need
 from __future__ import annotations
 
 import html
+import base64
 import io
 import json
 import os
@@ -220,12 +221,55 @@ def _png(width: int, height: int, noisy: bool = False) -> bytes:
             + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b""))
 
 
-def _jpeg(width: int, height: int) -> bytes:
-    from PIL import Image  # a dependency of WeasyPrint, so in the ait-vc image
+# A made-up baseline JPEG, 16 x 24 pixels, flat grey (335 bytes); hard-coded so the tests need no image library.
+JPEG_16X24 = bytes.fromhex(
+    "ffd8ffe000104a46494600010100000100010000ffdb004300100b0c0e0c0a100e0d0e1211101318281a181616183123251d283a333d3c3933383740485c4e404457453738506d51575f626768673e4d71797064785c656763ffc0000b080018001001011100ffc4001f0000010501010101010100000000000000000102030405060708090a0bffc400b5100002010303020403050504040000017d01020300041105122131410613516107227114328191a1082342b1c11552d1f02433627282090a161718191a25262728292a3435363738393a434445464748494a535455565758595a636465666768696a737475767778797a838485868788898a92939495969798999aa2a3a4a5a6a7a8a9aab2b3b4b5b6b7b8b9bac2c3c4c5c6c7c8c9cad2d3d4d5d6d7d8d9dae1e2e3e4e5e6e7e8e9eaf1f2f3f4f5f6f7f8f9faffda0008010100003f0028a28a28afffd9"
+)
 
-    out = io.BytesIO()
-    Image.new("L", (width, height), 128).save(out, "JPEG")
-    return out.getvalue()
+
+def _jpeg_header(width: int, height: int) -> bytes:
+    """Only a JPEG's start: SOI, one SOF0 segment saying width x height, EOI. Enough to be read, not to be drawn."""
+    sof = bytes([8]) + struct.pack(">HH", height, width) + bytes([1, 1, 0x11, 0])
+    return b"\xff\xd8" + b"\xff\xc0" + struct.pack(">H", len(sof) + 2) + sof + b"\xff\xd9"
+
+
+def _then(m: list[float], n: list[float]) -> list[float]:
+    """The matrix that applies m first, then n, both as PDF's [a b c d e f]."""
+    return [m[0] * n[0] + m[1] * n[2], m[0] * n[1] + m[1] * n[3], m[2] * n[0] + m[3] * n[2],
+            m[2] * n[1] + m[3] * n[3], m[4] * n[0] + m[5] * n[2] + n[4], m[4] * n[1] + m[5] * n[3] + n[5]]
+
+
+def _drawn_images(page) -> list[dict]:
+    """Each image the page draws, with its rectangle in points. An image is drawn into the unit square, so the
+    current transformation matrix is its rectangle. (src/tools/print_check.py's drawn_images, which can't be
+    imported: it needs the print check's stack.)"""
+    from pypdf.generic import ContentStream
+
+    found: list[dict] = []
+
+    def walk(content, resources, base: list[float]) -> None:
+        ctm, saved = base, []
+        for operands, op in ContentStream(content, page.pdf).operations:
+            if op == b"q":
+                saved.append(ctm)
+            elif op == b"Q" and saved:
+                ctm = saved.pop()
+            elif op == b"cm":
+                ctm = _then([float(v) for v in operands], ctm)
+            elif op == b"Do":
+                xobject = (resources.get("/XObject") or {}).get(operands[0])
+                if xobject is None:
+                    continue
+                xobject = xobject.get_object()
+                if xobject.get("/Subtype") == "/Image":
+                    found.append({"px": (int(xobject["/Width"]), int(xobject["/Height"])),
+                                  "x": ctm[4], "y": ctm[5], "w": ctm[0], "h": ctm[3]})
+                elif xobject.get("/Subtype") == "/Form":
+                    matrix = [float(v) for v in xobject.get("/Matrix", [1, 0, 0, 1, 0, 0])]
+                    walk(xobject, xobject.get("/Resources") or resources, _then(matrix, ctm))
+
+    walk(page.get_contents(), page.get("/Resources") or {}, [1, 0, 0, 1, 0, 0])
+    return found
 
 
 def _pages(path: str) -> list:
@@ -362,6 +406,9 @@ def test_rejects_wrong_files() -> None:
         "background a PDF": {"background": ("paper.pdf", _blank_pdf())},
         "background a GIF": {"background": ("paper.png", b"GIF89a" + b"\x00" * 20)},
         "background named .png but not an image": {"background": ("paper.png", b"not an image")},
+        "background PNG signature alone": {"background": ("paper.png", b"\x89PNG\r\n\x1a\n")},
+        "background JPEG signature and junk": {"background": ("paper.jpg", b"\xff\xd8\xff" + b"hello" * 20)},
+        "background JPEG with no size in it": {"background": ("paper.jpg", b"\xff\xd8\xff\xd9")},
         "credential without vc_template": {"credential": ("c.json", _json(no_mapping))},
         "credential not JSON": {"credential": ("c.json", b"{oops")},
         "sample not JSON": {"sample": ("s.json", b"{oops")},
@@ -381,6 +428,103 @@ def test_rejects_wrong_files() -> None:
         if case.startswith("background"):
             assert "PNG or JPEG" in res.json()["detail"], (case, res.json())
     assert client.get("/api/set").json() == before, "a rejected upload leaves the set as it was"
+
+
+def test_background_over_the_pixel_bound_is_refused() -> None:
+    """A small file can hold a huge image (a PNG of one colour): the size in its header is what's bounded."""
+    import labset
+
+    _upload_set()
+    before = client.get("/api/set").json()
+    bound = f"{labset.MAX_PIXELS:,}"
+    over = {"a PNG": ("paper.png", _png(4000, 4000)), "a JPEG": ("paper.jpg", _jpeg_header(20000, 20000))}
+    for case, file in over.items():
+        res = _upload(background=file)
+        assert res.status_code == 400, (case, res.status_code, res.text)
+        assert bound in res.json()["detail"] and "pixels" in res.json()["detail"], (case, res.json())
+    at_most = _upload(background=("paper.png", _png(2480, 3508)))  # A4 at 300 dpi
+    assert at_most.status_code == 200, at_most.text
+    assert client.get("/api/set").json() != before
+
+
+def test_a_download_always_uploads_back() -> None:
+    """The set's files together stay within what one upload may carry, so Download's zip goes back in."""
+    _upload_set()
+    template = b"<p>#claimValue('holderName')</p>" + b" " * (4 * 1024 * 1024)
+    assert _upload(template=("big.html", template)).status_code == 200
+    res = _upload(background=("paper.png", _png(2236, 2236, noisy=True)))  # about 5 MB: 9 MB with the template
+    assert res.status_code == 400, res.status_code
+    assert "MB" in res.json()["detail"] and "in all" in res.json()["detail"], res.json()
+    assert client.get("/api/set").json()["loaded"]["background"] is None, "the refused upload left the set as it was"
+
+    template = b"<p>#claimValue('holderName')</p>" + b" " * (3 * 1024 * 1024)
+    assert _upload(template=("big.html", template)).status_code == 200
+    assert _upload(background=("paper.png", _png(2236, 2236, noisy=True))).status_code == 200  # 8 MB in all
+    zipped = client.get("/download").content
+    client.delete("/api/set")
+    assert _upload(bundle=("vc-lab-set.zip", zipped)).status_code == 200, "the biggest set Download can give"
+
+
+def test_an_old_zip_with_a_pdf_background_says_what_to_do() -> None:
+    _upload_set()
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w") as z:
+        z.writestr("template/record.html", TEMPLATE)
+        z.writestr("background/paper.pdf", _blank_pdf())
+    res = _upload(bundle=("old.zip", out.getvalue()))
+    assert res.status_code == 400
+    detail = res.json()["detail"]
+    assert "PNG or JPEG" in detail and "remove background/ from the zip, or upload the files one at a time" in detail, detail
+
+
+def _stand_in_renderer(bodies: list) -> HTTPServer:
+    """A renderer that keeps each request it gets and answers a PDF, so VC Lab's request is what's asserted. It
+    runs on a host too, without Compose."""
+    class StandIn(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            bodies.append(json.loads(self.rfile.read(int(self.headers["Content-Length"]))))
+            self.send_response(200)
+            self.send_header("Content-Type", "application/pdf")
+            self.send_header("Content-Length", "5")
+            self.end_headers()
+            self.wfile.write(b"%PDF-")
+
+        def log_message(self, *args: object) -> None:
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), StandIn)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server
+
+
+def test_the_renderer_is_sent_the_uploaded_background() -> None:
+    """VC Lab's side of the Background, without a renderer: `backgroundImage` is the upload as a data: URI,
+    `null` with none or after Remove, and the same after a zip round trip."""
+    bodies: list = []
+    server = _stand_in_renderer(bodies)
+    saved, vc_lab.RENDERER_URL = vc_lab.RENDERER_URL, f"http://127.0.0.1:{server.server_port}"
+    try:
+        def sent() -> object:
+            assert client.get("/preview.pdf").status_code == 200
+            return bodies[-1]["backgroundImage"]
+
+        png, jpeg = _png(40, 50), JPEG_16X24
+        as_uri = lambda kind, data: f"data:image/{kind};base64,{base64.b64encode(data).decode()}"  # noqa: E731
+        _upload_print_set()
+        assert sent() is None, "no upload"
+        assert _upload(background=("paper.png", png)).status_code == 200
+        assert sent() == as_uri("png", png)
+        assert _upload(background=("scan.bin", jpeg)).status_code == 200
+        assert sent() == as_uri("jpeg", jpeg), "the kind comes from the bytes, not the name"
+        zipped = client.get("/download").content
+        assert client.delete("/api/set/background").status_code == 200
+        assert sent() is None, "after Remove"
+        client.delete("/api/set")
+        assert _upload(bundle=("vc-lab-set.zip", zipped)).status_code == 200
+        assert sent() == as_uri("jpeg", jpeg), "after the zip round trip"
+    finally:
+        vc_lab.RENDERER_URL = saved
+        server.shutdown()
 
 
 def test_large_upload_stays_in_memory() -> None:
@@ -585,12 +729,18 @@ def test_preview_pdf_uses_only_the_standard_fonts() -> bool:
 # page), and nothing else; #if because Velocity prints an unset variable as written.
 BACKGROUND_TEMPLATE = """<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><title>$titleName</title>
-<style>@page { size: A4 portrait; margin: 0 } body { margin: 0; height: 297mm;
-#if($backgroundImage)background-image: url($backgroundImage); background-repeat: no-repeat; background-size: 210mm 297mm;#end
-}</style></head>
+<style>
+  @page { size: A4; margin: 0; }
+  body { margin: 0; }
+  .page { position: relative; width: 595.28pt; height: 841.89pt; }
+  .background { position: absolute; left: 0; top: 0; width: 595.28pt; height: 841.89pt; }
+</style></head>
 <body>
 #macro(claimValue $claimName)#set($__claim = $rowProperties.get($claimName))#if($__claim)#foreach($__entry in $__claim.entrySet())$__entry.value#end#end#end
+<div class="page">
+#if($backgroundImage && $backgroundImage != "")<img class="background" src="$backgroundImage"/>#end
 <p>Holder: #claimValue("holderName")</p>
+</div>
 </body></html>
 """
 
@@ -603,10 +753,21 @@ def _upload_background_set(**extra: tuple[str, bytes]) -> None:
     assert res.status_code == 200, res.text
 
 
-def _printed_images() -> list[tuple[int, int]]:
+def _printed_rects() -> list[dict]:
+    """Every image the first page draws: its pixel size and the rectangle it covers, in points (as print_check does)."""
     text, pages = _printed()
     assert "Holder: Ada Example" in text, text
-    return [size for page in pages for size in _images(page)]
+    return _drawn_images(pages[0])
+
+
+def _printed_images() -> list[tuple[int, int]]:
+    return [rect["px"] for rect in _printed_rects()]
+
+
+def _on_the_whole_page(rect: dict) -> bool:
+    """Drawn from the page's corner at the page's size, A4 in points: 595.28 x 841.89."""
+    return (abs(rect["x"]) < 1.5 and abs(rect["y"]) < 1.5
+            and abs(rect["w"] - 595.28) < 1.5 and abs(rect["h"] - 841.89) < 1.5)
 
 
 def test_background_png_lands_as_the_pages_image() -> bool:
@@ -616,14 +777,30 @@ def test_background_png_lands_as_the_pages_image() -> bool:
     assert _printed_images() == [], "no Background, no image"
     assert _upload(background=("paper.png", _png(120, 160))).json()["loaded"]["background"] == "paper.png"
     assert _printed_images() == [(120, 160)], "the PNG, at its own pixel size"
+    assert _on_the_whole_page(_printed_rects()[0]), ("full size: from the corner, over the whole A4 page", _printed_rects())
     return True
 
 
 def test_background_jpeg_lands_as_the_pages_image() -> bool:
     if _no_renderer("test_background_jpeg_lands_as_the_pages_image"):
         return False
-    _upload_background_set(background=("paper.jpg", _jpeg(130, 170)))
-    assert _printed_images() == [(130, 170)], "the JPEG, at its own pixel size"
+    _upload_background_set(background=("paper.jpg", JPEG_16X24))
+    assert _printed_images() == [(16, 24)], "the JPEG, at its own pixel size"
+    assert _on_the_whole_page(_printed_rects()[0]), _printed_rects()
+    return True
+
+
+def test_background_at_the_pixel_bound_still_prints() -> bool:
+    """The bound is chosen so the renderer's heap copes with the biggest Background VC Lab accepts."""
+    if _no_renderer("test_background_at_the_pixel_bound_still_prints"):
+        return False
+    import labset
+
+    side = 2500
+    assert side * (labset.MAX_PIXELS // side) == labset.MAX_PIXELS, "the test's image is exactly at the bound"
+    _upload_background_set(background=("big.png", _png(side, labset.MAX_PIXELS // side)))
+    rects = _printed_rects()
+    assert [r["px"] for r in rects] == [(side, labset.MAX_PIXELS // side)] and _on_the_whole_page(rects[0]), rects
     return True
 
 
@@ -690,7 +867,7 @@ def test_remove_background_goes_back_to_the_files_address_or_none() -> bool:
 def test_background_survives_download_and_upload_back() -> bool:
     if _no_renderer("test_background_survives_download_and_upload_back"):
         return False
-    for name, image in (("paper.png", _png(120, 160)), ("paper.jpeg", _jpeg(130, 170))):
+    for name, image in (("paper.png", _png(120, 160)), ("paper.jpeg", JPEG_16X24)):
         _upload_background_set(background=(name, image))
         before = (client.get("/api/set").json(), _printed())
         res = client.get("/download")
@@ -754,6 +931,11 @@ def main() -> None:
         test_preview_pdf_passes_on_what_the_renderer_refuses,
         test_preview_pdf_answers_a_template_too_deep_to_print,
         test_preview_pdf_reports_any_renderer_refusal,
+        test_background_over_the_pixel_bound_is_refused,
+        test_a_download_always_uploads_back,
+        test_an_old_zip_with_a_pdf_background_says_what_to_do,
+        test_the_renderer_is_sent_the_uploaded_background,
+        test_background_at_the_pixel_bound_still_prints,
         test_export_pdf_refuses_an_image_background,
         test_background_png_lands_as_the_pages_image,
         test_background_jpeg_lands_as_the_pages_image,
