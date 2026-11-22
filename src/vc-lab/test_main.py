@@ -390,10 +390,25 @@ def test_the_renderer_is_sent_the_mapped_claims() -> None:
         credential = {**CREDENTIAL, "vc_template": {**CREDENTIAL["vc_template"], "credentialSubject": {
             "label": "Dr. ${name} of ${nowhere}", "kept": 3}}}
         assert _upload(credential=("record.json", _json(credential))).status_code == 200
-        assert sent()["credentialSubject"] == {"label": "Dr. Ada Example of ", "kept": 3}, "text around a reference"
+        assert sent()["credentialSubject"] == {"label": "Dr. Ada Example of ${nowhere}", "kept": 3}, "text around a reference"
         envelope = sent()["credentialSubject"]
         assert _upload(sample=("bare.json", _json(SUBJECT))).status_code == 200
         assert sent()["credentialSubject"] == envelope, "a bare record maps the same as an enveloped one"
+
+
+def test_a_reference_to_a_field_the_data_lacks_resolves_as_velocity_does() -> None:
+    """Certify's Velocity signs an unresolved ${x} or $x as the literal text, and $!{x} or $!x as nothing."""
+    _upload_set()
+    mapping = {"plain": "${nowhere}", "bare": "$nowhere", "nested": "${thesis.nowhere}", "quiet": "$!{nowhere}",
+               "quietBare": "$!nowhere", "quietNested": "$!{thesis.nowhere}", "inText": "a ${nowhere} b $!{nowhere}c",
+               "found": "$!{name}", "foundBare": "$!name", "holder": "${_holderId}"}
+    credential = {**CREDENTIAL, "vc_template": {**CREDENTIAL["vc_template"], "credentialSubject": mapping}}
+    assert _upload(credential=("record.json", _json(credential))).status_code == 200
+    with _renderer_stand_in() as sent:
+        assert sent()["credentialSubject"] == {
+            "plain": "${nowhere}", "bare": "$nowhere", "nested": "${thesis.nowhere}", "quiet": "", "quietBare": "",
+            "quietNested": "", "inText": "a ${nowhere} b c", "found": "Ada Example", "foundBare": "Ada Example",
+            "holder": "did:example:holderId"}
 
 
 def test_replace_one_slot() -> None:
@@ -1034,6 +1049,7 @@ def main() -> None:
         test_starts_empty_and_asks_for_the_missing_files,
         test_the_old_rendering_endpoints_are_gone,
         test_the_renderer_is_sent_the_mapped_claims,
+        test_a_reference_to_a_field_the_data_lacks_resolves_as_velocity_does,
         test_replace_one_slot,
         test_remove_background_then_clear,
         test_download_and_upload_back,

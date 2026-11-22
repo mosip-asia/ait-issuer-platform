@@ -200,6 +200,30 @@ def test_a_set_without_a_background_removes_the_published_one_and_says_so(root: 
     assert again.returncode == 0, again.stderr
 
 
+@with_root
+def test_a_set_whose_credential_names_the_published_background_keeps_it(root: Root) -> None:
+    # An organisation's paper placed by hand, with the credential file's address pointing at it, has no copy in git.
+    (root.templates / "ait-transcript").mkdir()
+    (root.templates / "ait-transcript" / "background.png").write_bytes(PNG)
+    named = {**SET_CREDENTIAL, "display": [{"name": "x", "background_image": {"uri": BACKGROUND_URI}}]}
+    run = root.publish(a_set(background=None, credential=json.dumps(named).encode()))
+    assert run.returncode == 0, run.stderr
+    assert (root.templates / "ait-transcript" / "background.png").read_bytes() == PNG
+    assert "keeping" in run.stdout and "names" in run.stdout, run.stdout
+    elsewhere = {**SET_CREDENTIAL, "display": [{"name": "x", "background_image": {"uri": "https://elsewhere.example/p.png"}}]}
+    assert root.publish(a_set(background=None, credential=json.dumps(elsewhere).encode())).returncode == 0
+    assert not (root.templates / "ait-transcript" / "background.png").exists(), "an address elsewhere doesn't keep it"
+
+
+@with_root
+def test_a_credential_file_with_a_utf8_bom_is_published_without_one(root: Root) -> None:
+    bom = b"\xef\xbb\xbf" + json.dumps(SET_CREDENTIAL).encode()
+    run = root.publish(a_set(credential=bom))
+    assert run.returncode == 0, run.stderr
+    written = (root.out / "ait-transcript.json").read_bytes()
+    assert not written.startswith(b"\xef\xbb\xbf") and json.loads(written)["credential_config_key_id"] == "ait-transcript"
+
+
 def test_what_it_refuses_leaves_everything_as_it_was() -> None:
     cases = {
         "not a zip": (b"this is not a zip", "not a zip"),
