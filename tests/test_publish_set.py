@@ -30,6 +30,7 @@ JPEG = b"\xff\xd8\xff\xe0" + b"made-up jpeg bytes" + b"\xff\xd9"
 OTHER_CREDENTIAL = {"credential_config_key_id": "ait-student-id", "display": [{"name": "Student ID"}]}
 COMMITTED_CREDENTIAL = {"credential_config_key_id": "ait-transcript", "display": [{"name": "Committed transcript"}]}
 SET_CREDENTIAL = {"credential_config_key_id": "ait-transcript", "display": [{"name": "Set's transcript"}]}
+BACKGROUND_URI = "http://vdr.localhost/templates/ait-transcript/background.png"
 
 
 def make_zip(files: dict[str, bytes]) -> bytes:
@@ -110,7 +111,10 @@ def test_a_set_lands_as_the_template_the_background_and_a_credentials_folder(roo
     # The credential folder: every credential of the Installation, with the set's file in place of the committed one,
     # named for its credential configuration id (the file's name in the zip doesn't matter).
     assert sorted(p.name for p in root.out.iterdir()) == ["ait-student-id.json", "ait-transcript.json"]
-    assert json.loads((root.out / "ait-transcript.json").read_text(encoding="utf-8")) == SET_CREDENTIAL
+    # The set's credential file, plus what makes the publish work: the live DID, and the Background's address.
+    assert json.loads((root.out / "ait-transcript.json").read_text(encoding="utf-8")) == {
+        **SET_CREDENTIAL, "did_url": "${CERTIFY_DID}",
+        "display": [{"name": "Set's transcript", "background_image": {"uri": BACKGROUND_URI}}]}
     assert json.loads((root.out / "ait-student-id.json").read_text(encoding="utf-8")) == OTHER_CREDENTIAL
     # The committed credential file is untouched.
     committed = root.dir / "deploy/ait/certify/credentials/ait-transcript.json"
@@ -156,14 +160,44 @@ def test_a_jpeg_background_keeps_its_bytes_and_takes_the_png_name(root: Root) ->
     assert placed.read_bytes() == PNG
 
 
+def written_credential(root: Root) -> dict:
+    return json.loads((root.out / "ait-transcript.json").read_text(encoding="utf-8"))
+
+
 @with_root
-def test_a_set_without_a_background_leaves_the_published_one_alone_and_says_so(root: Root) -> None:
+def test_a_sets_background_gets_its_address_in_the_credential_the_next_print_fetches_it_from(root: Root) -> None:
+    # VC Lab's download holds the credential file as uploaded: no address. Without one Certify publishes nothing for
+    # Mimoto to fetch, so the Background would sit on the VDR unprinted. A different address in the file is replaced.
+    other = {**SET_CREDENTIAL, "display": [{"name": "x", "background_image": {"uri": "https://elsewhere.example/p.png"}}]}
+    for credential in (SET_CREDENTIAL, other, {**SET_CREDENTIAL, "display": []}):
+        assert root.publish(a_set(credential=json.dumps(credential).encode())).returncode == 0
+        assert written_credential(root)["display"][0]["background_image"] == {"uri": BACKGROUND_URI}, credential
+
+
+@with_root
+def test_a_set_without_a_background_keeps_the_credentials_display_as_it_is(root: Root) -> None:
+    assert root.publish(a_set(background=None)).returncode == 0
+    assert written_credential(root)["display"] == SET_CREDENTIAL["display"]
+
+
+@with_root
+def test_the_credential_is_always_signed_under_the_live_did(root: Root) -> None:
+    # template-sync writes ${CERTIFY_DID} as the live DID; another DID, or none, would sign under a key nobody resolves.
+    for credential in ({**SET_CREDENTIAL, "did_url": "did:key:z6MkSomeoneElse"}, SET_CREDENTIAL):
+        assert root.publish(a_set(credential=json.dumps(credential).encode())).returncode == 0
+        assert written_credential(root)["did_url"] == "${CERTIFY_DID}", credential
+
+
+@with_root
+def test_a_set_without_a_background_removes_the_published_one_and_says_so(root: Root) -> None:
     (root.templates / "ait-transcript").mkdir()
     (root.templates / "ait-transcript" / "background.png").write_bytes(PNG)
     run = root.publish(a_set(background=None))
     assert run.returncode == 0, run.stderr
-    assert (root.templates / "ait-transcript" / "background.png").read_bytes() == PNG
-    assert "no Background" in run.stdout + run.stderr, run.stdout + run.stderr
+    assert not (root.templates / "ait-transcript" / "background.png").exists()
+    assert "no Background" in run.stdout and "removed" in run.stdout, run.stdout
+    again = root.publish(a_set(background=None))  # nothing to remove the second time: the same state, no error
+    assert again.returncode == 0, again.stderr
 
 
 def test_what_it_refuses_leaves_everything_as_it_was() -> None:
