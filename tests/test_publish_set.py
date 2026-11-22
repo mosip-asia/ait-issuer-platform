@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -73,12 +74,13 @@ class Root:
             subprocess.run(["git", "add", "deploy"], cwd=self.dir, check=True)
             subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "x"], cwd=self.dir, check=True)
 
-    def publish(self, files: dict[str, bytes] | bytes, issuer_id: str = "AITUniversity") -> subprocess.CompletedProcess:
+    def publish(self, files: dict[str, bytes] | bytes, issuer_id: str = "AITUniversity",
+                env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
         zip_path = self.dir / "set.zip"
         zip_path.write_bytes(files if isinstance(files, bytes) else make_zip(files))
         return subprocess.run([sys.executable, str(TOOL), "--set", str(zip_path), f"--issuer-id={issuer_id}",
                                "--installation", "ait", "--credentials-out", str(self.out)],
-                              cwd=self.dir, capture_output=True, text=True)
+                              cwd=self.dir, capture_output=True, text=True, env={**os.environ, **(env or {})})
 
     def tree(self) -> dict[str, str]:
         """Every file under the root (except .git and the zip) and its hash: the state a publish leaves."""
@@ -215,28 +217,48 @@ def test_a_set_whose_credential_names_the_published_background_keeps_it(root: Ro
     assert not (root.templates / "ait-transcript" / "background.png").exists(), "an address elsewhere doesn't keep it"
 
 
-@with_root
-def test_only_the_local_vdrs_address_for_the_background_keeps_it(root: Root) -> None:
-    """The address is parsed: the local VDR's host (template-sync rewrites it for each stack) and the published path
-    keep the hand-placed paper, whatever the query or the spaces around it; any other host or path removes it."""
+def kept_or_removed(root: Root, uri: str, env: dict[str, str] | None = None) -> bool:
+    """Publish a set without a Background whose credential file names `uri`; True when the placed paper stays."""
     placed = root.templates / "ait-transcript" / "background.png"
-    placed.parent.mkdir()
+    placed.parent.mkdir(exist_ok=True)
+    placed.write_bytes(PNG)
+    named = {**SET_CREDENTIAL, "display": [{"name": "x", "background_image": {"uri": uri}}]}
+    run = root.publish(a_set(background=None, credential=json.dumps(named).encode()), env=env)
+    assert run.returncode == 0 and "Traceback" not in run.stderr, (uri, run.stderr)
+    assert ("keeping" in run.stdout) == placed.exists() and ("removed" in run.stdout) != placed.exists(), (uri, run.stdout)
+    return placed.exists()
+
+
+@with_root
+def test_the_address_template_sync_publishes_for_the_background_keeps_it(root: Root) -> None:
+    """Template-sync's own rewrite decides: whatever it turns into this stack's VDR address for the file keeps the
+    hand-placed paper, whatever the query or the spaces around it; any other address removes it."""
+    path = "/templates/ait-transcript/background.png"
     cases = {
-        BACKGROUND_URI + "?v=2": True,
-        f" {BACKGROUND_URI} ": True,
-        "https://vdr.localhost/templates/ait-transcript/background.png": True,
-        "https://evil.example/x/templates/ait-transcript/background.png": False,
-        "https://evil.example/templates/ait-transcript/background.png": False,
-        "http://vdr.localhost/x/templates/ait-transcript/background.png": False,
+        "http://vdr.localhost" + path: True,
+        "http://vdr.localhost" + path + "?v=2": True,
+        f" http://vdr.localhost{path} ": True,
+        "${VDR_BASE_URL}" + path: True,
+        "${CDN_BASE_URL}" + path: True,
+        "http://cdn.localhost" + path: True,
+        "https://vdr.localhost" + path: False,  # sync leaves it as it is: not this stack's VDR
+        "https://evil.example" + path: False,
+        "https://evil.example/x" + path: False,
+        "http://vdr.localhost/x" + path: False,
         "http://vdr.localhost/templates/ait-student-id/background.png": False,
+        "http://[vdr.localhost" + path: False,  # not an address: no error, and the check runs before anything is written
     }
     for uri, kept in cases.items():
-        placed.write_bytes(PNG)
-        named = {**SET_CREDENTIAL, "display": [{"name": "x", "background_image": {"uri": uri}}]}
-        run = root.publish(a_set(background=None, credential=json.dumps(named).encode()))
-        assert run.returncode == 0, run.stderr
-        assert placed.exists() == kept, (uri, run.stdout)
-        assert ("keeping" in run.stdout) == kept and ("removed" in run.stdout) != kept, (uri, run.stdout)
+        assert kept_or_removed(root, uri) == kept, uri
+
+
+@with_root
+def test_the_stacks_own_vdr_base_decides_what_keeps_the_background(root: Root) -> None:
+    base = {"VDR_BASE_URL": "https://vdr.example.test"}
+    path = "/templates/ait-transcript/background.png"
+    for uri in ("${VDR_BASE_URL}" + path, "http://vdr.localhost" + path, "http://cdn.localhost" + path, "https://vdr.example.test" + path):
+        assert kept_or_removed(root, uri, base), uri
+    assert not kept_or_removed(root, "https://vdr.localhost" + path, base)
 
 
 @with_root
