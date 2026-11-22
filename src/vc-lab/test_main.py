@@ -168,6 +168,13 @@ PRINT_SUBJECT = {
 }
 
 
+STANDARD_FONTS = {
+    "Courier", "Courier-Bold", "Courier-Oblique", "Courier-BoldOblique",
+    "Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Helvetica-BoldOblique",
+    "Times-Roman", "Times-Bold", "Times-Italic", "Times-BoldItalic", "Symbol", "ZapfDingbats",
+}
+
+
 def _json(value: object) -> bytes:
     return json.dumps(value).encode("utf-8")
 
@@ -422,17 +429,41 @@ def test_preview_pdf_template_error_is_422_with_its_line() -> bool:
     if _no_renderer("test_preview_pdf_template_error_is_422_with_its_line"):
         return False
     cases = {
-        "a directive Velocity can't parse": ("<html><body>\n<p>fine</p>\n<p>#set($x = )</p>\n</body></html>\n", "line 3"),
+        "a directive Velocity can't parse": ("<html><body>\n<p>fine</p>\n<p>#set($x = )</p>\n</body></html>\n",
+                                             ["Encountered", "line 3"]),
         # Java's split drops trailing empty fields: without -1 an ungraded course has 6 fields, not 7.
         "a field past the end of a split row": (
             '<html><body>\n#set($row = "C|XY102|Seams|0|45|3|")\n#set($f = $row.split("\\|"))<p>$f.get(6)</p>\n</body></html>\n',
-            "line 3"),
+            ["method 'get'", "line 3"]),
     }
-    for case, (template, line) in cases.items():
+    for case, (template, expected) in cases.items():
         _upload_print_set(template)
         res = client.get("/preview.pdf")
         assert res.status_code == 422, (case, res.status_code, res.text)
-        assert line in res.json()["detail"], (case, res.json())
+        assert all(part in res.json()["detail"] for part in expected), (case, res.json())
+    return True
+
+
+def test_preview_pdf_splits_course_rows() -> bool:
+    if _no_renderer("test_preview_pdf_splits_course_rows"):
+        return False
+    _upload_print_set()
+    text, _ = _printed()
+    rows = ["ROW T / 5 fields: Term One 6", "ROW C / 7 fields: XY101 Fixture Design", "ROW C / 7 fields: XY102 Seams"]
+    assert all(row in text for row in rows), text
+    assert text.index(rows[0]) < text.index(rows[1]) < text.index(rows[2]), "rows print in the claim's order"
+    return True
+
+
+def test_preview_pdf_uses_only_the_standard_fonts() -> bool:
+    """Mimoto's iText knows the 14 standard PDF fonts only; a template asking for another font gets one of them."""
+    if _no_renderer("test_preview_pdf_uses_only_the_standard_fonts"):
+        return False
+    _upload_print_set()  # its body asks for "Noto Sans", FreeSans and Arial
+    _, pages = _printed()
+    fonts = {str(f.get_object()["/BaseFont"]).lstrip("/").split("+")[-1]
+             for page in pages for f in page["/Resources"].get_object().get("/Font", {}).values()}
+    assert fonts and fonts <= STANDARD_FONTS, fonts
     return True
 
 
@@ -502,6 +533,8 @@ def main() -> None:
         test_preview_pdf_flattens_claims_as_mimoto_does,
         test_preview_pdf_hands_every_claim_in_display_order,
         test_preview_pdf_template_error_is_422_with_its_line,
+        test_preview_pdf_splits_course_rows,
+        test_preview_pdf_uses_only_the_standard_fonts,
         test_export_pdf_lays_the_background_under_page_one,
         test_background_with_its_own_rotation_comes_out_portrait,
     ]
