@@ -653,8 +653,9 @@ CLAIM_BYTES_TEMPLATE = """<!DOCTYPE html>
 
 # What Certify 0.14 signs on this platform, from Certify's own code: the Data-provider plugin's shape() on the record,
 # then Velocity 1.7 and org.json 20241224 on the vc_template text template-sync stores. Each expected value was
-# produced by that code (Certify's jars and the baked plugin from ghcr.io/mosip-asia/ait-certify; the harness is in
-# the PR's notes). A record or a vc_template Certify can't sign is refused, with the reason.
+# produced by running that code: the jars in ghcr.io/mosip-asia/ait-certify's certify-service.jar and the plugin jar
+# baked into that image, called as Certify calls them (shape, putAll(toMap()), evaluate, new JSONObject). A record or
+# a vc_template Certify can't sign is refused, with the reason.
 CERTIFY_CASES = {
     "a field the record lacks": (
         {"name": "Ada"},

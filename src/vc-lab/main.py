@@ -113,7 +113,8 @@ def preview_pdf() -> Response:
     except httpx.HTTPError as e:
         raise HTTPException(status_code=502, detail=f"the renderer at {RENDERER_URL} can't be reached: {e}")
     # 400: the request or the credential file is wrong. 422: the set doesn't print: Certify would refuse the data or
-    # the vc_template, the template has an error (with its line), or the credential file has a fault. 503: the renderer is out of memory. Each reason reaches the designer.
+    # the vc_template, the template has an error (with its line), or the credential file has a fault. 503: the
+    # renderer is out of memory. Each reason reaches the designer.
     if res.status_code in (400, 422, 503):
         raise HTTPException(status_code=res.status_code, detail=_renderer_reason(res))
     if res.status_code != 200:

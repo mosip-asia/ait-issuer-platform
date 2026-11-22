@@ -23,8 +23,8 @@ import java.util.concurrent.Semaphore;
 
 /**
  * The renderer: one call, POST /render, that maps a record to claims the way Certify 0.14 does and prints them the
- * way Mimoto 0.21's HTML path does (README.md). JSON in, PDF out. Nothing is written to disk. Nothing is kept between calls, unless a template uses reflection to
- * reach past Velocity (README.md, "Limits").
+ * way Mimoto 0.21's HTML path does (README.md). JSON in, PDF out. Nothing is written to disk. Nothing is kept
+ * between calls, unless a template uses reflection to reach past Velocity (README.md, "Limits").
  */
 public final class RendererServer {
 
