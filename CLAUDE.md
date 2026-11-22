@@ -84,7 +84,7 @@ bash scripts/check-data-guard.sh
 - `compose.verify.yaml`: Inji Verify UI and verification backend.
 - `compose.trust.yaml`: VDR schema context registry and VCGA issuer catalog.
 - `compose.traefik.yaml`: Ingress router for local/dev domain routing.
-- `compose.mimoto.yaml`: Local only, never CD: the real Mimoto 0.21 (the Wallet's printer) beside the local stack. Start it with `scripts/mimoto-up.sh`; check a print with `scripts/print-check.sh`.
+- `compose.mimoto.yaml`: Local only, never CD: the real Mimoto 0.21 (the Wallet's printer) beside the local stack. Start it with `scripts/mimoto-up.sh`; check a print with `scripts/print-check.sh`; publish a VC Lab set with `scripts/publish-set.sh`.
 
 ### Day-0 Deployment Guides:
 - **Roadmap**: [`docs/guides/day-0-deployment.md`](docs/guides/day-0-deployment.md)

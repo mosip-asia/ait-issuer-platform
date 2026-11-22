@@ -83,7 +83,7 @@ What it proves:
 
 The check also publishes a test copy of the credential files to the local stack for the run, made from the files git holds: it maps `courseRows`, points `display[0].background_image` at the VDR, and sets a made-up Thai `notes`. When it ends it republishes the files git holds and recreates Certify, so the stack is as committed. Two consequences:
 
-- A credential file you published by hand (below) takes no part in the check's prints: the copy replaces it when the check starts, and the committed file replaces the copy when it ends. Publish yours again after the check.
+- A credential file you published (section 5) takes no part in the check's prints: the copy replaces it when the check starts, and the committed file replaces the copy when it ends. Publish yours again after the check.
 - If the restore fails, the check exits with status 1 and prints the command that does it by hand.
 
 The PDFs of the run are kept in a temporary folder, named on the line `PDFs: <folder>`. `original.pdf` is the print of whatever template the VDR held, and `swapped.pdf` the print of the check's test template.
@@ -107,7 +107,7 @@ Copy over the file or edit it however you like: the VDR mounts the whole `templa
 
 The check's first print (`original`, saved as `original.pdf`) is from your template, with the check's copy of the credential file, and the check puts your template back after its swap. The check asserts the student's name is on the page, so a template of yours must print `fullName`. To print once with a credential file you published yourself, sign in as `st120001` (its password is in `deploy/ait/mock/keycloak-realm.json`, the stand-in realm) the way `src/tools/print_check.py` does: its `context()` and `print_once()` functions are that flow.
 
-Git tracks this file. `git checkout -- deploy/ait/vdr/templates/AITUniversity-ait-transcript-template.html` puts the committed one back (and discards your own template if it is still there: keep a copy elsewhere), and CD's `git checkout -f` does it at every deploy, so a template placed this way lasts only until then. Real deployments need their own way to place it (T3).
+Git tracks this file. `git checkout -- deploy/ait/vdr/templates/AITUniversity-ait-transcript-template.html` puts the committed one back (and discards your own template if it is still there: keep a copy elsewhere), and CD's `git checkout -f` does it at every deploy, so a template placed this way lasts only until then. Real deployments need their own way to place it (T3). A template that came with a VC Lab set is published with the set (section 5), not by this copy.
 
 **A `#macro` is the one thing a swap doesn't replace.** Mimoto's Velocity engine is shared by every print, and it registers a template's `#macro` the first time it sees that name: a later template that defines a macro of the same name prints with the first body until Mimoto restarts. Everything else in the template (markup, `#set`, loops) is read fresh at each print. When you change a macro's body, give it a new name, or recreate Mimoto (`docker compose up -d --force-recreate mimoto`, with the command from step 2). Shown with Mimoto's own Velocity 1.7: the first of two templates that define the same macro wins, in either order. The AIT template's `claimValue` macro hit this: the print check's first print had registered the committed template's version, and the AIT template's corrected macro came out wrong until a fresh Mimoto printed it first.
 
@@ -125,29 +125,31 @@ A Background is the picture of an organisation's pre-printed paper. The platform
 
 Two things connect it:
 
-1. The file, at `<VDR>/templates/<credential configuration id>/background.png`. Locally: `deploy/ait/vdr/templates/ait-transcript/background.png` (make the folder). Use any PNG or JPEG of the paper, saved under that name. VC Lab's Background is a PNG or JPEG, and its download holds it as uploaded (`background/<file name>` in the zip). Rename it to `background.png` when you place it, whatever its type: the printer reads the type from the bytes, not the name.
-2. The credential file's `display[0].background_image.uri`, set to `http://vdr.localhost/templates/ait-transcript/background.png`. Certify publishes it in its metadata, and Mimoto hands it to the template as `$backgroundImage`. The file git holds sets no address, so publish the credential file with one (next section).
+1. The file, at `<VDR>/templates/<credential configuration id>/background.png`. Locally: `deploy/ait/vdr/templates/ait-transcript/background.png`. It is any PNG or JPEG of the paper. VC Lab's download holds it as uploaded (`background/<file name>` in the zip), and the publish command below places it at that path whatever its type, because the printer reads the type from the bytes, not the name.
+2. The credential file's `display[0].background_image.uri`, set to `http://vdr.localhost/templates/ait-transcript/background.png`. Certify publishes it in its metadata, and Mimoto hands it to the template as `$backgroundImage`. The file git holds sets no address, so a set's credential file carries one: VC Lab's download holds it, and the publish command below loads it.
 
 The template then draws it. See "Template conventions".
 
 To see your own Background in the print check: the check's test copy of the credential file already points `display[0].background_image` at `<VDR>/templates/<credential configuration id>/background.png`, so a Background you place there prints in the check. `original.pdf` shows it behind your template. For the swapped print the check puts its own made-up Background at that path and afterwards puts yours back byte for byte.
 
-### Publish a credential file by hand
+### Publish a set
 
-There is no publish command yet. From the repository root, with the file's folder holding all the Installation's credential files (the sync reads a folder):
+A set is the zip VC Lab's Download gives: the template, the credential file, a sample and the Background. After `./scripts/mimoto-up.sh`, from the repository root:
 
 ```bash
-mkdir -p /tmp/creds && cp deploy/ait/certify/credentials/*.json /tmp/creds/
-cp my-ait-transcript.json /tmp/creds/ait-transcript.json
-chmod -R a+rX /tmp/creds
-export COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE="$(grep ^COMPOSE_FILE= .env | cut -d= -f2-):compose.mimoto.yaml"
-docker compose run --rm -T -e CREDENTIALS_DIR=/test-credentials -v /tmp/creds:/test-credentials:ro template-sync
-docker compose restart certify
+./scripts/publish-set.sh ~/Downloads/set.zip AITUniversity
 ```
 
-`template-sync` keeps Certify's live DID because `.env` holds it (step 2 of the start command); with the placeholder every credential would fail to verify. Certify has to restart to serve the new metadata. Mimoto fetches that metadata from Certify with a cache, which the local Mimoto sets to 0 so a published address shows at once; a Mimoto that was already running keeps its old setting until it is recreated.
+The second argument is the issuer id (the Wallet's `issuer_id`, `AITUniversity` for AIT). The command works only on the local stack: it refuses unless `.env` has `compose.mock.yaml` in `COMPOSE_FILE` and Certify trusts the local Keycloak, the way the start command does. On a deployment, publishing is infra's step (T3). It does these things, and each one converges, so publishing the same set again leaves the same state:
 
-To put the committed files back: `docker compose up -d --force-recreate template-sync certify`.
+1. Puts the template on the VDR as `<issuer id>-<credential configuration id>-template.html` (`deploy/ait/vdr/templates/AITUniversity-ait-transcript-template.html`) and warns that git tracks that file: the next checkout puts the committed template back, so a published set is a local test, not a release. The credential configuration id is the credential file's own `credential_config_key_id`.
+2. Puts the Background at `<credential configuration id>/background.png` under the VDR's templates folder, where git ignores it, whatever its type (a JPEG stays a JPEG). A set without a Background leaves the one already there.
+3. Writes Certify's live DID into `.env` when it holds another one.
+4. Loads the credential file through `template-sync` from a temporary folder (the Installation's credential files, with the set's in place of the committed one) and recreates Certify. `template-sync` keeps Certify's live DID; with the placeholder every credential would fail to verify.
+
+The next Wallet print uses the set. Mimoto fetches Certify's metadata with a cache, which the local Mimoto sets to 0 so a published address shows at once; a Mimoto that was already running keeps its old setting until it is recreated (step 2).
+
+`./scripts/print-check.sh` then prints the set's template and Background in `original.pdf`, and afterwards puts the committed credential files back into Certify (the template and the Background stay). To put the committed credential files back yourself: `COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=<.env's COMPOSE_FILE> docker compose up -d --force-recreate template-sync certify`. To put the committed template back: `git checkout -- deploy/ait/vdr/templates/AITUniversity-ait-transcript-template.html`.
 
 ## Template conventions
 
@@ -241,6 +243,6 @@ No field may hold `|` or a line break (replace them before sending). A field may
 | `FAIL signature check ... signature_verification_failed` | Certify's rows hold a DID other than the key it signs with (run `./scripts/mimoto-up.sh`), or w3id.org was slow or unreachable. |
 | `FAIL token exchange ... invalid_request` | The local Keycloak doesn't trust Mimoto's key: run `./scripts/mimoto-up.sh`. |
 | The PDF shows Thai as garbage | The VDR doesn't send `charset=utf-8` (T2). |
-| A hand-published credential file is gone | A print check ended and put the committed files back: publish it again. |
+| A published set's credential file is gone from Certify | A print check ended and put the committed files back: publish the set again. |
 | A change to `mimoto-*.properties` has no effect | Mimoto keeps its settings until it is recreated (step 2). |
 | A swapped template prints with an old macro body | Mimoto registers a `#macro` once; rename it or recreate Mimoto (step 4). |
