@@ -15,10 +15,13 @@ import html
 import io
 import json
 import os
+import socket
+import struct
 import sys
 import tempfile
 import threading
 import zipfile
+import zlib
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Callable
@@ -29,7 +32,7 @@ sys.path.insert(0, str(VC_LAB_DIR))
 
 import main as vc_lab  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
-from pypdf import PdfReader, PdfWriter, Transformation  # noqa: E402
+from pypdf import PdfReader, PdfWriter  # noqa: E402
 
 client = TestClient(vc_lab.app)
 
@@ -206,19 +209,22 @@ def _empty_zip() -> bytes:
     return out.getvalue()
 
 
-def _paper_pdf(word: str) -> bytes:
-    """Portrait paper carrying `word`, stored the way the real watermark PDF is: a landscape page, its content
-    turned a quarter, and /Rotate 90 so a viewer shows it upright."""
-    from weasyprint import HTML
+def _png(width: int, height: int, noisy: bool = False) -> bytes:
+    """A made-up grey PNG, width x height; noisy makes it incompressible, so a big one stays big."""
+    def chunk(kind: bytes, body: bytes) -> bytes:
+        return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body))
 
-    portrait = PdfReader(io.BytesIO(HTML(string=f"<p style='font-size:30pt'>{word}</p>").write_pdf())).pages[0]
-    w, h = float(portrait.mediabox.width), float(portrait.mediabox.height)
-    writer = PdfWriter()
-    stored = writer.add_blank_page(width=h, height=w)
-    stored.merge_transformed_page(portrait, Transformation().rotate(90).translate(h, 0))
-    stored.rotate(90)
+    rows = b"".join(b"\x00" + (os.urandom(width) if noisy else b"\x80" * width) for _ in range(height))
+    signature = b"\x89PNG\r\n\x1a\n"
+    return (signature + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 0, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b""))
+
+
+def _jpeg(width: int, height: int) -> bytes:
+    from PIL import Image  # a dependency of WeasyPrint, so in the ait-vc image
+
     out = io.BytesIO()
-    writer.write(out)
+    Image.new("L", (width, height), 128).save(out, "JPEG")
     return out.getvalue()
 
 
@@ -318,7 +324,7 @@ def test_replace_one_slot() -> None:
 
 def test_remove_background_then_clear() -> None:
     _upload_set()
-    assert _upload(background=("paper.pdf", _blank_pdf())).json()["loaded"]["background"] == "paper.pdf"
+    assert _upload(background=("paper.png", _png(20, 30))).json()["loaded"]["background"] == "paper.png"
     loaded = client.delete("/api/set/background").json()["loaded"]
     assert loaded["background"] is None and loaded["template"] == "record.html" and loaded["sample"]
     cleared = client.delete("/api/set").json()
@@ -329,17 +335,17 @@ def test_remove_background_then_clear() -> None:
 
 def test_download_and_upload_back() -> None:
     _upload_set()
-    paper = _blank_pdf()
-    assert _upload(background=("../../secret/paper.pdf", paper)).status_code == 200
+    paper = _png(20, 30)
+    assert _upload(background=("../../secret/paper.png", paper)).status_code == 200
     before_status, before_page = client.get("/api/set").json(), client.get("/preview").text
-    assert before_status["loaded"]["background"] == "paper.pdf", "no path parts in a stored name"
+    assert before_status["loaded"]["background"] == "paper.png", "no path parts in a stored name"
 
     res = client.get("/download")
     assert res.status_code == 200 and res.headers["content-type"] == "application/zip"
     with zipfile.ZipFile(io.BytesIO(res.content)) as z:
-        assert sorted(z.namelist()) == ["background/paper.pdf", "credential/record.json",
+        assert sorted(z.namelist()) == ["background/paper.png", "credential/record.json",
                                         "sample/adapter-response.json", "template/record.html"]
-        assert z.read("background/paper.pdf") == paper, "each file exactly as uploaded"
+        assert z.read("background/paper.png") == paper, "each file exactly as uploaded"
         assert json.loads(z.read("credential/record.json")) == CREDENTIAL
 
     client.delete("/api/set")
@@ -353,7 +359,9 @@ def test_rejects_wrong_files() -> None:
     before = client.get("/api/set").json()
     no_mapping = {k: v for k, v in CREDENTIAL.items() if k != "vc_template"}
     cases = {
-        "background not a PDF": {"background": ("paper.png", b"\x89PNG\r\n\x1a\n not a pdf")},
+        "background a PDF": {"background": ("paper.pdf", _blank_pdf())},
+        "background a GIF": {"background": ("paper.png", b"GIF89a" + b"\x00" * 20)},
+        "background named .png but not an image": {"background": ("paper.png", b"not an image")},
         "credential without vc_template": {"credential": ("c.json", _json(no_mapping))},
         "credential not JSON": {"credential": ("c.json", b"{oops")},
         "sample not JSON": {"sample": ("s.json", b"{oops")},
@@ -370,6 +378,8 @@ def test_rejects_wrong_files() -> None:
         res = _upload(**files)
         assert res.status_code == 400, (case, res.status_code, res.text)
         assert isinstance(res.json()["detail"], str) and res.json()["detail"], case
+        if case.startswith("background"):
+            assert "PNG or JPEG" in res.json()["detail"], (case, res.json())
     assert client.get("/api/set").json() == before, "a rejected upload leaves the set as it was"
 
 
@@ -382,6 +392,7 @@ def test_large_upload_stays_in_memory() -> None:
         _upload_set()
         big = b"<p>#claimValue('holderName')</p>" + b" " * (3 * 1024 * 1024)
         assert _upload(template=("big.html", big)).status_code == 200
+        assert _upload(background=("big.png", _png(1200, 1800, noisy=True))).status_code == 200  # about 2 MB
     finally:
         tempfile.SpooledTemporaryFile.rollover = original
     assert not spilled, "the upload was written to a temporary file on disk"
@@ -570,44 +581,143 @@ def test_preview_pdf_uses_only_the_standard_fonts() -> bool:
     return True
 
 
-def test_export_pdf_lays_the_background_under_page_one() -> bool:
-    try:
-        import weasyprint  # noqa: F401
-    except Exception as e:  # Pango missing on this host; the ait-vc image has it
-        print(f"SKIP test_export_pdf_lays_the_background_under_page_one ({type(e).__name__})")
+# A template that draws $backgroundImage the way the Wallet's templates do (a CSS background over the whole
+# page), and nothing else; #if because Velocity prints an unset variable as written.
+BACKGROUND_TEMPLATE = """<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>$titleName</title>
+<style>@page { size: A4 portrait; margin: 0 } body { margin: 0; height: 297mm;
+#if($backgroundImage)background-image: url($backgroundImage); background-repeat: no-repeat; background-size: 210mm 297mm;#end
+}</style></head>
+<body>
+#macro(claimValue $claimName)#set($__claim = $rowProperties.get($claimName))#if($__claim)#foreach($__entry in $__claim.entrySet())$__entry.value#end#end#end
+<p>Holder: #claimValue("holderName")</p>
+</body></html>
+"""
+
+
+def _upload_background_set(**extra: tuple[str, bytes]) -> None:
+    client.delete("/api/set")
+    res = _upload(template=("paper.html", BACKGROUND_TEMPLATE.encode()),
+                  credential=("print.json", _json(PRINT_CREDENTIAL)),
+                  sample=("adapter-response.json", _json({"credentialSubject": PRINT_SUBJECT})), **extra)
+    assert res.status_code == 200, res.text
+
+
+def _printed_images() -> list[tuple[int, int]]:
+    text, pages = _printed()
+    assert "Holder: Ada Example" in text, text
+    return [size for page in pages for size in _images(page)]
+
+
+def test_background_png_lands_as_the_pages_image() -> bool:
+    if _no_renderer("test_background_png_lands_as_the_pages_image"):
         return False
-    _upload_set()
-    plain = _pages("/export.pdf")
-    assert len(plain) == 2, "page 1 the record, page 2 the QR"
-    assert "Ada Example" in plain[0].extract_text() and "XY101" in plain[0].extract_text()
-    assert "PAPERMARK" not in plain[0].extract_text()
-
-    wallet = _pages("/export.pdf?view=wallet")
-    assert len(wallet) == 2 and "XY101" not in wallet[0].extract_text()
-
-    assert _upload(background=("paper.pdf", _paper_pdf("PAPERMARK"))).status_code == 200
-    layered = _pages("/export.pdf")
-    assert len(layered) == 2
-    assert "PAPERMARK" in layered[0].extract_text(), "the background is under page 1"
-    assert "Ada Example" in layered[0].extract_text(), "with the record over it"
-    assert layered[1].extract_text() == plain[1].extract_text(), "page 2 prints clean"
-    assert "PAPERMARK" not in client.get("/preview").text
+    _upload_background_set()
+    assert _printed_images() == [], "no Background, no image"
+    assert _upload(background=("paper.png", _png(120, 160))).json()["loaded"]["background"] == "paper.png"
+    assert _printed_images() == [(120, 160)], "the PNG, at its own pixel size"
     return True
 
 
-def test_background_with_its_own_rotation_comes_out_portrait() -> bool:
+def test_background_jpeg_lands_as_the_pages_image() -> bool:
+    if _no_renderer("test_background_jpeg_lands_as_the_pages_image"):
+        return False
+    _upload_background_set(background=("paper.jpg", _jpeg(130, 170)))
+    assert _printed_images() == [(130, 170)], "the JPEG, at its own pixel size"
+    return True
+
+
+def _serve_png(png: bytes) -> HTTPServer:
+    """A stand-in VDR, reachable from the renderer's container by this container's address."""
+    class Vdr(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", str(len(png)))
+            self.end_headers()
+            self.wfile.write(png)
+
+        def log_message(self, *args: object) -> None:
+            pass
+
+    server = HTTPServer(("0.0.0.0", 0), Vdr)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server
+
+
+def _with_published_background(server: HTTPServer) -> dict:
+    """PRINT_CREDENTIAL with display[0].background_image.uri pointing at the stand-in VDR."""
+    uri = f"http://{socket.gethostbyname(socket.gethostname())}:{server.server_port}/background.png"
+    first = {**PRINT_CREDENTIAL["display"][0], "background_image": {"uri": uri}}
+    return {**PRINT_CREDENTIAL, "display": [first]}
+
+
+def test_no_background_uploaded_uses_the_credential_files_address() -> bool:
+    if _no_renderer("test_no_background_uploaded_uses_the_credential_files_address"):
+        return False
+    server = _serve_png(_png(90, 60))
+    try:
+        _upload_background_set()
+        credential = _with_published_background(server)
+        assert _upload(credential=("print.json", _json(credential))).status_code == 200
+        assert _printed_images() == [(90, 60)], "the published image, fetched by the renderer"
+        assert _upload(background=("paper.png", _png(120, 160))).status_code == 200
+        assert _printed_images() == [(120, 160)], "an upload overrides display[0].background_image.uri"
+    finally:
+        server.shutdown()
+    return True
+
+
+def test_remove_background_goes_back_to_the_files_address_or_none() -> bool:
+    if _no_renderer("test_remove_background_goes_back_to_the_files_address_or_none"):
+        return False
+    server = _serve_png(_png(90, 60))
+    try:
+        _upload_background_set()
+        assert _upload(credential=("print.json", _json(_with_published_background(server)))).status_code == 200
+        assert _upload(background=("paper.png", _png(120, 160))).status_code == 200
+        assert client.delete("/api/set/background").status_code == 200
+        assert _printed_images() == [(90, 60)], "back to the credential file's address"
+        assert _upload(background=("paper.png", _png(120, 160))).status_code == 200
+        assert _upload(credential=("print.json", _json(PRINT_CREDENTIAL))).status_code == 200
+        assert client.delete("/api/set/background").status_code == 200
+        assert _printed_images() == [], "no address in the credential file: no Background"
+    finally:
+        server.shutdown()
+    return True
+
+
+def test_background_survives_download_and_upload_back() -> bool:
+    if _no_renderer("test_background_survives_download_and_upload_back"):
+        return False
+    for name, image in (("paper.png", _png(120, 160)), ("paper.jpeg", _jpeg(130, 170))):
+        _upload_background_set(background=(name, image))
+        before = (client.get("/api/set").json(), _printed())
+        res = client.get("/download")
+        with zipfile.ZipFile(io.BytesIO(res.content)) as z:
+            assert z.read(f"background/{name}") == image, "the Background as the image that was uploaded"
+        client.delete("/api/set")
+        assert _upload(bundle=("vc-lab-set.zip", res.content)).status_code == 200
+        after = (client.get("/api/set").json(), _printed())
+        assert after[0] == before[0], name
+        assert after[1][0] == before[1][0] and [_images(p) for p in after[1][1]] == [_images(p) for p in before[1][1]]
+    return True
+
+
+def test_export_pdf_refuses_an_image_background() -> bool:
+    """The old Export PDF can't lay an image under its page: it says so, and works again without one."""
     try:
         import weasyprint  # noqa: F401
-    except Exception as e:
-        print(f"SKIP test_background_with_its_own_rotation_comes_out_portrait ({type(e).__name__})")
+    except Exception as e:  # Pango missing on this host; the ait-vc image has it
+        print(f"SKIP test_export_pdf_refuses_an_image_background ({type(e).__name__})")
         return False
     _upload_set()
-    paper = _paper_pdf("UPRIGHT")
-    assert PdfReader(io.BytesIO(paper)).pages[0].rotation == 90
-    assert _upload(background=("paper.pdf", paper)).status_code == 200
-    page = _pages("/export.pdf")[0]
-    assert float(page.mediabox.height) > float(page.mediabox.width), "portrait A4"
-    assert "UPRIGHT" in page.extract_text(orientations=(0,)), "the paper reads upright, as a viewer shows it"
+    assert len(_pages("/export.pdf")) == 2
+    assert _upload(background=("paper.png", _png(20, 30))).status_code == 200
+    res = client.get("/export.pdf")
+    assert res.status_code == 422 and "Export PDF" in res.json()["detail"] and "preview.pdf" in res.json()["detail"], res.text
+    assert client.delete("/api/set/background").status_code == 200
+    assert len(_pages("/export.pdf")) == 2
     return True
 
 
@@ -644,8 +754,12 @@ def main() -> None:
         test_preview_pdf_passes_on_what_the_renderer_refuses,
         test_preview_pdf_answers_a_template_too_deep_to_print,
         test_preview_pdf_reports_any_renderer_refusal,
-        test_export_pdf_lays_the_background_under_page_one,
-        test_background_with_its_own_rotation_comes_out_portrait,
+        test_export_pdf_refuses_an_image_background,
+        test_background_png_lands_as_the_pages_image,
+        test_background_jpeg_lands_as_the_pages_image,
+        test_no_background_uploaded_uses_the_credential_files_address,
+        test_remove_background_goes_back_to_the_files_address_or_none,
+        test_background_survives_download_and_upload_back,
     ]
     passed = skipped = 0
     for test in tests:
