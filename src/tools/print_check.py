@@ -481,6 +481,11 @@ def run(installation: Path, templates: Path, test_template: Path, out: Path, stu
     print(f"restored the original {ctx['template']}")
 
 
+def run_published(installation: Path, out: Path, student: str | None) -> None:
+    """One Wallet print of whatever is published (scripts/publish-set.sh): no swap, nothing published by the check."""
+    print_once("published", context(installation, student), out)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--installation", type=Path, required=True)
@@ -490,18 +495,23 @@ def main() -> int:
     parser.add_argument("--templates-shown", default="the VDR's templates folder",
                         help="the templates folder as the repository names it, for messages")
     parser.add_argument("--student")
-    parser.add_argument("--thai-note", required=True,
+    parser.add_argument("--thai-note", default="",
                         help="the made-up Thai text print-check.sh published as the credential's notes claim")
+    parser.add_argument("--published", action="store_true",
+                        help="print once what is published (template, Background, credential file), changing nothing")
     args = parser.parse_args()
     # As PID 1 in a container Python ignores SIGTERM; exit on it instead, so `docker stop` still restores the
     # template. A SIGKILL can't be caught: the next run notices the leftover (run()).
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     try:
-        run(args.installation, args.templates, args.test_template, args.out, args.student, args.templates_shown, args.thai_note)
+        if args.published:
+            run_published(args.installation, args.out, args.student)
+        else:
+            run(args.installation, args.templates, args.test_template, args.out, args.student, args.templates_shown, args.thai_note)
     except StepFailed as e:
         print(f"FAIL {e}")
         return 1
-    print("print check: PASS")
+    print("print check: PASS" + (" (as published)" if args.published else ""))
     return 0
 
 

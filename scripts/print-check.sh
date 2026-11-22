@@ -12,9 +12,15 @@
 #
 # Usage:
 #   ./scripts/print-check.sh [student]     a made-up student of the stand-in realm; default: smoke.json's eligible
+#   ./scripts/print-check.sh --published [student]
+#       one print of what is published (scripts/publish-set.sh: the set's template, Background and credential file),
+#       checking only that the print succeeds and carries the student's name. Nothing is published or swapped, so
+#       the PDF (published.pdf in the folder the output names) is what the next Wallet print gives.
 # ==============================================================================
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
+AS_PUBLISHED=0
+if [[ ${1:-} == --published ]]; then AS_PUBLISHED=1; shift; fi
 
 env_value() { { grep -E "^$1=" .env || true; } | tail -1 | cut -d= -f2- | tr -d '\r"'; }  # a missing key is empty, not an exit
 [ -f .env ] || { echo "No .env: bring the regular stack up first (scripts/deploy.sh)." >&2; exit 1; }
@@ -125,6 +131,7 @@ publish_test_credentials() {
   quiet compose restart certify
   wait_certify
 }
+if [[ $AS_PUBLISHED == 0 ]]; then
 # Stop before anything is published when Certify is down or doesn't know the credential id.
 certify_reports_display   || { echo "FAIL setup: couldn't read $CREDENTIAL's display from Certify's metadata at $CERTIFY: is the stack up?" >&2; exit 1; }
 test_credentials
@@ -143,6 +150,7 @@ docker run --rm --user root -v "$PWD/$FONT_DIR:/font" -e "OWNER=$(id -u):$(id -g
   chown -R "$OWNER" /font' >/dev/null \
   || { echo "FAIL setup: couldn't take the Thai font from Debian's fonts-tlwg-loma-ttf (is the network up?)" >&2; exit 1; }
 echo "Thai font: $(wc -c < "$FONT_DIR/thai-font.ttf") bytes from Debian's fonts-tlwg-loma-ttf"
+fi
 
 docker run --rm --user "$(id -u):$(id -g)" \
   --add-host auth.localhost:host-gateway --add-host issuer.localhost:host-gateway \
@@ -158,7 +166,7 @@ docker run --rm --user "$(id -u):$(id -g)" \
   -v "$OUT:/out" \
   "ghcr.io/mosip-asia/ait-vc:${IMAGE_TAG:-latest}" \
   python /check/print_check.py --installation /installation --templates /templates \
-    --test-template /check/template.html --out /out --templates-shown "$INST/vdr/templates" --thai-note "$THAI_NOTE" ${1:+--student "$1"} \
+    --test-template /check/template.html --out /out --templates-shown "$INST/vdr/templates" --thai-note "$THAI_NOTE" $([[ $AS_PUBLISHED == 1 ]] && echo --published) ${1:+--student "$1"} \
   && status=0 || status=$?
 echo "PDFs: $OUT"
 exit "$status"
