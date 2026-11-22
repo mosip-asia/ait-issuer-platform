@@ -5,9 +5,11 @@ A set is the zip VC Lab's Download gives: template/, credential/, sample/ and ba
 - the template on the VDR as <issuer id>-<credential configuration id>-template.html (Mimoto's name), and warns when
   git tracks that file, because the next checkout puts the committed one back;
 - the Background, as the bytes it came in, at <credential configuration id>/background.png under the VDR's templates
-  folder (git ignores it), whatever its type: the printer reads the type from the bytes;
+  folder (git ignores it), whatever its type: the printer reads the type from the bytes. A set without one removes
+  what was published, so the VDR mirrors the set;
 - the credential file into --credentials-out, a folder holding the Installation's credential files with the set's in
-  place of the committed one, for template-sync to read.
+  place of the committed one, for template-sync to read. The set's file gets the live DID (did_url ${CERTIFY_DID}) and,
+  with a Background, display[0].background_image.uri at the published address.
 
 The credential configuration id is the credential file's own credential_config_key_id. The set is checked whole before
 anything is written, and publishing the same set again gives the same files. Standard library only; run from the
@@ -25,6 +27,7 @@ import sys
 import zipfile
 from pathlib import Path
 
+VDR_TEMPLATES = "http://vdr.localhost/templates"  # template-sync rewrites it for each stack's VDR (VDR_BASE_URL)
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 FOLDERS = ("template", "credential", "sample", "background")
 
@@ -76,8 +79,21 @@ class Set:
             raise Refused("the credential file's credential_config_key_id is missing or isn't a plain name "
                           "(letters, digits, '.', '_', '-')")
         self.config_id = config_id
+        self.parsed = parsed
         if self.background is not None and image_kind(self.background) is None:
             raise Refused("the Background isn't a PNG or JPEG image")
+
+
+def for_template_sync(the_set: Set) -> dict:
+    """The credential file as template-sync should load it: signed under the live DID (template-sync turns
+    ${CERTIFY_DID} into it), and, when the set has a Background, naming the address it was just published at. VC Lab's
+    download holds the file as uploaded, with neither; without the address Certify publishes nothing for Mimoto to fetch."""
+    credential = dict(the_set.parsed, did_url="${CERTIFY_DID}")
+    if the_set.background is not None:
+        display = list(credential.get("display") or [{}])
+        display[0] = dict(display[0], background_image={"uri": f"{VDR_TEMPLATES}/{the_set.config_id}/background.png"})
+        credential["display"] = display
+    return credential
 
 
 def tracked(path: Path) -> bool:
@@ -109,14 +125,18 @@ def publish(set_zip: Path, issuer_id: str, installation: str, credentials_out: P
         background.write_bytes(the_set.background)
         print(f"background: {background} ({image_kind(the_set.background)}, {len(the_set.background)} bytes)")
     else:
-        print(f"no Background in the set: a Background already at {templates / the_set.config_id / 'background.png'} stays")
+        background = templates / the_set.config_id / "background.png"
+        removed = background.exists()
+        background.unlink(missing_ok=True)
+        print(f"no Background in the set: {'removed ' + str(background) if removed else 'none at ' + str(background)}")
 
     credentials_out.mkdir(parents=True, exist_ok=True)
     for stale in credentials_out.glob("*.json"):
         stale.unlink()
     for p in sorted(credentials.glob("*.json")):
         (credentials_out / p.name).write_bytes(p.read_bytes())
-    (credentials_out / f"{the_set.config_id}.json").write_bytes(the_set.credential)
+    (credentials_out / f"{the_set.config_id}.json").write_text(
+        json.dumps(for_template_sync(the_set), indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"credential: {the_set.config_id} -> {credentials_out}/{the_set.config_id}.json")
 
 
