@@ -19,10 +19,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 
 /**
  * The renderer: one call, POST /render, that prints a credential the way Mimoto 0.21's HTML path does (README.md).
- * JSON in, PDF out. Nothing is written to disk; nothing is kept between calls.
+ * JSON in, PDF out. Nothing is written to disk. Nothing is kept between calls, unless a template uses reflection to
+ * reach past Velocity (README.md, "Limits").
  */
 public final class RendererServer {
 
@@ -33,6 +35,13 @@ public final class RendererServer {
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
     private static final CredentialPDFGeneratorService PRINTER = new CredentialPDFGeneratorService();
+
+    // At most four requests are read, printed and answered at once; the others wait their turn, first come first
+    // served. A request holds its body, a Background and a PDF, so this bounds the heap that previews take.
+    static final int RENDERS_AT_ONCE = 4;
+    private static final Semaphore RENDERS = new Semaphore(RENDERS_AT_ONCE, true);
+
+    static final int CHUNK = 64 * 1024;  // bytes per write: see send()
 
     /** POST /render's body. credentialFile is Certify's credential file, as VC Lab holds it. */
     record RenderRequest(String template, Map<String, Object> credentialSubject, JsonNode credentialFile,
@@ -57,49 +66,57 @@ public final class RendererServer {
                 error(exchange, 405, "use POST");
                 return;
             }
-            byte[] body = exchange.getRequestBody().readNBytes(MAX_REQUEST + 1);
-            if (body.length > MAX_REQUEST) {
-                error(exchange, 413, "request is larger than " + MAX_REQUEST / (1024 * 1024) + " MB");
-                return;
-            }
-            RenderRequest request;
+            RENDERS.acquireUninterruptibly();
             try {
-                request = JSON.readValue(body, RenderRequest.class);
-            } catch (IOException e) {
-                error(exchange, 400, "expected the JSON render request: " + e.getMessage());
-                return;
-            }
-            if (request.template() == null || request.credentialSubject() == null || request.credentialFile() == null) {
-                error(exchange, 400, "template, credentialSubject and credentialFile are required");
-                return;
-            }
-            CredentialsSupportedResponse metadata;
-            try {
-                metadata = issuerMetadata(request.credentialFile());
-            } catch (IllegalArgumentException e) {
-                error(exchange, 400, "credentialFile isn't shaped as Certify's credential file: " + e.getMessage());
-                return;
-            }
-            byte[] pdf;
-            try {
-                pdf = PRINTER.generatePdf(request.template(), request.credentialSubject(), metadata,
-                        request.backgroundImage(), request.locale() != null ? request.locale() : "en");
-            } catch (Exception e) {
-                // The input parsed, so what failed is printing it, as Mimoto would fail: the message is the answer.
-                // Velocity's names the template's line and column; iText's names what it couldn't lay out.
-                e.printStackTrace();
-                error(exchange, 422, String.valueOf(e.getMessage()));
-                return;
-            } catch (StackOverflowError e) {
-                // Velocity parses and renders nested blocks recursively.
-                error(exchange, 422, "the template nests its blocks too deep to print");
-                return;
+                print(exchange);
             } catch (OutOfMemoryError e) {
                 error(exchange, 503, "the renderer ran out of memory for this print; try again, or use a smaller Background");
-                return;
+            } finally {
+                RENDERS.release();
             }
-            send(exchange, 200, "application/pdf", pdf);
         }
+    }
+
+    private static void print(HttpExchange exchange) throws IOException {
+        byte[] body = exchange.getRequestBody().readNBytes(MAX_REQUEST + 1);
+        if (body.length > MAX_REQUEST) {
+            error(exchange, 413, "request is larger than " + MAX_REQUEST / (1024 * 1024) + " MB");
+            return;
+        }
+        RenderRequest request;
+        try {
+            request = JSON.readValue(body, RenderRequest.class);
+        } catch (IOException e) {
+            error(exchange, 400, "expected the JSON render request: " + e.getMessage());
+            return;
+        }
+        if (request.template() == null || request.credentialSubject() == null || request.credentialFile() == null) {
+            error(exchange, 400, "template, credentialSubject and credentialFile are required");
+            return;
+        }
+        CredentialsSupportedResponse metadata;
+        try {
+            metadata = issuerMetadata(request.credentialFile());
+        } catch (IllegalArgumentException e) {
+            error(exchange, 400, "credentialFile isn't shaped as Certify's credential file: " + e.getMessage());
+            return;
+        }
+        byte[] pdf;
+        try {
+            pdf = PRINTER.generatePdf(request.template(), request.credentialSubject(), metadata,
+                    request.backgroundImage(), request.locale() != null ? request.locale() : "en");
+        } catch (Exception e) {
+            // The input parsed, so what failed is printing it, as Mimoto would fail: the message is the answer.
+            // Velocity's names the template's line and column; iText's names what it couldn't lay out.
+            e.printStackTrace();
+            error(exchange, 422, String.valueOf(e.getMessage()));
+            return;
+        } catch (StackOverflowError e) {
+            // Velocity parses and renders nested blocks recursively.
+            error(exchange, 422, "the template nests its blocks too deep to print");
+            return;
+        }
+        send(exchange, 200, "application/pdf", pdf);
     }
 
     /**
@@ -125,8 +142,12 @@ public final class RendererServer {
     private static void send(HttpExchange exchange, int status, String type, byte[] body) throws IOException {
         exchange.getResponseHeaders().set("Content-Type", type);
         exchange.sendResponseHeaders(status, body.length);
+        // In chunks: the JDK keeps a direct buffer as large as the largest single write for each thread that wrote it,
+        // so one write of a whole PDF would pin that much memory outside the heap for good.
         try (OutputStream out = exchange.getResponseBody()) {
-            out.write(body);
+            for (int off = 0; off < body.length; off += CHUNK) {
+                out.write(body, off, Math.min(CHUNK, body.length - off));
+            }
         }
     }
 }
