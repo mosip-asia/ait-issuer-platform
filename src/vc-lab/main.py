@@ -222,8 +222,8 @@ _DASHBOARD = """<!DOCTYPE html>
         <h2>The set</h2>
         <div class="slot">
           <b>Template</b> <span class="ext">.html (A4)</span>
-          <div class="hint">The layout: HTML where the data is placed. Each <code>#claimValue("name")</code> is filled with
-            that claim.</div>
+          <div class="hint">The layout: HTML where the data is placed. It reads each claim through a macro it defines itself
+            (see the VC Lab templates guide).</div>
           <div class="pick"><label>Choose file<input type="file" hidden data-field="template" accept=".html,.htm,.vm,text/html"></label>
             <span class="file" data-slot="template"></span></div>
         </div>
