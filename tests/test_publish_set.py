@@ -216,6 +216,30 @@ def test_a_set_whose_credential_names_the_published_background_keeps_it(root: Ro
 
 
 @with_root
+def test_only_the_local_vdrs_address_for_the_background_keeps_it(root: Root) -> None:
+    """The address is parsed: the local VDR's host (template-sync rewrites it for each stack) and the published path
+    keep the hand-placed paper, whatever the query or the spaces around it; any other host or path removes it."""
+    placed = root.templates / "ait-transcript" / "background.png"
+    placed.parent.mkdir()
+    cases = {
+        BACKGROUND_URI + "?v=2": True,
+        f" {BACKGROUND_URI} ": True,
+        "https://vdr.localhost/templates/ait-transcript/background.png": True,
+        "https://evil.example/x/templates/ait-transcript/background.png": False,
+        "https://evil.example/templates/ait-transcript/background.png": False,
+        "http://vdr.localhost/x/templates/ait-transcript/background.png": False,
+        "http://vdr.localhost/templates/ait-student-id/background.png": False,
+    }
+    for uri, kept in cases.items():
+        placed.write_bytes(PNG)
+        named = {**SET_CREDENTIAL, "display": [{"name": "x", "background_image": {"uri": uri}}]}
+        run = root.publish(a_set(background=None, credential=json.dumps(named).encode()))
+        assert run.returncode == 0, run.stderr
+        assert placed.exists() == kept, (uri, run.stdout)
+        assert ("keeping" in run.stdout) == kept and ("removed" in run.stdout) != kept, (uri, run.stdout)
+
+
+@with_root
 def test_a_credential_file_with_a_utf8_bom_is_published_without_one(root: Root) -> None:
     bom = b"\xef\xbb\xbf" + json.dumps(SET_CREDENTIAL).encode()
     run = root.publish(a_set(credential=bom))
