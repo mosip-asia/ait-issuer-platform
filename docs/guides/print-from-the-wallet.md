@@ -157,11 +157,11 @@ Run `./scripts/mimoto-up.sh` before publishing: it, like `deploy.sh`, runs `comp
 ./scripts/parity-check.sh
 ```
 
-Run it after `./scripts/mimoto-up.sh`, with VC Lab up (`deploy.sh` starts it, with the renderer beside it, at `http://lab.localhost`). It takes about two minutes. It runs one made-up set both ways and compares the two PDFs:
+Run it after `./scripts/mimoto-up.sh`, with VC Lab up (`deploy.sh` starts it, with the renderer beside it, at `http://lab.localhost`). It takes under a minute. It runs one made-up set both ways and compares the two PDFs:
 
 1. Puts a Thai font on the VDR for the set's template (`scripts/thai-font.sh`, the print check's font, in the git-ignored `deploy/ait/vdr/templates/parity-check/`).
 2. Uploads the set to VC Lab through its HTTP API, one file at a time, and keeps `/preview.pdf` and the zip `/download` gives. The set:
-   - the template is `tests/fixtures/parity-template.html`: every claim through `$rowProperties`, the `courseRows` grid, the Background, the logo, Thai typed and as an HTML entity, and the Thai font through `@font-face`;
+   - the template is `tests/fixtures/parity-template.html`: every claim through `$rowProperties`, the `courseRows` grid, the Background, the logo (the same address in the credential file and the issuers list, so both print the same one), the QR, Thai typed and as an HTML entity, and the Thai font through `@font-face`;
    - the credential file is the committed one (`ait-transcript`) with a made-up display name, `courseRows` mapped (a claim with no display entry), a made-up Thai `notes`, a `programCommittee` given as a list of text, and every claim named in `display_order` (below);
    - the sample is the mock Adapter's record for `st120001`, the record Certify signs for the same student, so mapped values and `courses` (a list of objects) come from the same data both ways;
    - the Background is the print check's made-up PNG.
@@ -178,10 +178,10 @@ parity: FAIL: VC Lab's preview and the Wallet's print differ (above)
 
 and the exit status is 1. On exit the command puts back what publishing changed: the template and the Background the VDR held, and the committed credential files in Certify. The set and both PDFs (`preview.pdf` from VC Lab, `wallet.pdf` from Mimoto) are kept in the temporary folder named on the line `the set and both PDFs`.
 
-Two known differences the set avoids:
+Two known differences:
 
-- **The order of the claims `display_order` leaves out.** Mimoto hands `$rowProperties` in `display_order`, then the other claims in the order of the signed credential, and Certify signs them in a Java `HashMap`'s order, not the credential file's. VC Lab hands them in the credential file's order. So a template that loops over `$rowProperties` prints the same order in both only for the claims `display_order` names; the set names every claim.
-- **The QR.** The set's template uses no `$qrCodeImage`: VC Lab always draws a placeholder QR, and Mimoto draws none when the credential is too large for one (`src/renderer/README.md`).
+- **The order of the claims `display_order` leaves out.** Mimoto hands `$rowProperties` in `display_order`, then the other claims in the order of the signed credential, and Certify signs them in a Java `HashMap`'s order, not the credential file's. VC Lab hands them in the credential file's order. So a template that loops over `$rowProperties` prints the same order in both only for the claims `display_order` names. The set names every claim, so the check passes.
+- **The QR.** VC Lab always draws a 400 × 400 placeholder. Mimoto draws the credential's own QR at the same size, or none when the credential's QR data is over 4096 bytes (`src/renderer/README.md`). The set's template then prints `NO-QR`, and the check fails on the text and the image sizes. The made-up record is under that limit, so both draw one. The check compares the QR's size, not what it encodes.
 
 ## Template conventions
 

@@ -13,18 +13,23 @@
   .page { position: relative; width: 595.28pt; height: 841.89pt; background-color: $backgroundColor; }
   .background { position: absolute; left: 0; top: 0; width: 595.28pt; height: 841.89pt; }
   .logo { width: 40pt; height: 40pt; }
+  .qr { width: 100pt; height: 100pt; }
   .content { position: absolute; left: 30pt; top: 30pt; width: 535pt; }
   td { padding: 0 4pt; }
 </style>
 </head>
 <body>
 <!-- Every claim Mimoto hands a template ($rowProperties: claim -> {display name: text}), so a value printed differently
-     shows in the page text: mapped values, the list of objects (courses, as ""), the list of text
+     shows in the page text. The logo is the same address in the credential file and the issuers list, so both print
+     the same one. Claims: mapped values, the list of objects (courses, as ""), the list of text
      (programCommittee, joined), the claim with no display entry (courseRows) and the Thai claim value (notes). -->
 <div class="page">
 #if($backgroundImage && $backgroundImage != "")<img class="background" src="$backgroundImage"/>#end
 <div class="content">
 #if($logoUrl && $logoUrl != "")<img class="logo" src="$logoUrl"/>#end
+<!-- The QR: VC Lab always draws a 400 x 400 placeholder; Mimoto draws the credential's, or none above 4096 bytes of
+     pixelpass data, which then shows as NO-QR and a missing image. -->
+#if($qrCodeImage && $qrCodeImage != "")<img class="qr" src="data:image/png;base64,$qrCodeImage"/>#else<p>NO-QR</p>#end
 <p>PARITY-SET $titleName / $textColor on $backgroundColor / validity $credentialValidity</p>
 <p>THAI-TYPED: ภาษาไทย / THAI-ENTITY: &#x0E20;&#x0E32;&#x0E29;&#x0E32;&#x0E44;&#x0E17;&#x0E22;</p>
 #foreach($claim in $rowProperties.entrySet())
