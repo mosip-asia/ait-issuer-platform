@@ -355,8 +355,7 @@ def test_rejects_wrong_files() -> None:
         "credential without vc_template": {"credential": ("c.json", _json(no_mapping))},
         "credential not JSON": {"credential": ("c.json", b"{oops")},
         "sample not JSON": {"sample": ("s.json", b"{oops")},
-        "template with a stray #end": {"template": ("t.html", b"<p>#if($x)a#end#end</p>")},
-        "template missing an #end": {"template": ("t.html", b"<p>#foreach($c in $terms)$c</p>")},
+        "template not UTF-8": {"template": ("t.html", b"<p>\xff\xfe</p>")},
         "credential with display not a list": {"credential": ("c.json", _json({**CREDENTIAL, "display": {"name": "x"}}))},
         "credential with a logo not an object": {
             "credential": ("c.json", _json({**CREDENTIAL, "display": [{"name": "x", "logo": "logo.png"}]}))},
@@ -435,12 +434,26 @@ def test_preview_pdf_template_error_is_422_with_its_line() -> bool:
         "a field past the end of a split row": (
             '<html><body>\n#set($row = "C|XY102|Seams|0|45|3|")\n#set($f = $row.split("\\|"))<p>$f.get(6)</p>\n</body></html>\n',
             ["method 'get'", "line 3"]),
+        # VC Lab uploads it: Velocity, not an upload check, says what's wrong and where.
+        "a #foreach without its #end": (
+            "<html><body>\n<p>fine</p>\n#foreach($e in $rowProperties.entrySet())\n<p>$e.key</p>\n</body></html>\n",
+            ["Encountered", "line "]),
     }
     for case, (template, expected) in cases.items():
         _upload_print_set(template)
         res = client.get("/preview.pdf")
         assert res.status_code == 422, (case, res.status_code, res.text)
         assert all(part in res.json()["detail"] for part in expected), (case, res.json())
+    return True
+
+
+def test_preview_pdf_takes_any_velocity_1_7_directive() -> bool:
+    """Velocity 1.7 has directives VC Lab's own engine never knew (#define, #{end}); a template using them uploads
+    and prints."""
+    if _no_renderer("test_preview_pdf_takes_any_velocity_1_7_directive"):
+        return False
+    _upload_print_set("<html><body>\n#define($block)Defined block#{end}\n<p>$block</p>\n</body></html>\n")
+    assert "Defined block" in _printed()[0]
     return True
 
 
@@ -550,6 +563,7 @@ def main() -> None:
         test_preview_pdf_splits_course_rows,
         test_preview_pdf_uses_only_the_standard_fonts,
         test_preview_pdf_takes_a_redefined_macro,
+        test_preview_pdf_takes_any_velocity_1_7_directive,
         test_export_pdf_lays_the_background_under_page_one,
         test_background_with_its_own_rotation_comes_out_portrait,
     ]
