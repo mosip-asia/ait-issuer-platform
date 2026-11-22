@@ -210,15 +210,29 @@ def _empty_zip() -> bytes:
     return out.getvalue()
 
 
-def _png(width: int, height: int, noisy: bool = False) -> bytes:
-    """A made-up grey PNG, width x height; noisy makes it incompressible, so a big one stays big."""
-    def chunk(kind: bytes, body: bytes) -> bytes:
-        return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body))
+def _chunk(kind: bytes, body: bytes) -> bytes:
+    return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body))
 
-    rows = b"".join(b"\x00" + (os.urandom(width) if noisy else b"\x80" * width) for _ in range(height))
-    signature = b"\x89PNG\r\n\x1a\n"
-    return (signature + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 0, 0, 0, 0))
-            + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b""))
+
+def _png(width: int, height: int, noisy: bool = False, channels: int = 1, depth: int = 8,
+         noise_bytes: int | None = None) -> bytes:
+    """A made-up PNG, width x height, with 1 (grey), 2, 3 or 4 channels of 8 or 16 bits. Rows are flat grey, except
+    that `noisy` makes every row random (incompressible, so a big one stays big), or `noise_bytes` makes as many
+    rows random as that many bytes cover, so a huge image can still be a file under the upload cap."""
+    row = (width * channels * depth + 7) // 8
+    noisy_rows = height if noisy else min(height, (noise_bytes or 0) // row)
+    rows = b"".join(b"\x00" + (os.urandom(row) if y < noisy_rows else b"\x80" * row) for y in range(height))
+    header = struct.pack(">IIBBBBB", width, height, depth, {1: 0, 2: 4, 3: 2, 4: 6}[channels], 0, 0, 0)
+    return (b"\x89PNG\r\n\x1a\n" + _chunk(b"IHDR", header) + _chunk(b"IDAT", zlib.compress(rows))
+            + _chunk(b"IEND", b""))
+
+
+def _png_of_size(size: int) -> bytes:
+    """A small PNG padded to exactly `size` bytes with random bytes in a private ancillary chunk."""
+    small = _png(16, 16)
+    pad = size - len(small) - 12  # a chunk's length, type and CRC
+    assert pad >= 0
+    return small[:-12] + _chunk(b"prVt", os.urandom(pad)) + small[-12:]
 
 
 # A made-up baseline JPEG, 16 x 24 pixels, flat grey (335 bytes); hard-coded so the tests need no image library.
@@ -430,39 +444,69 @@ def test_rejects_wrong_files() -> None:
     assert client.get("/api/set").json() == before, "a rejected upload leaves the set as it was"
 
 
-def test_background_over_the_pixel_bound_is_refused() -> None:
-    """A small file can hold a huge image (a PNG of one colour): the size in its header is what's bounded."""
+def test_background_over_the_decoded_bound_is_refused() -> None:
+    """A small file can hold a huge image (a PNG of one colour): what the renderer decodes it to is bounded, which is
+    pixels x channels x bytes per sample, read from the header."""
     import labset
 
     _upload_set()
     before = client.get("/api/set").json()
-    bound = f"{labset.MAX_PIXELS:,}"
-    over = {"a PNG": ("paper.png", _png(4000, 4000)), "a JPEG": ("paper.jpg", _jpeg_header(20000, 20000))}
+    bound = f"{labset.MAX_DECODED // 1_000_000} MB"
+    over = {
+        "an RGB PNG, 48 MB": ("paper.png", _png(4000, 4000, channels=3)),
+        "a 16-bit RGBA PNG, 80 MB": ("paper.png", _png(2500, 4000, channels=4, depth=16)),
+        "an RGBA PNG one pixel row over": ("paper.png", _png(2500, 4001, channels=4)),
+        "a JPEG header, 1.2 GB": ("paper.jpg", _jpeg_header(20000, 20000)),
+    }
     for case, file in over.items():
         res = _upload(background=file)
         assert res.status_code == 400, (case, res.status_code, res.text)
-        assert bound in res.json()["detail"] and "pixels" in res.json()["detail"], (case, res.json())
-    at_most = _upload(background=("paper.png", _png(2480, 3508)))  # A4 at 300 dpi
-    assert at_most.status_code == 200, at_most.text
-    assert client.get("/api/set").json() != before
+        assert bound in res.json()["detail"] and "decoded" in res.json()["detail"], (case, res.json())
+    assert client.get("/api/set").json() == before
+    for case, file in {"A4 at 300 dpi, RGBA": ("paper.png", _png(2480, 3508, channels=4)),
+                       "16-bit grey at the bound": ("paper.png", _png(2500, 8000, depth=16)),
+                       "RGBA at the bound": ("paper.png", _png(2500, 4000, channels=4))}.items():
+        res = _upload(background=file)
+        assert res.status_code == 200, (case, res.status_code, res.text)
 
 
-def test_a_download_always_uploads_back() -> None:
-    """The set's files together stay within what one upload may carry, so Download's zip goes back in."""
-    _upload_set()
-    template = b"<p>#claimValue('holderName')</p>" + b" " * (4 * 1024 * 1024)
-    assert _upload(template=("big.html", template)).status_code == 200
-    res = _upload(background=("paper.png", _png(2236, 2236, noisy=True)))  # about 5 MB: 9 MB with the template
-    assert res.status_code == 400, res.status_code
-    assert "MB" in res.json()["detail"] and "in all" in res.json()["detail"], res.json()
+def test_a_full_set_downloads_and_uploads_back() -> None:
+    """The set's files together may reach MAX_SET, and then its zip (those files, incompressible, plus the zip's
+    headers and long names) is still one request VC Lab takes. One byte more is refused, naming the overshoot."""
+    import labset
+
+    long = "n" * 250  # with the extension a 255-byte name
+    template = b"<p>#claimValue('holderName')</p>"
+    others = {"template": (long + ".html", template), "credential": (long + ".json", _json(CREDENTIAL)),
+              "sample": (long + ".json", _json(SAMPLE))}
+    room = labset.MAX_SET - len(template) - len(_json(CREDENTIAL)) - len(_json(SAMPLE))
+    client.delete("/api/set")
+    assert _upload(**others).status_code == 200
+
+    over = _upload(background=(long + ".png", _png_of_size(room + 1)))
+    detail = over.json().get("detail", "")
+    assert over.status_code == 400 and "1 over" in detail and "in all" in detail, (over.status_code, detail)
     assert client.get("/api/set").json()["loaded"]["background"] is None, "the refused upload left the set as it was"
 
-    template = b"<p>#claimValue('holderName')</p>" + b" " * (3 * 1024 * 1024)
-    assert _upload(template=("big.html", template)).status_code == 200
-    assert _upload(background=("paper.png", _png(2236, 2236, noisy=True))).status_code == 200  # 8 MB in all
+    assert _upload(background=(long + ".png", _png_of_size(room))).status_code == 200, "exactly MAX_SET"
     zipped = client.get("/download").content
     client.delete("/api/set")
-    assert _upload(bundle=("vc-lab-set.zip", zipped)).status_code == 200, "the biggest set Download can give"
+    res = _upload(bundle=("vc-lab-set.zip", zipped))
+    assert res.status_code == 200, (len(zipped), res.status_code, res.text)
+    assert client.get("/api/set").json()["loaded"]["background"] == long + ".png"
+
+
+def test_a_long_file_name_is_cut_to_255_bytes() -> None:
+    _upload_set()
+    for name in ("x" * 1000 + ".png", "ใบรับรอง" * 100 + ".png"):
+        res = _upload(background=(name, _png(20, 30)))
+        assert res.status_code == 200, res.text
+        stored = res.json()["loaded"]["background"]
+        assert len(stored.encode("utf-8")) <= 255 and stored.endswith(".png"), (len(stored.encode("utf-8")), stored[-12:])
+        zipped = client.get("/download")
+        assert zipped.status_code == 200, "Download works with a long name"
+        with zipfile.ZipFile(io.BytesIO(zipped.content)) as z:
+            assert f"background/{stored}" in z.namelist()
 
 
 def test_an_old_zip_with_a_pdf_background_says_what_to_do() -> None:
@@ -475,6 +519,15 @@ def test_an_old_zip_with_a_pdf_background_says_what_to_do() -> None:
     assert res.status_code == 400
     detail = res.json()["detail"]
     assert "PNG or JPEG" in detail and "remove background/ from the zip, or upload the files one at a time" in detail, detail
+
+    # A refusal that removing the Background or uploading one at a time can't help gets no such advice.
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w") as z:
+        z.writestr("template/record.html", TEMPLATE)
+        z.writestr("background/huge.png", _png(4000, 4000, channels=3))
+    res = _upload(bundle=("big.zip", out.getvalue()))
+    assert res.status_code == 400 and "decoded" in res.json()["detail"], res.text
+    assert "remove background/" not in res.json()["detail"], res.json()
 
 
 def _stand_in_renderer(bodies: list) -> HTTPServer:
@@ -792,17 +845,28 @@ def test_background_jpeg_lands_as_the_pages_image() -> bool:
     return True
 
 
-def test_background_at_the_pixel_bound_still_prints() -> bool:
-    """The bound is chosen so the renderer's heap copes with the biggest Background VC Lab accepts."""
-    if _no_renderer("test_background_at_the_pixel_bound_still_prints"):
+def test_the_worst_accepted_background_prints_four_at_once() -> bool:
+    """The bound is chosen so the renderer's heap copes with the biggest Background VC Lab accepts, in the formats
+    that decode largest, each with about 7 MB of noise (the upload cap's worth), four prints at once."""
+    if _no_renderer("test_the_worst_accepted_background_prints_four_at_once"):
         return False
     import labset
+    from concurrent.futures import ThreadPoolExecutor
 
-    side = 2500
-    assert side * (labset.MAX_PIXELS // side) == labset.MAX_PIXELS, "the test's image is exactly at the bound"
-    _upload_background_set(background=("big.png", _png(side, labset.MAX_PIXELS // side)))
-    rects = _printed_rects()
-    assert [r["px"] for r in rects] == [(side, labset.MAX_PIXELS // side)] and _on_the_whole_page(rects[0]), rects
+    worst = {  # name: (width, channels, depth); the height is what the bound allows
+        "8-bit RGBA": (2500, 4, 8),
+        "16-bit RGBA": (2000, 4, 16),
+        "16-bit RGB": (2500, 3, 16),
+    }
+    for kind, (width, channels, depth) in worst.items():
+        height = labset.MAX_DECODED // (width * channels * depth // 8)
+        _upload_background_set(background=("big.png", _png(width, height, channels=channels, depth=depth,
+                                                            noise_bytes=7_000_000)))
+        rects = _printed_rects()
+        assert [r["px"] for r in rects] == [(width, height)] and _on_the_whole_page(rects[0]), (kind, rects)
+        with ThreadPoolExecutor(4) as pool:
+            answers = list(pool.map(lambda _: client.get("/preview.pdf"), range(4)))
+        assert [a.status_code for a in answers] == [200] * 4, (kind, [(a.status_code, a.text[:120]) for a in answers])
     return True
 
 
@@ -933,11 +997,12 @@ def main() -> None:
         test_preview_pdf_passes_on_what_the_renderer_refuses,
         test_preview_pdf_answers_a_template_too_deep_to_print,
         test_preview_pdf_reports_any_renderer_refusal,
-        test_background_over_the_pixel_bound_is_refused,
-        test_a_download_always_uploads_back,
+        test_background_over_the_decoded_bound_is_refused,
+        test_a_full_set_downloads_and_uploads_back,
+        test_a_long_file_name_is_cut_to_255_bytes,
         test_an_old_zip_with_a_pdf_background_says_what_to_do,
         test_the_renderer_is_sent_the_uploaded_background,
-        test_background_at_the_pixel_bound_still_prints,
+        test_the_worst_accepted_background_prints_four_at_once,
         test_export_pdf_refuses_an_image_background,
         test_background_png_lands_as_the_pages_image,
         test_background_jpeg_lands_as_the_pages_image,
