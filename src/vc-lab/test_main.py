@@ -1021,6 +1021,10 @@ def test_preview_pdf_of_the_committed_transcript_template_leaves_a_missing_claim
         return False
     template = Path(os.environ.get("TEMPLATES_DIR") or REPO_ROOT / "deploy/ait/vdr/templates") / "AITUniversity-ait-transcript-template.html"
     credential = Path(os.environ.get("CREDENTIALS_DIR") or REPO_ROOT / "deploy/ait/certify/credentials") / "ait-transcript.json"
+    if not (template.is_file() and credential.is_file()):  # another Installation (INSTALLATION=hackathon) has no AIT files
+        print("SKIP test_preview_pdf_of_the_committed_transcript_template_leaves_a_missing_claim_empty "
+              f"({template.name} or {credential.name} not in this Installation)")
+        return False
     record = {"fullName": "Mina Example", "dateOfBirth": "1999-01-02", "country": None, "option": None, "registrationNo": "st000001",
               "dateAdmitted": "2020-03-04", "degreeAwarded": "Master of Examples", "academicProgram": "M.Ex Fixtures"}
     client.delete("/api/set")
