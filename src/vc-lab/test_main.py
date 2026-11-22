@@ -457,6 +457,20 @@ def test_preview_pdf_takes_any_velocity_1_7_directive() -> bool:
     return True
 
 
+def test_preview_pdf_answers_a_template_too_deep_to_print() -> bool:
+    """Velocity parses nested blocks recursively; a template nested past the renderer's stack is the template's
+    fault: 422, and the renderer keeps serving."""
+    if _no_renderer("test_preview_pdf_answers_a_template_too_deep_to_print"):
+        return False
+    _upload_print_set("<html><body><p>" + "#if(true)" * 4000 + "deep" + "#end" * 4000 + "</p></body></html>\n")
+    res = client.get("/preview.pdf")
+    assert res.status_code == 422, (res.status_code, res.text[:300])
+    assert "deep" in res.json()["detail"], res.json()
+    _upload_print_set()
+    assert "Holder: Ada Example" in _printed()[0], "the renderer still prints after it"
+    return True
+
+
 def test_preview_pdf_names_a_thai_file() -> bool:
     if _no_renderer("test_preview_pdf_names_a_thai_file"):
         return False
@@ -591,6 +605,7 @@ def main() -> None:
         test_preview_pdf_takes_any_velocity_1_7_directive,
         test_preview_pdf_names_a_thai_file,
         test_preview_pdf_passes_on_what_the_renderer_refuses,
+        test_preview_pdf_answers_a_template_too_deep_to_print,
         test_export_pdf_lays_the_background_under_page_one,
         test_background_with_its_own_rotation_comes_out_portrait,
     ]
