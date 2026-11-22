@@ -214,7 +214,7 @@ Check it in VC Lab with data that has the field.
 VC Lab's Download gives a zip of the four files. To print with it from the real Wallet on the local stack, start Mimoto (`./scripts/mimoto-up.sh`), then, from the repository root:
 
 ```bash
-./scripts/publish-set.sh ~/Downloads/set.zip AITUniversity
+./scripts/publish-set.sh ~/Downloads/vc-lab-set.zip AITUniversity
 ```
 
 The second argument is the issuer id, the Wallet's `issuer_id` (`AITUniversity` is the AIT example). The command puts the template and the Background on the local VDR and loads the credential file into Certify, and the next Wallet print uses them. What to know before you publish:

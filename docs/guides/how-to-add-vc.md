@@ -73,7 +73,7 @@ Credentials typically require two visual presentations:
 1. **Wallet Card Display**: Thumbnail styling in the wallet catalog (`background_color`, `text_color`, logo URI).
 2. **Printable Document / Certificate Layout**: The printable document is an **Apache Velocity HTML template** (e.g. [`deploy/ait/AITUniversity-ait-transcript-template.html`](../../deploy/ait/AITUniversity-ait-transcript-template.html) or [`deploy/base/credential-template.html`](../../deploy/base/credential-template.html)):
    - Defines page geometry (`@page { size: A4 portrait; margin: 10mm; }`).
-   - Uses `#macro(claimValue $claimName)` and `#claimValue("fieldName")` to bind claims.
+   - Uses a macro such as `#macro(claimText $claimName)` and `#claimText("fieldName")` to bind claims (the macro and its name are in [VC Lab templates](./vc-lab-templates.md); do not reuse `claimValue`).
    - Embeds `$qrCodeImage` for instant scan-to-verify functionality.
 
 ### 0.4 Visual Credential Studio & Wallet Preview (VC Lab)

@@ -137,7 +137,7 @@ To see your own Background in the print check: the check's test copy of the cred
 A set is the zip VC Lab's Download gives: the template, the credential file, a sample and the Background. After `./scripts/mimoto-up.sh`, from the repository root:
 
 ```bash
-./scripts/publish-set.sh ~/Downloads/set.zip AITUniversity
+./scripts/publish-set.sh ~/Downloads/vc-lab-set.zip AITUniversity
 ```
 
 The second argument is the issuer id (the Wallet's `issuer_id`, `AITUniversity` for AIT). The command works only on the local stack: it refuses unless `.env` has `compose.mock.yaml` in `COMPOSE_FILE` and Certify trusts the local Keycloak, the way the start command does. On a deployment, publishing is infra's step (T3). It does these things, and each one converges, so publishing the same set again leaves the same state:
