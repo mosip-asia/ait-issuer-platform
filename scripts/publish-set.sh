@@ -11,7 +11,8 @@
 #   2. puts the template on the VDR as <issuer id>-<credential configuration id>-template.html and warns that git
 #      tracks that file; puts the Background at <credential configuration id>/background.png under the VDR's
 #      templates folder (git-ignored), whatever its type, or removes the one there when the set has none, so the VDR
-#      mirrors the set (src/tools/publish_set.py);
+#      mirrors the set, unless the set's credential file names that file on the local VDR (paper placed by hand,
+#      kept) (src/tools/publish_set.py);
 #   3. writes Certify's live DID into .env when .env holds another one;
 #   4. loads the credential file into Certify through template-sync, from a temporary folder holding the
 #      Installation's credential files with the set's in place of the committed one, then recreates Certify. The
