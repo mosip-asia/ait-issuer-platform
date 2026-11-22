@@ -1,6 +1,6 @@
 # VC Lab
 
-VC Lab renders a credential's HTML template from files you upload, shows what a Wallet will print, and exports the hard copy as a PDF. It knows nothing about any organisation: it has no built-in template, data or branding, and it reads nothing from the repo's folders, so a deployed VC Lab behaves the same as a local one.
+VC Lab renders a credential's HTML template from files you upload and shows the PDF the Wallet prints from them. Its preview comes from the [renderer](../renderer/README.md), which runs Mimoto 0.21's print path; VC Lab gets its address from `RENDERER_URL`, which Compose sets. It knows nothing about any organisation: it has no built-in template, data or branding, and it reads nothing from the repo's folders, so a deployed VC Lab behaves the same as a local one.
 
 ## The set
 
@@ -26,7 +26,7 @@ Uploading a file replaces that slot only; uploading a zip from Download replaces
 
 ## Dashboard and API
 
-The dashboard (`/`) has a file input per slot (or one for a zip), the list of loaded files, the HTML preview with a Lab/Wallet switch, and Export PDF, Download, Remove background and Clear.
+The dashboard (`/`) has a file input per slot (or one for a zip), the list of loaded files, the preview (the PDF from `/preview.pdf`, or its error in red), and Export PDF with a Lab/Wallet switch, Download, Remove background and Clear.
 
 | Call | Does |
 |---|---|
@@ -34,12 +34,13 @@ The dashboard (`/`) has a file input per slot (or one for a zip), the list of lo
 | `GET /api/set` | which slots are loaded, with their file names, and which required ones are missing |
 | `DELETE /api/set` | clears the set |
 | `DELETE /api/set/background` | removes the background only |
+| `GET /preview.pdf` | the PDF the Wallet prints from the set, drawn by the renderer; a template that doesn't print answers 422 with the renderer's message (a Velocity error names its line) |
 | `GET /preview?view=lab\|wallet` | the rendered HTML, never with the background |
 | `GET /export.pdf?view=lab\|wallet` | the PDF, with the background under page 1 when one is loaded |
 | `GET /download` | a zip with `template/`, `credential/`, `sample/` and `background/`, each file as uploaded |
 | `GET /health` | liveness |
 
-Rendering needs the template, the credential file and the sample; without them the preview and export answer 409, naming what is missing. A wrong file answers 400 with the reason.
+Rendering needs the template, the credential file and the sample; without them the previews and export answer 409, naming what is missing. `/preview.pdf` answers 503 without `RENDERER_URL` and 502 when the renderer can't be reached. A wrong file answers 400 with the reason.
 
 ## The hard copy (`hardcopy.py`)
 
@@ -60,15 +61,16 @@ Not checked yet: whether Certify needs a restart to pick up the new version.
 ## Running
 
 ```bash
-docker compose up -d vc-lab   # then open http://lab.localhost
-python3 src/vc-lab/main.py    # or locally, on port 4200
+docker compose up -d vc-lab   # starts the renderer first; then open http://lab.localhost
+python3 src/vc-lab/main.py    # or locally, on port 4200 (set RENDERER_URL for /preview.pdf)
 ```
 
-Tests (script-style; the PDF tests need WeasyPrint's system libraries, so they run in the `ait-vc` image and skip on a host without them):
+Tests (script-style). The `/preview.pdf` tests need the renderer and the `/export.pdf` tests need WeasyPrint's system libraries, so they run in the `ait-vc` image through Compose and skip on a host:
 
 ```bash
-.venv/bin/python src/vc-lab/test_main.py             # the web API, with a small made-up set
-.venv/bin/python src/vc-lab/test_template_engine.py  # Velocity details
+docker compose build renderer vc-lab
+docker compose run --rm vc-lab python src/vc-lab/test_main.py  # the web API, with small made-up sets
+.venv/bin/python src/vc-lab/test_template_engine.py            # Velocity details
 ```
 
 ## Layout
