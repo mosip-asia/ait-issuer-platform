@@ -125,7 +125,7 @@ A Background is the picture of an organisation's pre-printed paper. The platform
 
 Two things connect it:
 
-1. The file, at `<VDR>/templates/<credential configuration id>/background.png`. Locally: `deploy/ait/vdr/templates/ait-transcript/background.png` (make the folder). Use any PNG or JPEG of the paper, saved under that name. VC Lab's Background is a PNG or JPEG, and its download holds it as uploaded (`background/<file name>` in the zip), so it is ready to place under that name.
+1. The file, at `<VDR>/templates/<credential configuration id>/background.png`. Locally: `deploy/ait/vdr/templates/ait-transcript/background.png` (make the folder). Use any PNG or JPEG of the paper, saved under that name. VC Lab's Background is a PNG or JPEG, and its download holds it as uploaded (`background/<file name>` in the zip). Rename it to `background.png` when you place it, whatever its type: the printer reads the type from the bytes, not the name.
 2. The credential file's `display[0].background_image.uri`, set to `http://vdr.localhost/templates/ait-transcript/background.png`. Certify publishes it in its metadata, and Mimoto hands it to the template as `$backgroundImage`. The file git holds sets no address, so publish the credential file with one (next section).
 
 The template then draws it. See "Template conventions".
