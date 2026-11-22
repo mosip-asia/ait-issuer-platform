@@ -1003,8 +1003,8 @@ def test_preview_pdf_of_the_committed_transcript_template_leaves_a_missing_claim
     one before it. Made-up data: no country and no option, each printed straight after a claim with its own value."""
     if _no_renderer("test_preview_pdf_of_the_committed_transcript_template_leaves_a_missing_claim_empty"):
         return False
-    template = REPO_ROOT / "deploy/ait/vdr/templates/AITUniversity-ait-transcript-template.html"
-    credential = REPO_ROOT / "deploy/ait/certify/credentials/ait-transcript.json"
+    template = Path(os.environ.get("TEMPLATES_DIR") or REPO_ROOT / "deploy/ait/vdr/templates") / "AITUniversity-ait-transcript-template.html"
+    credential = Path(os.environ.get("CREDENTIALS_DIR") or REPO_ROOT / "deploy/ait/certify/credentials") / "ait-transcript.json"
     record = {"fullName": "Mina Example", "dateOfBirth": "1999-01-02", "registrationNo": "st000001",
               "dateAdmitted": "2020-03-04", "degreeAwarded": "Master of Examples", "academicProgram": "M.Ex Fixtures"}
     client.delete("/api/set")
