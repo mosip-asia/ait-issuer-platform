@@ -411,8 +411,10 @@ def test_preview_pdf_hands_every_claim_in_display_order() -> bool:
     _upload_print_set()
     text, _ = _printed()
     assert "Note: Printed from made-up data" in text, "a claim with no display entry still reaches the template"
-    assert "Order: thesisTitle holderName terms majors honours courseRows printNote" in text,         "display_order first, then the other claims; id is not a claim to print"
-    assert "Names: Thesis; Holder; Terms; Majors; Honours; Course Rows; Print Note;" in text,         "display names from the credential file, and a title-case fallback for a claim without one"
+    assert "Order: thesisTitle holderName terms majors honours courseRows printNote" in text, (
+        "display_order first, then the other claims; id is not a claim to print")
+    assert "Names: Thesis; Holder; Terms; Majors; Honours; Course Rows; Print Note;" in text, (
+        "display names from the credential file, and a title-case fallback for a claim without one")
     return True
 
 
