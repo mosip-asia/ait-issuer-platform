@@ -18,5 +18,5 @@ USER 1000
 EXPOSE 8080
 # -XX:-UsePerfData: the JVM writes nothing under /tmp, so the container can run with a read-only filesystem.
 # -XX:MaxRAMPercentage=75: the heap gets most of the container's memory limit (compose.yaml), not the default 25%;
-# at 25% of 768 MB, four previews at once with an 8 MB Background ran out of heap.
+# at 25% of the limit, four previews at once with an 8 MB Background ran out of heap.
 CMD ["java", "-XX:-UsePerfData", "-XX:MaxRAMPercentage=75", "-Djava.awt.headless=true", "-cp", "/app/renderer.jar:/app/lib/*", "asia.mosip.renderer.RendererServer"]
