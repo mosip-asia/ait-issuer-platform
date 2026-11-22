@@ -1,10 +1,12 @@
 """VC Lab's web API, driven the way the dashboard drives it, with a small made-up set.
 
-Run:
+Run, with the renderer beside VC Lab (the /preview.pdf tests need it):
+    docker compose build renderer vc-lab && docker compose run --rm vc-lab python src/vc-lab/test_main.py
+On a host, without Compose:
     python3 src/vc-lab/test_main.py
 
-The PDF tests need WeasyPrint's system libraries (Pango): they run in the ait-vc image and skip on a host
-without them.
+The /preview.pdf tests skip without RENDERER_URL, and the /export.pdf tests need WeasyPrint's system libraries
+(Pango): both run in the ait-vc image through Compose and skip on a host.
 """
 
 from __future__ import annotations
@@ -12,6 +14,7 @@ from __future__ import annotations
 import html
 import io
 import json
+import os
 import sys
 import tempfile
 import zipfile
@@ -96,6 +99,71 @@ SAMPLE = {"@context": ["https://www.w3.org/ns/credentials/v2"], "type": ["Verifi
           "issuer": "did:example:adapter", "credentialSubject": SUBJECT}
 
 
+# A set for the Wallet's print (/preview.pdf, through the renderer). The template reads claims only through
+# $rowProperties, as Mimoto hands them over.
+PRINT_TEMPLATE = """<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>$titleName</title>
+<style>@page { size: A4 portrait; margin: 20mm; } body { font-family: "Noto Sans", FreeSans, Arial, sans-serif; }</style>
+</head>
+<body>
+#macro(claimValue $claimName)#set($__claim = $rowProperties.get($claimName))#if($__claim)#foreach($__entry in $__claim.entrySet())$__entry.value#end#end#end
+<h1>$titleName</h1>
+<p>Holder: #claimValue("holderName")</p>
+<p>Thesis: #claimValue("thesisTitle")</p>
+<p>Records: [#claimValue("terms")]</p>
+<p>Majors: [#claimValue("majors")]</p>
+<p>Note: #claimValue("printNote")</p>
+<p>Order: #foreach($e in $rowProperties.entrySet())$e.key #end</p>
+<p>Names: #foreach($e in $rowProperties.entrySet())#foreach($n in $e.value.keySet())$n; #end#end</p>
+<p>Colours: $textColor on $backgroundColor, logo $logoUrl, validity $credentialValidity</p>
+#set($cr = "")
+#set($crMap = $rowProperties.get("courseRows"))
+#if($crMap)#foreach($e in $crMap.entrySet())#set($cr = $e.value)#end#end
+#foreach($row in $cr.split("\\n"))
+#set($f = $row.split("\\|", -1))
+<p>ROW $f.get(0) / $f.size() fields: $f.get(1) $f.get(2)</p>
+#end
+<img src="data:image/png;base64,$qrCodeImage" alt="QR" />
+</body></html>
+"""
+
+PRINT_CREDENTIAL = {
+    "credential_config_key_id": "example-record",
+    "display": [{"name": "Example Record", "locale": "en",
+                 "logo": {"url": "https://example.org/logo.png", "alt_text": "Example logo"},
+                 "background_color": "#ffffff", "text_color": "#123456"}],
+    "display_order": ["thesisTitle", "holderName"],
+    "credential_subject": {  # courseRows and printNote have no display entry
+        "holderName": {"display": [{"name": "Holder", "locale": "en"}]},
+        "thesisTitle": {"display": [{"name": "Thesis", "locale": "en"}]},
+        "terms": {"display": [{"name": "Terms", "locale": "en"}]},
+        "majors": {"display": [{"name": "Majors", "locale": "en"}]},
+    },
+    "vc_template": {
+        "@context": ["https://www.w3.org/ns/credentials/v2"],
+        "issuer": "${_issuer}",
+        "type": ["VerifiableCredential", "ExampleRecord"],
+        "credentialSubject": {
+            "id": "${_holderId}",
+            "holderName": "${name}",
+            "thesisTitle": "${thesis.title}",
+            "terms": "${records}",
+            "majors": "${majors}",
+            "courseRows": "${courseRows}",
+            "printNote": "${note}",
+        },
+    },
+}
+
+PRINT_SUBJECT = {
+    **SUBJECT,
+    "majors": ["Fixtures", "Seams"],
+    # One term heading, a graded course and an ungraded one (its last field is empty).
+    "courseRows": "T|Term One|6|3.50|3.50\nC|XY101|Fixture Design|0|45|3|A\nC|XY102|Seams|0|45|3|",
+    "note": "Printed from made-up data",
+}
+
+
 def _json(value: object) -> bytes:
     return json.dumps(value).encode("utf-8")
 
@@ -148,6 +216,34 @@ def _pages(path: str) -> list:
     return PdfReader(io.BytesIO(res.content)).pages
 
 
+def _no_renderer(test: str) -> bool:
+    """True, after printing SKIP, when no renderer is configured (a host run); Compose sets RENDERER_URL."""
+    if os.environ.get("RENDERER_URL"):
+        return False
+    print(f"SKIP {test} (no RENDERER_URL: run it through Compose, see README.md)")
+    return True
+
+
+def _upload_print_set(template: str = PRINT_TEMPLATE) -> None:
+    client.delete("/api/set")
+    res = _upload(template=("print.html", template.encode()), credential=("print.json", _json(PRINT_CREDENTIAL)),
+                  sample=("adapter-response.json", _json({"credentialSubject": PRINT_SUBJECT})))
+    assert res.status_code == 200, res.text
+
+
+def _printed() -> tuple[str, list]:
+    """The Wallet's print of the loaded set: its whitespace-normalised text and its pages."""
+    pages = _pages("/preview.pdf")
+    return " ".join(" ".join(p.extract_text() for p in pages).split()), pages
+
+
+def _images(page) -> list[tuple[int, int]]:
+    """(width, height) of each image the page draws."""
+    xobjects = page["/Resources"].get_object().get("/XObject", {})
+    return [(int(x["/Width"]), int(x["/Height"])) for x in (o.get_object() for o in xobjects.values())
+            if x.get("/Subtype") == "/Image"]
+
+
 # ---------------------------------------------------------------------------------------------------------------
 # Tests
 
@@ -156,6 +252,7 @@ def test_health_and_dashboard() -> None:
     assert client.get("/health").json() == {"status": "UP", "service": "vc-lab"}
     page = client.get("/")
     assert page.status_code == 200 and "VC Lab" in page.text
+    assert "/preview.pdf" in page.text, "the dashboard shows the Wallet's print"
 
 
 def test_starts_empty_and_asks_for_the_missing_files() -> None:
@@ -163,7 +260,7 @@ def test_starts_empty_and_asks_for_the_missing_files() -> None:
     status = client.get("/api/set").json()
     assert status["loaded"] == {"template": None, "credential": None, "sample": None, "background": None}
     _upload(template=("record.html", TEMPLATE.encode()))
-    for path in ("/preview", "/preview?view=wallet", "/export.pdf"):
+    for path in ("/preview", "/preview?view=wallet", "/export.pdf", "/preview.pdf"):
         res = client.get(path)
         assert res.status_code == 409, (path, res.status_code)
         assert "credential" in res.json()["detail"] and "sample" in res.json()["detail"]
@@ -279,6 +376,20 @@ def test_large_upload_stays_in_memory() -> None:
     assert "Ada Example" in client.get("/preview").text
 
 
+def test_preview_pdf_prints_mapped_values() -> bool:
+    if _no_renderer("test_preview_pdf_prints_mapped_values"):
+        return False
+    _upload_print_set()
+    text, pages = _printed()
+    assert "Holder: Ada Example" in text, "a mapped field"
+    assert "Thesis: On Small Fixtures" in text, "a nested field (${thesis.title})"
+    assert "Example Record" in text, "the title comes from the display entry"
+    assert "Colours: #123456 on #ffffff, logo https://example.org/logo.png, validity -1" in text
+    assert (400, 400) in _images(pages[0]), "a placeholder QR the size Mimoto draws it (mosip.inji.qr.code.width)"
+    assert "$rowProperties" not in text and "#claimValue" not in text
+    return True
+
+
 def test_export_pdf_lays_the_background_under_page_one() -> bool:
     try:
         import weasyprint  # noqa: F401
@@ -341,6 +452,7 @@ def main() -> None:
         test_download_and_upload_back,
         test_rejects_wrong_files,
         test_large_upload_stays_in_memory,
+        test_preview_pdf_prints_mapped_values,
         test_export_pdf_lays_the_background_under_page_one,
         test_background_with_its_own_rotation_comes_out_portrait,
     ]
