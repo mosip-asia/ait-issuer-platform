@@ -17,7 +17,7 @@ tags:
 This guide explains the developer and designer workflow for authoring, modeling, and deploying a new **Verifiable Credential (VC)** to the platform.
 
 The credential lifecycle is structured into two phases:
-1. **Phase 0: Credential Design & Modeling (Upstream Authoring)**: Define the claims dictionary, select the cryptographic format, craft the visual card and printable HTML template, and preview offline without running infrastructure.
+1. **Phase 0: Credential Design & Modeling (Upstream Authoring)**: Define the claims dictionary, select the cryptographic format, craft the visual card and printable HTML template, and preview the PDF the Wallet would print (VC Lab and its renderer run from Compose; no issuer stack is needed).
 2. **Phase 1: Deployment & Runtime Configuration (The 5 Core Components)**: Deploy schema, templates, and assets to VDR, configure signing engine in Certify, register in VCGA catalog, expose in Wallet, and enforce verification rules in Verify.
 
 ---
@@ -76,13 +76,13 @@ Credentials typically require two visual presentations:
    - Uses `#macro(claimValue $claimName)` and `#claimValue("fieldName")` to bind claims.
    - Embeds `$qrCodeImage` for instant scan-to-verify functionality.
 
-### 0.4 Visual Credential Studio & Offline Preview (VC Lab)
+### 0.4 Visual Credential Studio & Wallet Preview (VC Lab)
 
 Use **VC Lab Studio** (`src/vc-lab/`) to design, render, and inspect your credential before deployment:
 
 Open the live VC Lab studio:
 - **Dashboard URL:** [http://lab.localhost](http://lab.localhost)
-- Upload the template, the credential file and a sample Adapter response; VC Lab previews the rendered template (and the Wallet's version) and exports the hard copy as a PDF. It reads nothing from the repo; see [`src/vc-lab/README.md`](../../src/vc-lab/README.md).
+- Upload the template, the credential file and a sample Adapter response; VC Lab shows the PDF the Wallet would print, drawn by the renderer from the same template. It reads nothing from the repo; see [`src/vc-lab/README.md`](../../src/vc-lab/README.md).
 
 ---
 

@@ -333,7 +333,7 @@ def test_health_and_dashboard() -> None:
     for gone in ('name="view"', "Export PDF", "/export.pdf"):
         assert gone not in page.text, f"the dashboard has no {gone}"
     for kept in ('data-field="template"', 'data-field="credential"', 'data-field="sample"',
-                 'data-field="background"', 'data-field="bundle"', "Remove background", "Download", "Clear"):
+                 'data-field="background"', 'data-field="bundle"', 'id="download"', 'id="removeBackground"', 'id="clear"'):
         assert kept in page.text, f"the dashboard keeps {kept}"
 
 
@@ -373,6 +373,7 @@ def _renderer_stand_in():
     finally:
         vc_lab.RENDERER_URL = saved
         server.shutdown()
+        server.server_close()
 
 
 def test_the_renderer_is_sent_the_mapped_claims() -> None:
@@ -606,6 +607,7 @@ def test_the_renderer_is_sent_the_uploaded_background() -> None:
     finally:
         vc_lab.RENDERER_URL = saved
         server.shutdown()
+        server.server_close()
 
 
 def test_large_upload_stays_in_memory() -> None:
@@ -638,6 +640,20 @@ def test_preview_pdf_prints_mapped_values() -> bool:
     assert "Colours: #123456 on #ffffff, logo https://example.org/logo.png, validity -1" in text
     assert (400, 400) in _images(pages[0]), "a placeholder QR the size Mimoto draws it (mosip.inji.qr.code.width)"
     assert "$rowProperties" not in text and "#claimValue" not in text
+    return True
+
+
+def test_preview_pdf_prints_data_as_written() -> bool:
+    """A claim that looks like template code prints as text: the data is never read as Velocity."""
+    if _no_renderer("test_preview_pdf_prints_data_as_written"):
+        return False
+    note = "Costs in $titleName #if(1)x#end"
+    client.delete("/api/set")
+    res = _upload(template=("print.html", PRINT_TEMPLATE.encode()), credential=("print.json", _json(PRINT_CREDENTIAL)),
+                  sample=("adapter-response.json", _json({"credentialSubject": {**PRINT_SUBJECT, "note": note}})))
+    assert res.status_code == 200, res.text
+    text, _ = _printed()
+    assert f"Note: {note}" in text, "the claim, verbatim"
     return True
 
 
@@ -689,7 +705,7 @@ def test_preview_pdf_template_error_is_422_with_its_line() -> bool:
 
 
 def test_preview_pdf_takes_any_velocity_1_7_directive() -> bool:
-    """Velocity 1.7 has directives VC Lab's own engine never knew (#define, #{end}); a template using them uploads
+    """Velocity 1.7 has directives the old engine never knew (#define, #{end}); a template using them uploads
     and prints."""
     if _no_renderer("test_preview_pdf_takes_any_velocity_1_7_directive"):
         return False
@@ -755,6 +771,7 @@ def test_preview_pdf_reports_any_renderer_refusal() -> bool:
     finally:
         vc_lab.RENDERER_URL = saved
         server.shutdown()
+        server.server_close()
     return True
 
 
@@ -939,6 +956,7 @@ def test_no_background_uploaded_uses_the_credential_files_address() -> bool:
         assert _printed_images() == [(120, 160)], "an upload overrides display[0].background_image.uri"
     finally:
         server.shutdown()
+        server.server_close()
     return True
 
 
@@ -958,6 +976,7 @@ def test_remove_background_goes_back_to_the_files_address_or_none() -> bool:
         assert _printed_images() == [], "no address in the credential file: no Background"
     finally:
         server.shutdown()
+        server.server_close()
     return True
 
 
@@ -999,6 +1018,7 @@ def main() -> None:
         test_rejects_wrong_files,
         test_large_upload_stays_in_memory,
         test_preview_pdf_prints_mapped_values,
+        test_preview_pdf_prints_data_as_written,
         test_preview_pdf_flattens_claims_as_mimoto_does,
         test_preview_pdf_hands_every_claim_in_display_order,
         test_preview_pdf_template_error_is_422_with_its_line,
