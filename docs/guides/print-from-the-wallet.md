@@ -1,6 +1,6 @@
 ---
 title: "Print from the Wallet on the local stack"
-description: "Reproduce the Wallet's PDF from a clean clone: start the real Mimoto beside the local stack, run the print check, swap a template, place a Background, and see what asks T2-T4 ask of other teams."
+description: "Reproduce the Wallet's PDF from a clean clone: start the real Mimoto beside the local stack, run the print check, swap a template, place a Background, check that VC Lab shows what the Wallet prints, and see what asks T2-T4 ask of other teams."
 tags:
   - guide
   - wallet
@@ -150,6 +150,38 @@ The second argument is the issuer id (the Wallet's `issuer_id`, `AITUniversity` 
 The next Wallet print uses the set. Mimoto fetches Certify's metadata with a cache, which the local Mimoto sets to 0 so a published address shows at once; a Mimoto that was already running keeps its old setting until it is recreated (step 2).
 
 Run `./scripts/mimoto-up.sh` before publishing: it, like `deploy.sh`, runs `compose up -d`, which re-syncs the committed credential files and undoes the publish (the template and the Background stay). Then `./scripts/print-check.sh --published` prints once what is published, with no swap and nothing published by the check, and keeps the PDF as `published.pdf` in the folder it names. The plain `./scripts/print-check.sh` publishes its own test copy of the committed credential files and, when it ends, puts the committed files back into Certify (the template and the Background stay). To put the committed credential files back yourself: `COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=<.env's COMPOSE_FILE> docker compose up -d --force-recreate template-sync certify`. To put the committed template back: `git checkout -- deploy/ait/vdr/templates/AITUniversity-ait-transcript-template.html`.
+
+## 6. Check that VC Lab shows what the Wallet prints
+
+```bash
+./scripts/parity-check.sh
+```
+
+Run it after `./scripts/mimoto-up.sh`, with VC Lab up (`deploy.sh` starts it, with the renderer beside it, at `http://lab.localhost`). It takes about two minutes. It runs one made-up set both ways and compares the two PDFs:
+
+1. Puts a Thai font on the VDR for the set's template (`scripts/thai-font.sh`, the print check's font, in the git-ignored `deploy/ait/vdr/templates/parity-check/`).
+2. Uploads the set to VC Lab through its HTTP API, one file at a time, and keeps `/preview.pdf` and the zip `/download` gives. The set:
+   - the template is `tests/fixtures/parity-template.html`: every claim through `$rowProperties`, the `courseRows` grid, the Background, the logo, Thai typed and as an HTML entity, and the Thai font through `@font-face`;
+   - the credential file is the committed one (`ait-transcript`) with a made-up display name, `courseRows` mapped (a claim with no display entry), a made-up Thai `notes`, a `programCommittee` given as a list of text, and every claim named in `display_order` (below);
+   - the sample is the mock Adapter's record for `st120001`, the record Certify signs for the same student, so mapped values and `courses` (a list of objects) come from the same data both ways;
+   - the Background is the print check's made-up PNG.
+3. Publishes that zip with `./scripts/publish-set.sh` and prints it from the Wallet with `./scripts/print-check.sh --published`.
+4. Compares VC Lab's preview with the Wallet's print: the page text with whitespace collapsed, the pixel sizes of the images each page draws, and the font names.
+
+Each comparison prints `PASS` and the last line is `parity: PASS`. A difference prints `FAIL page text`, `FAIL image sizes` or `FAIL font names`, then each difference. For example, with VC Lab emptying a list of text the way its removed Wallet view did:
+
+```
+FAIL page text: 1 difference(s)
+  page 1, after 'Records thesisGrade [thesisGrade]: A programCommittee [programCommittee]:': VC Lab has '', the Wallet has 'Dr. Ada Example, Dr. Ben Example'
+parity: FAIL: VC Lab's preview and the Wallet's print differ (above)
+```
+
+and the exit status is 1. On exit the command puts back what publishing changed: the template and the Background the VDR held, and the committed credential files in Certify. The set and both PDFs (`preview.pdf` from VC Lab, `wallet.pdf` from Mimoto) are kept in the temporary folder named on the line `the set and both PDFs`.
+
+Two known differences the set avoids:
+
+- **The order of the claims `display_order` leaves out.** Mimoto hands `$rowProperties` in `display_order`, then the other claims in the order of the signed credential, and Certify signs them in a Java `HashMap`'s order, not the credential file's. VC Lab hands them in the credential file's order. So a template that loops over `$rowProperties` prints the same order in both only for the claims `display_order` names; the set names every claim.
+- **The QR.** The set's template uses no `$qrCodeImage`: VC Lab always draws a placeholder QR, and Mimoto draws none when the credential is too large for one (`src/renderer/README.md`).
 
 ## Template conventions
 
