@@ -457,6 +457,31 @@ def test_preview_pdf_takes_any_velocity_1_7_directive() -> bool:
     return True
 
 
+def test_preview_pdf_names_a_thai_file() -> bool:
+    if _no_renderer("test_preview_pdf_names_a_thai_file"):
+        return False
+    _upload_print_set()
+    assert _upload(template=("ใบ.html", PRINT_TEMPLATE.encode())).status_code == 200
+    res = client.get("/preview.pdf")
+    assert res.status_code == 200, res.text
+    assert "filename*=UTF-8''%E0%B9%83%E0%B8%9A.pdf" in res.headers["content-disposition"], res.headers
+    return True
+
+
+def test_preview_pdf_passes_on_what_the_renderer_refuses() -> bool:
+    """A credential file the renderer can't read as Certify's is the upload's fault: 400 with the renderer's
+    reason, not a 502."""
+    if _no_renderer("test_preview_pdf_passes_on_what_the_renderer_refuses"):
+        return False
+    _upload_print_set()
+    unreadable = {**PRINT_CREDENTIAL, "credential_subject": {"holderName": "Holder"}}  # an entry must be an object
+    assert _upload(credential=("print.json", _json(unreadable))).status_code == 200
+    res = client.get("/preview.pdf")
+    assert res.status_code == 400, (res.status_code, res.text)
+    assert "credentialFile" in res.json()["detail"] and "answered" not in res.json()["detail"], res.json()
+    return True
+
+
 def test_preview_pdf_takes_a_redefined_macro() -> bool:
     """Each preview is a first print: a macro that a replaced template redefines prints its new body, even one
     the earlier tests' template (PRINT_TEMPLATE) defined too."""
@@ -564,6 +589,8 @@ def main() -> None:
         test_preview_pdf_uses_only_the_standard_fonts,
         test_preview_pdf_takes_a_redefined_macro,
         test_preview_pdf_takes_any_velocity_1_7_directive,
+        test_preview_pdf_names_a_thai_file,
+        test_preview_pdf_passes_on_what_the_renderer_refuses,
         test_export_pdf_lays_the_background_under_page_one,
         test_background_with_its_own_rotation_comes_out_portrait,
     ]
