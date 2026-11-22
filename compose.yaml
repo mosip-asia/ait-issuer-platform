@@ -65,6 +65,7 @@ services:
     # Background at 300 dpi (src/renderer/README.md, "Limits").
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped  # back after a template calls Runtime.exit, or the memory limit kills it
     mem_limit: 1g
     pids_limit: 128
     extra_hosts:
