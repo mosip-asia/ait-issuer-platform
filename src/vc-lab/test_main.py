@@ -734,13 +734,14 @@ BACKGROUND_TEMPLATE = """<!DOCTYPE html>
   body { margin: 0; }
   .page { position: relative; width: 595.28pt; height: 841.89pt; }
   .background { position: absolute; left: 0; top: 0; width: 595.28pt; height: 841.89pt; }
+  .content { position: absolute; left: 30pt; top: 30pt; width: 535pt; }  /* a flowing <p> would push the box down */
 </style>
 #macro(claimValue $claimName)#set($__claim = $rowProperties.get($claimName))#if($__claim)#foreach($__entry in $__claim.entrySet())$__entry.value#end#end#end
 </head>
 <body>
 <div class="page">
 #if($backgroundImage && $backgroundImage != "")<img class="background" src="$backgroundImage"/>#end
-<p>Holder: #claimValue("holderName")</p>
+<div class="content"><p>Holder: #claimValue("holderName")</p></div>
 </div>
 </body></html>
 """
