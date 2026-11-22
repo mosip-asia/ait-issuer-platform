@@ -2,7 +2,8 @@
 
 VC Lab knows nothing about any organisation and reads nothing from the repo. The user uploads one set (the
 template, Certify's credential file, the Adapter's sample response and an optional background PDF); VC Lab
-holds it in memory only and forgets it on restart. See README.md.
+holds it in memory only and forgets it on restart. /preview.pdf is the PDF the Wallet prints from the set, drawn
+by the renderer (src/renderer), whose address comes from RENDERER_URL. See README.md.
 
 Usage:
     python3 src/vc-lab/main.py
@@ -15,6 +16,7 @@ import os
 from pathlib import Path
 from typing import Any, AsyncGenerator, Literal
 
+import httpx
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, Response
 from starlette.datastructures import UploadFile
@@ -31,6 +33,9 @@ app = FastAPI(title="VC Lab", description="Render a credential template from upl
 _lab = LabSet()
 
 View = Literal["lab", "wallet"]
+
+# The renderer: Mimoto 0.21's print path as a service (src/renderer). Compose sets it.
+RENDERER_URL = os.environ.get("RENDERER_URL", "").rstrip("/")
 
 
 class _InMemoryParser(MultiPartParser):
@@ -99,6 +104,30 @@ def export_pdf(view: View = Query("lab")) -> Response:
     return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{name}"'})
 
 
+@app.get("/preview.pdf")
+def preview_pdf() -> Response:
+    """The PDF the Wallet would print from the set, drawn by the renderer as Mimoto 0.21 draws it."""
+    lab = _lab  # one set for the whole request, even if an upload replaces it meanwhile
+    _require_complete(lab)
+    if not RENDERER_URL:
+        raise HTTPException(status_code=503, detail="VC Lab has no renderer: set RENDERER_URL (Compose sets it)")
+    request = {
+        "template": lab.template.value,
+        "credentialSubject": template_engine.credential_subject(lab.credential.value, lab.sample.value),
+        "credentialFile": lab.credential.value,
+        "backgroundImage": None,
+        "locale": "en",
+    }
+    try:
+        res = httpx.post(f"{RENDERER_URL}/render", json=request, timeout=120)
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"the renderer at {RENDERER_URL} can't be reached: {e}")
+    if res.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"the renderer answered {res.status_code}: {res.text}")
+    name = f"{Path(lab.template.filename).stem}.pdf"
+    return Response(res.content, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{name}"'})
+
+
 @app.get("/download")
 def download() -> Response:
     """The set as a zip (template/, credential/, sample/, background/), each file as uploaded."""
@@ -110,9 +139,13 @@ def _status() -> dict[str, Any]:
     return {"loaded": _lab.loaded(), "missing": _lab.missing()}
 
 
-def _render(lab: LabSet, view: View) -> str:
+def _require_complete(lab: LabSet) -> None:
     if missing := lab.missing():
         raise HTTPException(status_code=409, detail=f"upload these first: {', '.join(missing)}")
+
+
+def _render(lab: LabSet, view: View) -> str:
+    _require_complete(lab)
     return template_engine.render_credential(
         lab.template.value, lab.credential.value, lab.sample.value, wallet=view == "wallet"
     )
@@ -241,7 +274,7 @@ _DASHBOARD = """<!DOCTYPE html>
     </div>
     <div class="card">
       <div class="viewer-head">
-        <h2 style="margin:0">Preview</h2>
+        <h2 style="margin:0">Preview: the PDF the Wallet prints</h2>
         <div class="views">
           <label><input type="radio" name="view" value="lab" checked> Lab</label>
           <label><input type="radio" name="view" value="wallet"> Wallet (as Mimoto prints it)</label>
@@ -258,8 +291,8 @@ _DASHBOARD = """<!DOCTYPE html>
     const showError = (text) => { document.getElementById('error').textContent = text || ''; };
 
     const VIEW_HINTS = {
-      lab: 'Lab: lists are drawn.',
-      wallet: 'Wallet: as Mimoto prints it. Lists come through empty, so loops show their #else.',
+      lab: 'Lab and Wallet apply to Export PDF only (the old renderer). Lab: lists are drawn.',
+      wallet: 'Lab and Wallet apply to Export PDF only (the old renderer). Wallet: lists come through empty.',
     };
     const NAMES = {template: 'template', credential: 'credential file', sample: 'data'};
 
@@ -273,8 +306,8 @@ _DASHBOARD = """<!DOCTYPE html>
       const note = document.getElementById('backgroundNote');
       note.className = 'note' + (background ? ' strong' : '');
       note.textContent = background
-        ? 'Background loaded (' + background + '). It shows only in Export PDF, not here.'
-        : 'This preview never shows the background. Export PDF does.';
+        ? 'Background loaded (' + background + '). It shows only in Export PDF; the preview draws the credential file's background_image.'
+        : 'The preview draws the credential file's background_image, if it has one.';
       document.getElementById('viewHint').textContent = VIEW_HINTS[view()];
       const ready = status.missing.length === 0;
       document.getElementById('exportPdf').disabled = !ready;
@@ -282,7 +315,21 @@ _DASHBOARD = """<!DOCTYPE html>
       document.getElementById('empty').textContent = ready ? '' : 'Upload these to see the preview: ' + status.missing.map(s => NAMES[s]).join(', ') + '.';
       const frame = document.getElementById('preview');
       frame.hidden = !ready;
-      if (ready) frame.src = '/preview?view=' + view() + '&t=' + Date.now();
+      if (ready) await showPreview(frame);
+    }
+
+    // The Wallet's print: the renderer's PDF, or its error (a template error names its line) in red.
+    async function showPreview(frame) {
+      const res = await fetch('/preview.pdf');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        showError(typeof data.detail === 'string' ? data.detail : 'preview failed: HTTP ' + res.status);
+        frame.hidden = true;
+        return;
+      }
+      if (frame.dataset.url) URL.revokeObjectURL(frame.dataset.url);
+      frame.dataset.url = URL.createObjectURL(await res.blob());
+      frame.src = frame.dataset.url;
     }
 
     async function call(method, url, body) {

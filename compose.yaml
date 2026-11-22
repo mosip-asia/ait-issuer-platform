@@ -32,6 +32,7 @@ services:
     container_name: vc-lab
     environment:
       - INSTALLATION=${INSTALLATION}
+      - RENDERER_URL=http://renderer:8080
       - CREDENTIALS_DIR=/app/credentials
       - CONTEXTS_DIR=/app/vdr/contexts
       - ASSETS_DIR=/app/vdr/assets
@@ -47,3 +48,21 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.vclab.rule=${TRAEFIK_VCLAB_RULE}"
       - "traefik.http.services.vclab.loadbalancer.server.port=4200"
+    depends_on:
+      renderer:
+        condition: service_healthy
+
+  # VC Lab's preview, printed as Mimoto 0.21 prints it (src/renderer/README.md). Only VC Lab calls it. It fetches the
+  # images and fonts a template names, as Mimoto does, so it reaches the VDR by its public name.
+  renderer:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.renderer
+    image: ghcr.io/mosip-asia/ait-renderer:${IMAGE_TAG}
+    read_only: true  # it writes nothing: an organisation's Background never lands on disk
+    extra_hosts:
+      - "vdr.localhost:host-gateway"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 2s
+      retries: 30

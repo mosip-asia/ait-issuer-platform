@@ -27,12 +27,18 @@ from typing import Any
 
 def render_credential(template_text: str, credential: dict[str, Any], sample: dict[str, Any], wallet: bool) -> str:
     """The template rendered for one uploaded set. wallet=True renders what Mimoto would print."""
-    record = sample.get("credentialSubject")
-    claims = map_claims(credential["vc_template"]["credentialSubject"], record if isinstance(record, dict) else sample)
+    claims = credential_subject(credential, sample)
     if wallet:
         claims = {k: "" if isinstance(v, list) else v for k, v in claims.items()}
     display = (credential.get("display") or [{}])[0]  # its shape is checked at upload (labset)
     return render_velocity_template(template_text, template_context(claims, display, wallet), claims)
+
+
+def credential_subject(credential: dict[str, Any], sample: dict[str, Any]) -> dict[str, Any]:
+    """The claims Certify would sign for this sample: the credential file's mapping evaluated against the record,
+    which is the sample's credentialSubject, or the whole sample when it has none."""
+    record = sample.get("credentialSubject")
+    return map_claims(credential["vc_template"]["credentialSubject"], record if isinstance(record, dict) else sample)
 
 
 # ${name}, ${a.b} or $name, $a.b: a reference to a value in the record.
