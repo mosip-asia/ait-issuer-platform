@@ -1,7 +1,7 @@
 """VC Lab: render a credential template from uploaded files, and export its hard copy as a PDF.
 
 VC Lab knows nothing about any organisation and reads nothing from the repo. The user uploads one set (the
-template, Certify's credential file, the Adapter's sample response and an optional background PDF); VC Lab
+template, Certify's credential file, the Adapter's sample response and an optional background image, PNG or JPEG); VC Lab
 holds it in memory only and forgets it on restart. /preview.pdf is the PDF the Wallet prints from the set, drawn
 by the renderer (src/renderer), whose address comes from RENDERER_URL. See README.md.
 
@@ -97,10 +97,16 @@ def preview(view: View = Query("lab")) -> HTMLResponse:
 
 @app.get("/export.pdf")
 def export_pdf(view: View = Query("lab")) -> Response:
-    """The rendered template as a PDF, with the background under page 1 when one is loaded."""
+    """The rendered template as a PDF. The old renderer can't draw an image under it: it refuses one (the Wallet's
+    print, /preview.pdf, is where the Background shows)."""
     lab = _lab  # one set for the whole request, even if an upload replaces it meanwhile
     html = _render(lab, view)
-    pdf = hardcopy.render_pdf(html, lab.background.value if lab.background else None)
+    if lab.background:
+        raise HTTPException(
+            status_code=422,
+            detail="Export PDF can't draw the Background image: see /preview.pdf, or remove the Background first",
+        )
+    pdf = hardcopy.render_pdf(html)
     return _inline_pdf(pdf, f"{Path(lab.template.filename).stem}-{view}.pdf")
 
 
@@ -115,7 +121,8 @@ def preview_pdf() -> Response:
         "template": lab.template.value,
         "credentialSubject": template_engine.credential_subject(lab.credential.value, lab.sample.value),
         "credentialFile": lab.credential.value,
-        "backgroundImage": None,
+        # The upload overrides display[0].background_image.uri; with none, the renderer uses the credential file's.
+        "backgroundImage": lab.background.value if lab.background else None,
         "locale": "en",
     }
     try:
@@ -271,10 +278,10 @@ _DASHBOARD = """<!DOCTYPE html>
             <span class="file" data-slot="sample"></span></div>
         </div>
         <div class="slot">
-          <b>Background</b> <span class="ext">.pdf (A4)</span>
-          <div class="hint">The pre-printed paper (watermark, seal, signature, image); page 1 is used. It shows only in
-            Export PDF.</div>
-          <div class="pick"><label>Choose file<input type="file" hidden data-field="background" accept=".pdf,application/pdf"></label>
+          <b>Background</b> <span class="ext">.png or .jpg</span>
+          <div class="hint">The organisation's paper (watermark, seal, signature). The template draws it as
+            $backgroundImage. Without one, the preview uses the credential file's background_image address.</div>
+          <div class="pick"><label>Choose file<input type="file" hidden data-field="background" accept=".png,.jpg,.jpeg,image/png,image/jpeg"></label>
             <span class="file" data-slot="background"></span></div>
         </div>
         <div class="warn">A background may be confidential. VC Lab has no login: upload one only on your own machine.
@@ -329,7 +336,7 @@ _DASHBOARD = """<!DOCTYPE html>
       const note = document.getElementById('backgroundNote');
       note.className = 'note' + (background ? ' strong' : '');
       note.textContent = background
-        ? 'Background loaded (' + background + '). It shows only in Export PDF; the preview draws background_image from the credential file.'
+        ? 'Background loaded (' + background + '). The preview draws it as $backgroundImage. Export PDF cannot draw it.'
         : 'The preview draws background_image from the credential file, if it has one.';
       document.getElementById('viewHint').textContent = VIEW_HINTS[view()];
       const ready = status.missing.length === 0;

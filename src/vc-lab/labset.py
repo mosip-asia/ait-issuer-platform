@@ -1,4 +1,4 @@
-"""The uploaded set VC Lab works on: a template, a credential file, a sample and an optional background.
+"""The uploaded set VC Lab works on: a template, a credential file, a sample and an optional background image.
 
 Part of the vc-lab module. A set is immutable; uploading builds a new one. Every file is parsed here, at the
 upload boundary: a wrong file is a ValueError with a plain reason. The template is only checked to be UTF-8
@@ -7,6 +7,7 @@ text; Velocity judges the rest when it renders, so the renderer's 422 names the 
 
 from __future__ import annotations
 
+import base64
 import dataclasses
 import io
 import json
@@ -14,8 +15,6 @@ import re
 import zipfile
 from dataclasses import dataclass
 from typing import Any, Callable, Generic, TypeVar
-
-import hardcopy
 
 MAX_UPLOAD = 8 * 1024 * 1024  # bytes: one request, and the files unpacked from one zip
 REQUIRED = ("template", "credential", "sample")
@@ -35,7 +34,7 @@ class LabSet:
     template: Loaded[str] | None = None  # the Velocity HTML
     credential: Loaded[dict[str, Any]] | None = None  # Certify's credential file, with a vc_template object
     sample: Loaded[dict[str, Any]] | None = None  # the Adapter's response, a JSON object
-    background: Loaded[bytes] | None = None  # the upload's page 1 fitted on portrait A4 (hardcopy.make_background)
+    background: Loaded[str] | None = None  # a PNG or JPEG, as the data: URI the renderer takes for $backgroundImage
 
     def loaded(self) -> dict[str, str | None]:
         """Each slot's file name, None when empty."""
@@ -69,6 +68,17 @@ def _template(name: str, data: bytes) -> str:
     return source  # Velocity checks the rest when it renders: /preview.pdf answers 422 with the line
 
 
+_IMAGE_SIGNATURES = ((b"\x89PNG\r\n\x1a\n", "image/png"), (b"\xff\xd8\xff", "image/jpeg"))
+
+
+def _background(name: str, data: bytes) -> str:
+    """The image as a data: URI. Its kind is read from its first bytes, never from its file name."""
+    for signature, media_type in _IMAGE_SIGNATURES:
+        if data.startswith(signature):
+            return f"data:{media_type};base64,{base64.b64encode(data).decode('ascii')}"
+    raise ValueError(f"background {name!r} is not a PNG or JPEG image; upload the organisation's paper as PNG or JPEG")
+
+
 def _json_object(slot: str, name: str, data: bytes) -> dict[str, Any]:
     try:
         value = json.loads(data.decode("utf-8-sig"))
@@ -98,7 +108,7 @@ _PARSERS: dict[str, Callable[[str, bytes], Any]] = {
     "template": _template,
     "credential": _credential,
     "sample": lambda name, data: _json_object("sample", name, data),
-    "background": hardcopy.make_background,
+    "background": _background,
 }
 assert set(_PARSERS) == set(SLOTS), "every slot of LabSet needs a parser"
 
