@@ -16,10 +16,7 @@ def credential_subject(credential: dict[str, Any], sample: dict[str, Any]) -> di
     """The claims Certify would sign for this sample: the credential file's mapping evaluated against the record,
     which is the sample's credentialSubject, or the whole sample when it has none."""
     record = sample.get("credentialSubject")
-    claims = map_claims(credential["vc_template"]["credentialSubject"], record if isinstance(record, dict) else sample)
-    # DELIBERATE DIFFERENCE for the parity check's red run (ticket 10), removed by the next commit: every list claim
-    # blanked, the way the removed Wallet view did, so a list of text no longer prints as Mimoto joins it.
-    return {k: "" if isinstance(v, list) else v for k, v in claims.items()}
+    return map_claims(credential["vc_template"]["credentialSubject"], record if isinstance(record, dict) else sample)
 
 
 # ${name}, ${a.b} or $name, $a.b: a reference to a value in the record.
