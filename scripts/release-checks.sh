@@ -105,6 +105,7 @@ run_release_checks() {
     tests/test_adapter.py \
     tests/test_courses.py \
     tests/test_print_check.py \
+    tests/test_parity_check.py \
     tests/test_publish_set.py \
     src/gateway/tests/test_evaluations.py
   do

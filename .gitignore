@@ -31,6 +31,8 @@ deploy/*/vdr/templates/**/*.[wW][oO][fF][fF]
 deploy/*/vdr/templates/**/*.[wW][oO][fF][fF]2
 # The print check's font, taken from Debian for the run (scripts/print-check.sh).
 deploy/*/vdr/templates/print-check/
+# The parity check's font, the same way (scripts/parity-check.sh).
+deploy/*/vdr/templates/parity-check/
 *.p12
 portal/*.db
 src/portal/*.db

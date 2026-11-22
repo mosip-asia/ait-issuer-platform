@@ -33,10 +33,9 @@ INST=deploy/$INSTALLATION
 OUT=$(mktemp -d)
 CERTIFY=http://issuer.localhost
 IMAGE=ghcr.io/mosip-asia/ait-vc:${IMAGE_TAG:-latest}
-# The Thai font the test template loads through @font-face. It is TLWG's Loma, freely licensed (GPL-2+ with a font
-# exception; the package's copyright file is kept next to the font for the run), taken from Debian's
-# fonts-tlwg-loma-ttf at run time, so no font is committed. It lives in a git-ignored folder of the VDR's templates
-# and is removed afterwards. src/tools/print_check.py's FONT_NAME and the test template name this font.
+# The Thai font the test template loads through @font-face (scripts/thai-font.sh). It lives in a
+# git-ignored folder of the VDR's templates and is removed afterwards. src/tools/print_check.py's FONT_NAME and the
+# test template name this font.
 FONT_DIR=$INST/vdr/templates/print-check
 PUBLISHED=0
 # A made-up Thai text for the transcript's notes claim. It goes into the published copy of the credential file only
@@ -141,15 +140,7 @@ set_thai_note
 publish_test_credentials
 echo "published a test copy of $CREDENTIAL that maps courseRows, with a Thai notes claim (restored afterwards)"
 
-# The font, from the Debian package inside the ait-vc image's own base.
-mkdir -p "$FONT_DIR"
-docker run --rm --user root -v "$PWD/$FONT_DIR:/font" -e "OWNER=$(id -u):$(id -g)" "$IMAGE" sh -c '
-  apt-get update -qq >/dev/null && apt-get install -y -qq --no-install-recommends fonts-tlwg-loma-ttf >/dev/null &&
-  cp /usr/share/fonts/truetype/tlwg/Loma.ttf /font/thai-font.ttf &&
-  cp /usr/share/doc/fonts-tlwg-loma-ttf/copyright /font/thai-font.copyright &&
-  chown -R "$OWNER" /font' >/dev/null \
-  || { echo "FAIL setup: couldn't take the Thai font from Debian's fonts-tlwg-loma-ttf (is the network up?)" >&2; exit 1; }
-echo "Thai font: $(wc -c < "$FONT_DIR/thai-font.ttf") bytes from Debian's fonts-tlwg-loma-ttf"
+bash scripts/thai-font.sh "$FONT_DIR" "$IMAGE"
 fi
 
 docker run --rm --user "$(id -u):$(id -g)" \

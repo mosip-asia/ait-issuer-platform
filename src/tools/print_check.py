@@ -318,11 +318,11 @@ def _then(m: list[float], n: list[float]) -> list[float]:
             m[2] * n[1] + m[3] * n[3], m[4] * n[0] + m[5] * n[2] + n[4], m[4] * n[1] + m[5] * n[3] + n[5]]
 
 
-def drawn_images(reader: PdfReader) -> list[dict]:
-    """Every image the first page draws: its pixel size and the rectangle it covers on the page, in points."""
+def drawn_images(reader: PdfReader, page_index: int = 0) -> list[dict]:
+    """Every image a page (the first by default) draws: its pixel size and the rectangle it covers, in points."""
     from pypdf.generic import ContentStream
 
-    page = reader.pages[0]
+    page = reader.pages[page_index]
     found: list[dict] = []
 
     def walk(content, resources, base: list[float]) -> None:

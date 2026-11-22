@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"/>
+<title>Parity check</title>
+<style>
+  /* The made-up set's template (scripts/parity-check.sh): a font loaded from the VDR by absolute address (the parity
+     check puts it there for the run), a page without margins so the Background reaches the paper's edge, and the
+     Background as an image under the layout. */
+  @font-face { font-family: "ParityThai"; src: url("http://vdr.localhost/templates/parity-check/thai-font.ttf"); }
+  @page { size: A4; margin: 0; }
+  body { margin: 0; font-family: ParityThai, Helvetica, sans-serif; font-size: 8pt; color: $textColor; }
+  .page { position: relative; width: 595.28pt; height: 841.89pt; background-color: $backgroundColor; }
+  .background { position: absolute; left: 0; top: 0; width: 595.28pt; height: 841.89pt; }
+  .logo { width: 40pt; height: 40pt; }
+  .qr { width: 100pt; height: 100pt; }
+  .content { position: absolute; left: 30pt; top: 30pt; width: 535pt; }
+  td { padding: 0 4pt; }
+</style>
+</head>
+<body>
+<!-- Every claim Mimoto hands a template ($rowProperties: claim -> {display name: text}), so a value printed differently
+     shows in the page text. The logo is the same address in the credential file and the issuers list, so both print
+     the same one. Claims: mapped values, the list of objects (courses, as ""), the list of text
+     (programCommittee, joined), the claim with no display entry (courseRows) and the Thai claim value (notes). -->
+<div class="page">
+#if($backgroundImage && $backgroundImage != "")<img class="background" src="$backgroundImage"/>#end
+<div class="content">
+#if($logoUrl && $logoUrl != "")<img class="logo" src="$logoUrl"/>#end
+<!-- The QR: VC Lab always draws a 400 x 400 placeholder; Mimoto draws the credential's, or none above 4096 bytes of
+     pixelpass data, which then shows as NO-QR and a missing image. -->
+#if($qrCodeImage && $qrCodeImage != "")<img class="qr" src="data:image/png;base64,$qrCodeImage"/>#else<p>NO-QR</p>#end
+<p>PARITY-SET $titleName / $textColor on $backgroundColor / validity $credentialValidity</p>
+<p>THAI-TYPED: ภาษาไทย / THAI-ENTITY: &#x0E20;&#x0E32;&#x0E29;&#x0E32;&#x0E44;&#x0E17;&#x0E22;</p>
+#foreach($claim in $rowProperties.entrySet())
+#foreach($shown in $claim.value.entrySet())
+<p>$claim.key [$shown.key]: $shown.value</p>
+#end
+#end
+<!-- The course grid from courseRows (ask T4): "\n" between rows, "|" between fields, split with -1 to keep an empty
+     last field. -->
+#set($cr = "")
+#set($crMap = $rowProperties.get("courseRows"))
+#if($crMap)#foreach($e in $crMap.entrySet())#set($cr = $e.value)#end#end
+<table>
+#foreach($row in $cr.split("\n"))
+#set($f = $row.split("\|", -1))
+#if($f.size() > 1)
+<tr>#if($f.get(0) == "T")<td>TERM</td>#{else}<td>COURSE</td>#end#foreach($x in $f)#if($velocityCount > 1)<td>$x</td>#end#end</tr>
+#end
+#end
+</table>
+</div>
+</div>
+</body>
+</html>

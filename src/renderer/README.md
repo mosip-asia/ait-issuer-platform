@@ -39,7 +39,8 @@ The copied code is in `src/main/java/asia/mosip/renderer/mimoto/`. Each file nam
 
 Where it differs from Mimoto, because VC Lab has no signed credential and no issuers list:
 
-- `qrCodeImage` is a placeholder QR code holding a fixed text, 400 × 400 like Mimoto's (`mosip.inji.qr.code.width` in `deploy/base/mimoto-default.properties`).
+- `qrCodeImage` is a placeholder QR code holding a fixed text, 400 × 400 like Mimoto's (`mosip.inji.qr.code.width` in `deploy/base/mimoto-default.properties`). The Wallet prints none when the credential's QR data is over 4096 bytes (`mosip.inji.qr.data.size.limit`); the preview still draws the placeholder.
+- The order of the claims `display_order` leaves out. Both hand `rowProperties` in `display_order`, then the other claims in the order they get them: the Wallet in the signed credential's order, which Certify makes a Java `HashMap`'s; the preview in the credential file's. So a template that loops over `rowProperties` must name every claim it loops over in `display_order` to print the same order in both.
 - `logoUrl` comes from the credential file's `display[0].logo.url`. Mimoto takes it from the issuers list.
 - `credentialValidity` is `-1`, what Mimoto uses when the Wallet sends no limit.
 - Each print gets a new Velocity engine. Mimoto renders with the Velocity singleton, where the first definition of a macro name stays until Mimoto restarts. So the preview always shows a template's own macro body, while the Wallet may print an older body, if a template defining the same macro name printed earlier since Mimoto's restart.
