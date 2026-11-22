@@ -205,7 +205,7 @@ VC Lab's Download gives a zip of the four files. To print with it from the real 
 ./scripts/publish-set.sh ~/Downloads/set.zip AITUniversity
 ```
 
-The second argument is the issuer id, the Wallet's `issuer_id` (`AITUniversity` is the AIT example). The command puts the template and the Background on the local VDR and loads the credential file into Certify, and the next Wallet print uses them. Run `./scripts/print-check.sh --published` to print once and keep the PDF. It works only on the local stack, and git tracks the template file it replaces, so a published set is a test, not a release. On a deployment, placing the files is infra's step (T3). What each step does, and how to put the committed files back: [Publish a set](./print-from-the-wallet.md#publish-a-set).
+The second argument is the issuer id, the Wallet's `issuer_id` (`AITUniversity` is the AIT example). The command puts the template and the Background on the local VDR and loads the credential file into Certify, and the next Wallet print uses them. Run `./scripts/print-check.sh --published` to print once and keep the PDF. It works only on the local stack, and git tracks the template file it replaces, so a published set is a test, not a release. On a deployment, placing the files is infra's step (T3). What each step does, and how to put the committed files back: [Publish a set](./print-from-the-wallet.md#publish-a-set). To check that VC Lab's preview and the real Wallet print the same page for a set, run `./scripts/parity-check.sh`: see [section 6](./print-from-the-wallet.md#6-check-that-vc-lab-shows-what-the-wallet-prints).
 
 ## Known limits
 
