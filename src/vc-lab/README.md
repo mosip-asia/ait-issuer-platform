@@ -13,7 +13,7 @@ What each file is, and how a value travels from SIS to the page, is in [the temp
 | `sample` | the Adapter's response, exactly as the Adapter sends it | its `credentialSubject`, or the whole file when it has none |
 | `background` (optional) | a PDF page, such as the organisation's pre-printed paper | page 1 |
 
-Uploading a file replaces that slot only; uploading a zip from Download replaces the whole set. Each file is checked when it is uploaded: the background must be a PDF, the credential file JSON with a `vc_template` object (holding a `credentialSubject` object), the sample a JSON object, and the template's `#if`/`#foreach`/`#macro` must each have their `#end`. One request may carry at most 8 MB.
+Uploading a file replaces that slot only; uploading a zip from Download replaces the whole set. Each file is checked when it is uploaded: the background must be a PDF, the credential file JSON with a `vc_template` object (holding a `credentialSubject` object), the sample a JSON object, and the template UTF-8 text. Velocity itself checks the template when it renders: `/preview.pdf` answers a template error with 422 and its line. One request may carry at most 8 MB.
 
 ## From sample to page
 

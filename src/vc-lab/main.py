@@ -148,6 +148,10 @@ def _require_complete(lab: LabSet) -> None:
 
 def _render(lab: LabSet, view: View) -> str:
     _require_complete(lab)
+    try:  # the old Velocity subset needs balanced blocks; uploads no longer check them
+        template_engine.check_template(lab.template.value)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     return template_engine.render_credential(
         lab.template.value, lab.credential.value, lab.sample.value, wallet=view == "wallet"
     )

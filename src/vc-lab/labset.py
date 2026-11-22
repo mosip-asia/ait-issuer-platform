@@ -1,8 +1,8 @@
 """The uploaded set VC Lab works on: a template, a credential file, a sample and an optional background.
 
 Part of the vc-lab module. A set is immutable; uploading builds a new one. Every file is parsed here, at the
-upload boundary, so a LabSet only ever holds files that render: a wrong file is a ValueError with a plain
-reason, and nothing past this module checks a file again. Nothing here touches the disk.
+upload boundary: a wrong file is a ValueError with a plain reason. The template is only checked to be UTF-8
+text; Velocity judges the rest when it renders, so the renderer's 422 names the line. Nothing here touches the disk.
 """
 
 from __future__ import annotations
@@ -16,7 +16,6 @@ from dataclasses import dataclass
 from typing import Any, Callable, Generic, TypeVar
 
 import hardcopy
-import template_engine
 
 MAX_UPLOAD = 8 * 1024 * 1024  # bytes: one request, and the files unpacked from one zip
 REQUIRED = ("template", "credential", "sample")
@@ -67,8 +66,7 @@ def _template(name: str, data: bytes) -> str:
         source = data.decode("utf-8")
     except UnicodeDecodeError:
         raise ValueError(f"template {name!r} is not UTF-8 text") from None
-    template_engine.check_template(source)
-    return source
+    return source  # Velocity checks the rest when it renders: /preview.pdf answers 422 with the line
 
 
 def _json_object(slot: str, name: str, data: bytes) -> dict[str, Any]:
