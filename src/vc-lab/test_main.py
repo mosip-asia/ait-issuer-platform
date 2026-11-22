@@ -997,6 +997,27 @@ def test_background_survives_download_and_upload_back() -> bool:
     return True
 
 
+def test_preview_pdf_of_the_committed_transcript_template_leaves_a_missing_claim_empty() -> bool:
+    """The committed AIT template's claimValue macro must print nothing for a claim the credential lacks. Velocity 1.7
+    keeps a variable's old value when #set is given null, so without a reset in the macro, a missing claim printed the
+    one before it. Made-up data: no country and no option, each printed straight after a claim with its own value."""
+    if _no_renderer("test_preview_pdf_of_the_committed_transcript_template_leaves_a_missing_claim_empty"):
+        return False
+    template = REPO_ROOT / "deploy/ait/vdr/templates/AITUniversity-ait-transcript-template.html"
+    credential = REPO_ROOT / "deploy/ait/certify/credentials/ait-transcript.json"
+    record = {"fullName": "Mina Example", "dateOfBirth": "1999-01-02", "registrationNo": "st000001",
+              "dateAdmitted": "2020-03-04", "degreeAwarded": "Master of Examples", "academicProgram": "M.Ex Fixtures"}
+    client.delete("/api/set")
+    res = _upload(template=(template.name, template.read_bytes()), credential=(credential.name, credential.read_bytes()),
+                  sample=("record.json", _json(record)))
+    assert res.status_code == 200, res.text
+    text, _ = _printed()
+    assert "Mina Example" in text and "1999-01-02" in text and "2020-03-04" in text, "the claims it has print"
+    assert text.count("1999-01-02") == 1, "the date of birth printed once: country has no value"
+    assert text.count("2020-03-04") == 1, "the date admitted printed once: option has no value"
+    return True
+
+
 def _snapshot() -> dict[str, tuple[int, int]]:
     roots = [REPO_ROOT / "deploy", VC_LAB_DIR]
     return {
@@ -1023,6 +1044,7 @@ def main() -> None:
         test_preview_pdf_hands_every_claim_in_display_order,
         test_preview_pdf_template_error_is_422_with_its_line,
         test_preview_pdf_splits_course_rows,
+        test_preview_pdf_of_the_committed_transcript_template_leaves_a_missing_claim_empty,
         test_preview_pdf_uses_only_the_standard_fonts,
         test_preview_pdf_takes_a_redefined_macro,
         test_preview_pdf_takes_any_velocity_1_7_directive,
