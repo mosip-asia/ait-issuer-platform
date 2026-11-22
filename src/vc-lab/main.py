@@ -2,8 +2,9 @@
 
 VC Lab knows nothing about any organisation and reads nothing from the repo. The user uploads one set (the
 template, Certify's credential file, the Adapter's sample response and an optional background image, PNG or JPEG); VC Lab
-holds it in memory only and forgets it on restart. /preview.pdf is the PDF the Wallet prints from the set, drawn
-by the renderer (src/renderer), whose address comes from RENDERER_URL. See README.md.
+holds it in memory only and forgets it on restart. /preview.pdf is the PDF the Wallet prints from the set: the
+renderer (src/renderer), whose address comes from RENDERER_URL, maps the data to claims as Certify does and prints them
+as Mimoto does. See README.md.
 
 Usage:
     python3 src/vc-lab/main.py
@@ -11,6 +12,7 @@ Usage:
 
 from __future__ import annotations
 
+import base64
 import dataclasses
 import os
 from pathlib import Path
@@ -24,7 +26,7 @@ from starlette.datastructures import UploadFile
 from starlette.formparsers import MultiPartException, MultiPartParser
 
 import labset
-import template_engine
+from certify_template_sync.sync import build_vc_template_base64
 from labset import MAX_UPLOAD, LabSet
 
 app = FastAPI(title="VC Lab", description="Render a credential template from uploaded files", version="0.2.0")
@@ -88,14 +90,19 @@ def remove_background() -> dict[str, Any]:
 
 @app.get("/preview.pdf")
 def preview_pdf() -> Response:
-    """The PDF the Wallet would print from the set, drawn by the renderer as Mimoto 0.21 draws it."""
+    """The PDF the Wallet would print from the set: the claims Certify 0.14 would sign for the data, drawn as Mimoto
+    0.21 draws them. Both happen in the renderer."""
     lab = _lab  # one set for the whole request, even if an upload replaces it meanwhile
     _require_complete(lab)
     if not RENDERER_URL:
         raise HTTPException(status_code=503, detail="VC Lab has no renderer: set RENDERER_URL (Compose sets it)")
+    sample = lab.sample.value
     request = {
         "template": lab.template.value,
-        "credentialSubject": template_engine.credential_subject(lab.credential.value, lab.sample.value),
+        # The Adapter's record: the sample's credentialSubject, or the whole sample when it has none.
+        "record": sample["credentialSubject"] if isinstance(sample.get("credentialSubject"), dict) else sample,
+        # The vc_template as template-sync stores it for Certify, the text Certify's Velocity evaluates.
+        "vcTemplate": base64.b64decode(build_vc_template_base64(lab.credential.value["vc_template"])).decode("utf-8"),
         "credentialFile": lab.credential.value,
         # The upload overrides display[0].background_image.uri; with none, the renderer uses the credential file's.
         "backgroundImage": lab.background.value if lab.background else None,
@@ -105,8 +112,8 @@ def preview_pdf() -> Response:
         res = httpx.post(f"{RENDERER_URL}/render", json=request, timeout=120)
     except httpx.HTTPError as e:
         raise HTTPException(status_code=502, detail=f"the renderer at {RENDERER_URL} can't be reached: {e}")
-    # 400: the request or the credential file is wrong. 422: the set doesn't print, a template error with its line,
-    # or a credential file fault with none. 503: the renderer is out of memory. Each reason reaches the designer.
+    # 400: the request or the credential file is wrong. 422: the set doesn't print: Certify would refuse the data or
+    # the vc_template, the template has an error (with its line), or the credential file has a fault. 503: the renderer is out of memory. Each reason reaches the designer.
     if res.status_code in (400, 422, 503):
         raise HTTPException(status_code=res.status_code, detail=_renderer_reason(res))
     if res.status_code != 200:

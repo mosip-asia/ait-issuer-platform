@@ -22,8 +22,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 
 /**
- * The renderer: one call, POST /render, that prints a credential the way Mimoto 0.21's HTML path does (README.md).
- * JSON in, PDF out. Nothing is written to disk. Nothing is kept between calls, unless a template uses reflection to
+ * The renderer: one call, POST /render, that maps a record to claims the way Certify 0.14 does and prints them the
+ * way Mimoto 0.21's HTML path does (README.md). JSON in, PDF out. Nothing is written to disk. Nothing is kept between calls, unless a template uses reflection to
  * reach past Velocity (README.md, "Limits").
  */
 public final class RendererServer {
@@ -43,8 +43,11 @@ public final class RendererServer {
 
     static final int CHUNK = 64 * 1024;  // bytes per write: see send()
 
-    /** POST /render's body. credentialFile is Certify's credential file, as VC Lab holds it. */
-    record RenderRequest(String template, Map<String, Object> credentialSubject, JsonNode credentialFile,
+    /**
+     * POST /render's body. record is the Adapter's record; vcTemplate is the credential file's vc_template as the
+     * text template-sync stores for Certify; credentialFile is Certify's credential file, as VC Lab holds it.
+     */
+    record RenderRequest(String template, JsonNode record, String vcTemplate, JsonNode credentialFile,
                          String backgroundImage, String locale) {}
 
     public static void main(String[] args) throws IOException {
@@ -90,8 +93,9 @@ public final class RendererServer {
             error(exchange, 400, "expected the JSON render request: " + e.getMessage());
             return;
         }
-        if (request.template() == null || request.credentialSubject() == null || request.credentialFile() == null) {
-            error(exchange, 400, "template, credentialSubject and credentialFile are required");
+        if (request.template() == null || request.record() == null || !request.record().isObject()
+                || request.vcTemplate() == null || request.credentialFile() == null) {
+            error(exchange, 400, "template, record (an object), vcTemplate and credentialFile are required");
             return;
         }
         CredentialsSupportedResponse metadata;
@@ -101,9 +105,18 @@ public final class RendererServer {
             error(exchange, 400, "credentialFile isn't shaped as Certify's credential file: " + e.getMessage());
             return;
         }
+        Map<String, Object> credentialSubject;
+        try {
+            // As the Wallet gets it: the signed credential's JSON text, read by Jackson.
+            credentialSubject = JSON.readValue(CertifyMapping.credentialSubject(request.record().toString(),
+                    request.vcTemplate(), request.credentialFile()).toString(), new TypeReference<>() {});
+        } catch (CertifyMapping.Refused e) {
+            error(exchange, 422, e.getMessage());
+            return;
+        }
         byte[] pdf;
         try {
-            pdf = PRINTER.generatePdf(request.template(), request.credentialSubject(), metadata,
+            pdf = PRINTER.generatePdf(request.template(), credentialSubject, metadata,
                     request.backgroundImage(), request.locale() != null ? request.locale() : "en");
         } catch (Exception e) {
             // The input parsed, so what failed is printing it, as Mimoto would fail: the message is the answer.

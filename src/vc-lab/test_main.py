@@ -30,8 +30,10 @@ from typing import Callable
 VC_LAB_DIR = Path(__file__).resolve().parent
 REPO_ROOT = VC_LAB_DIR.parent.parent
 sys.path.insert(0, str(VC_LAB_DIR))
+sys.path.insert(0, str(REPO_ROOT / "src"))  # certify_template_sync, as the image's PYTHONPATH has it
 
 import main as vc_lab  # noqa: E402
+from certify_template_sync.sync import build_vc_template_base64  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from pypdf import PdfReader, PdfWriter  # noqa: E402
 
@@ -85,17 +87,18 @@ CREDENTIAL = {
         "credentialSubject": {
             "id": "${_holderId}",
             "holderName": "${name}",
-            "thesisTitle": "${thesis.title}",
-            "terms": "${records}",
+            "thesisTitle": "${thesisTitle}",
+            "courses": "${courses}",
         },
     },
 }
 
 TRICKY_TITLE = "Costs in $titleName & #if($terms)loops#end"
+# A record as the Adapter contract has it: text, and courses (the one list) for Certify's template to embed unquoted.
 SUBJECT = {
     "name": "Ada Example",
-    "thesis": {"title": "On Small Fixtures", "grade": "P"},
-    "records": [
+    "thesisTitle": "On Small Fixtures",
+    "courses": [
         {"label": "Term One", "courses": [{"code": "XY101", "title": "Fixture Design", "grade": "A"},
                                           {"code": "XY102", "title": TRICKY_TITLE, "grade": "B+"}]},
         {"label": "Term Two", "courses": [{"code": "XY201", "title": "Seams", "grade": "A"}]},
@@ -116,7 +119,7 @@ PRINT_TEMPLATE = """<!DOCTYPE html>
 <h1>$titleName</h1>
 <p>Holder: #claimValue("holderName")</p>
 <p>Thesis: #claimValue("thesisTitle")</p>
-<p>Records: [#claimValue("terms")]</p>
+<p>Records: [#claimValue("courses")]</p>
 <p>Majors: [#claimValue("majors")]</p>
 <p>Honours: #claimValue("honours")</p>
 <p>Note: #claimValue("printNote")</p>
@@ -143,7 +146,7 @@ PRINT_CREDENTIAL = {
     "credential_subject": {  # courseRows and printNote have no display entry
         "holderName": {"display": [{"name": "Holder", "locale": "en"}]},
         "thesisTitle": {"display": [{"name": "Thesis", "locale": "en"}]},
-        "terms": {"display": [{"name": "Terms", "locale": "en"}]},
+        "courses": {"display": [{"name": "Terms", "locale": "en"}]},
         "majors": {"display": [{"name": "Majors", "locale": "en"}]},
         "honours": {"display": [{"name": "Honours", "locale": "en"}]},
     },
@@ -154,10 +157,12 @@ PRINT_CREDENTIAL = {
         "credentialSubject": {
             "id": "${_holderId}",
             "holderName": "${name}",
-            "thesisTitle": "${thesis.title}",
-            "terms": "${records}",
-            "majors": "${majors}",
-            "honours": "${honours}",
+            "thesisTitle": "${thesisTitle}",
+            "courses": "${courses}",
+            # A list of text and an object reach a credential only as the vc_template's own JSON: the Data-provider
+            # plugin refuses either in a record.
+            "majors": ["Fixtures", "Seams"],
+            "honours": {"value": "With distinction", "language": "en"},
             "courseRows": "${courseRows}",
             "printNote": "${note}",
         },
@@ -166,8 +171,6 @@ PRINT_CREDENTIAL = {
 
 PRINT_SUBJECT = {
     **SUBJECT,
-    "majors": ["Fixtures", "Seams"],
-    "honours": {"value": "With distinction", "language": "en"},
     # One term heading, a graded course and an ungraded one (its last field is empty).
     "courseRows": "T|Term One|6|3.50|3.50\nC|XY101|Fixture Design|0|45|3|A\nC|XY102|Seams|0|45|3|",
     "note": "Printed from made-up data",
@@ -376,39 +379,19 @@ def _renderer_stand_in():
         server.server_close()
 
 
-def test_the_renderer_is_sent_the_mapped_claims() -> None:
+def test_the_renderer_is_sent_the_record_and_the_vc_template_certify_evaluates() -> None:
+    """VC Lab maps nothing itself: the renderer gets the record and the vc_template as template-sync stores it for
+    Certify (sync.py's own function), and maps the claims as Certify does."""
     _upload_set()
     with _renderer_stand_in() as sent:
         request = sent()
         assert request["template"] == TEMPLATE and request["credentialFile"] == CREDENTIAL and request["locale"] == "en"
-        assert request["credentialSubject"] == {
-            "id": "did:example:holderId",  # Certify's own variables get a placeholder
-            "holderName": "Ada Example",
-            "thesisTitle": "On Small Fixtures",  # a nested reference, ${thesis.title}
-            "terms": SUBJECT["records"],  # a reference that is the whole value keeps its list
-        }
-        credential = {**CREDENTIAL, "vc_template": {**CREDENTIAL["vc_template"], "credentialSubject": {
-            "label": "Dr. ${name} of ${nowhere}", "kept": 3}}}
-        assert _upload(credential=("record.json", _json(credential))).status_code == 200
-        assert sent()["credentialSubject"] == {"label": "Dr. Ada Example of ${nowhere}", "kept": 3}, "text around a reference"
-        envelope = sent()["credentialSubject"]
+        assert request["record"] == SUBJECT, "the sample's credentialSubject"
+        stored = base64.b64decode(build_vc_template_base64(CREDENTIAL["vc_template"])).decode("utf-8")
+        assert request["vcTemplate"] == stored and '"courses": ${courses}' in stored, "with sync.py's rewrites"
+        assert "credentialSubject" not in request, "no claims mapped in VC Lab"
         assert _upload(sample=("bare.json", _json(SUBJECT))).status_code == 200
-        assert sent()["credentialSubject"] == envelope, "a bare record maps the same as an enveloped one"
-
-
-def test_a_reference_to_a_field_the_data_lacks_resolves_as_velocity_does() -> None:
-    """Certify's Velocity signs an unresolved ${x} or $x as the literal text, and $!{x} or $!x as nothing."""
-    _upload_set()
-    mapping = {"plain": "${nowhere}", "bare": "$nowhere", "nested": "${thesis.nowhere}", "quiet": "$!{nowhere}",
-               "quietBare": "$!nowhere", "quietNested": "$!{thesis.nowhere}", "inText": "a ${nowhere} b $!{nowhere}c",
-               "found": "$!{name}", "foundBare": "$!name", "holder": "${_holderId}"}
-    credential = {**CREDENTIAL, "vc_template": {**CREDENTIAL["vc_template"], "credentialSubject": mapping}}
-    assert _upload(credential=("record.json", _json(credential))).status_code == 200
-    with _renderer_stand_in() as sent:
-        assert sent()["credentialSubject"] == {
-            "plain": "${nowhere}", "bare": "$nowhere", "nested": "${thesis.nowhere}", "quiet": "", "quietBare": "",
-            "quietNested": "", "inText": "a ${nowhere} b c", "found": "Ada Example", "foundBare": "Ada Example",
-            "holder": "did:example:holderId"}
+        assert sent()["record"] == SUBJECT, "a bare record is the record"
 
 
 def test_replace_one_slot() -> None:
@@ -419,7 +402,7 @@ def test_replace_one_slot() -> None:
     with _renderer_stand_in() as sent:
         request = sent()
         assert request["template"] == "<p>v2 for #claimValue('holderName')</p>"
-        assert request["credentialSubject"]["holderName"] == "Ada Example", "the other slots are kept"
+        assert request["record"] == SUBJECT and request["credentialFile"] == CREDENTIAL, "the other slots are kept"
 
 
 def test_remove_background_then_clear() -> None:
@@ -640,7 +623,7 @@ def test_large_upload_stays_in_memory() -> None:
     assert not spilled, "the upload was written to a temporary file on disk"
     with _renderer_stand_in() as sent:
         request = sent()
-        assert request["credentialSubject"]["holderName"] == "Ada Example" and len(request["template"]) > 3 * 1024 * 1024
+        assert request["record"] == SUBJECT and len(request["template"]) > 3 * 1024 * 1024
         assert request["backgroundImage"].startswith("data:image/png;base64,")
 
 
@@ -650,7 +633,7 @@ def test_preview_pdf_prints_mapped_values() -> bool:
     _upload_print_set()
     text, pages = _printed()
     assert "Holder: Ada Example" in text, "a mapped field"
-    assert "Thesis: On Small Fixtures" in text, "a nested field (${thesis.title})"
+    assert "Thesis: On Small Fixtures" in text, "another mapped field"
     assert "Example Record" in text, "the title comes from the display entry"
     assert "Colours: #123456 on #ffffff, logo https://example.org/logo.png, validity -1" in text
     assert (400, 400) in _images(pages[0]), "a placeholder QR the size Mimoto draws it (mosip.inji.qr.code.width)"
@@ -770,7 +753,7 @@ def test_preview_pdf_flattens_claims_as_mimoto_does() -> bool:
         return False
     _upload_print_set()
     text, _ = _printed()
-    assert "Records: []" in text, "a list of objects (terms) prints as nothing"
+    assert "Records: []" in text, "a list of objects (courses) prints as nothing"
     assert "Majors: [Fixtures, Seams]" in text, "a list of text prints as one ', '-joined string"
     assert "Honours: With distinction" in text, "an object prints as its value"
     return True
@@ -782,9 +765,12 @@ def test_preview_pdf_hands_every_claim_in_display_order() -> bool:
     _upload_print_set()
     text, _ = _printed()
     assert "Note: Printed from made-up data" in text, "a claim with no display entry still reaches the template"
-    assert "Order: thesisTitle holderName terms majors honours courseRows printNote" in text, (
-        "display_order first, then the other claims; id is not a claim to print")
-    assert "Names: Thesis; Holder; Terms; Majors; Honours; Course Rows; Print Note;" in text, (
+    order = text.split("Order: ")[1].split(" Names: ")[0].split()
+    assert order[:2] == ["thesisTitle", "holderName"], "display_order first"
+    assert sorted(order[2:]) == ["courseRows", "courses", "honours", "majors", "printNote"], (
+        "then the other claims, in the order Certify's org.json gives them; id is not a claim to print")
+    names = text.split("Names: ")[1].split(" Colours: ")[0].rstrip(";").split("; ")
+    assert names[:2] == ["Thesis", "Holder"] and set(names[2:]) == {"Terms", "Majors", "Honours", "Course Rows", "Print Note"}, (
         "display names from the credential file, and a title-case fallback for a claim without one")
     return True
 
@@ -1108,8 +1094,9 @@ def test_background_survives_download_and_upload_back() -> bool:
 def test_preview_pdf_of_the_committed_transcript_template_leaves_a_missing_claim_empty() -> bool:
     """The committed AIT template's claimValue macro must print nothing for a claim the credential lacks. Velocity 1.7
     keeps a variable's old value when #set is given null, so without a reset in the macro, a missing claim printed the
-    one before it. Made-up data: country and option are null (a claim the signed credential lacks, which Mimoto leaves out of
-    $rowProperties), each printed straight after a claim with its own value."""
+    one before it. Made-up data: the credential file's vc_template doesn't map country and option, so the signed
+    credential lacks them and Mimoto leaves them out of $rowProperties; each is printed straight after a claim with
+    its own value. (A null in the record is no way to get there: the Data-provider plugin refuses it.)"""
     if _no_renderer("test_preview_pdf_of_the_committed_transcript_template_leaves_a_missing_claim_empty"):
         return False
     template = Path(os.environ.get("TEMPLATES_DIR") or REPO_ROOT / "deploy/ait/vdr/templates") / "AITUniversity-ait-transcript-template.html"
@@ -1118,16 +1105,20 @@ def test_preview_pdf_of_the_committed_transcript_template_leaves_a_missing_claim
         print("SKIP test_preview_pdf_of_the_committed_transcript_template_leaves_a_missing_claim_empty "
               f"({template.name} or {credential.name} not in this Installation)")
         return False
-    record = {"fullName": "Mina Example", "dateOfBirth": "1999-01-02", "country": None, "option": None, "registrationNo": "st000001",
-              "dateAdmitted": "2020-03-04", "degreeAwarded": "Master of Examples", "academicProgram": "M.Ex Fixtures"}
+    record = {"fullName": "Mina Example", "dateOfBirth": "1999-01-02", "registrationNo": "st000001",
+              "dateAdmitted": "2020-03-04", "degreeAwarded": "Master of Examples", "academicProgram": "M.Ex Fixtures",
+              "courses": []}
+    config = json.loads(credential.read_text(encoding="utf-8"))
+    mapping = config["vc_template"]["credentialSubject"]
+    del mapping["country"], mapping["option"]
     client.delete("/api/set")
-    res = _upload(template=(template.name, template.read_bytes()), credential=(credential.name, credential.read_bytes()),
+    res = _upload(template=(template.name, template.read_bytes()), credential=(credential.name, _json(config)),
                   sample=("record.json", _json(record)))
     assert res.status_code == 200, res.text
     text, _ = _printed()
     assert "Mina Example" in text and "1999-01-02" in text and "2020-03-04" in text, "the claims it has print"
-    assert text.count("1999-01-02") == 1, "the date of birth printed once: country is null"
-    assert text.count("2020-03-04") == 1, "the date admitted printed once: option is null"
+    assert text.count("1999-01-02") == 1, "the date of birth printed once: the credential has no country"
+    assert text.count("2020-03-04") == 1, "the date admitted printed once: the credential has no option"
     return True
 
 
@@ -1145,8 +1136,7 @@ def main() -> None:
         test_health_and_dashboard,
         test_starts_empty_and_asks_for_the_missing_files,
         test_the_old_rendering_endpoints_are_gone,
-        test_the_renderer_is_sent_the_mapped_claims,
-        test_a_reference_to_a_field_the_data_lacks_resolves_as_velocity_does,
+        test_the_renderer_is_sent_the_record_and_the_vc_template_certify_evaluates,
         test_replace_one_slot,
         test_remove_background_then_clear,
         test_download_and_upload_back,

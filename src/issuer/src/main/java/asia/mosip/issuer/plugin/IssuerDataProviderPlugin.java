@@ -46,8 +46,6 @@ public class IssuerDataProviderPlugin implements DataProviderPlugin {
     static final String NO_RECORD = "no_record";
     static final String ADAPTER_ERROR = "adapter_error";
     static final String GATEWAY_ERROR = "gateway_error";
-    /** The one claim a record serves as an array (the contract's terms of courses), which Certify's template takes unquoted. */
-    private static final String COURSES = "courses";
     /**
      * Keys a record must not carry: Certify's reserved keys, and the trace keys the plugin adds. adapter/openapi.yaml's
      * {@code RecordKey} excludes the same set; adapter/test_adapter.py holds the two equal.
@@ -209,12 +207,12 @@ public class IssuerDataProviderPlugin implements DataProviderPlugin {
             long gatewayConnectTimeoutMs,
             long gatewayReadTimeoutMs) {
         this(recordUrl, adapterConnectTimeoutMs, adapterReadTimeoutMs, gatewayEnabled, gatewayUrl, gatewayAuthToken,
-                gatewayConnectTimeoutMs, gatewayReadTimeoutMs, COURSES);
+                gatewayConnectTimeoutMs, gatewayReadTimeoutMs, String.join(",", TemplateRecord.STRUCTURED_KEYS));
     }
 
     private static Set<String> parseStructuredKeys(String config) {
         if (config == null || config.isBlank()) {
-            return Set.of(COURSES);
+            return TemplateRecord.STRUCTURED_KEYS;
         }
         Set<String> set = new java.util.HashSet<>();
         for (String s : config.split(",")) {
@@ -223,7 +221,7 @@ public class IssuerDataProviderPlugin implements DataProviderPlugin {
                 set.add(trimmed);
             }
         }
-        return set.isEmpty() ? Set.of(COURSES) : Set.copyOf(set);
+        return set.isEmpty() ? TemplateRecord.STRUCTURED_KEYS : Set.copyOf(set);
     }
 
     /** {@code mosip.certify.gateway.enabled}: exactly {@code true} or {@code false}, with no default. */
@@ -302,63 +300,14 @@ public class IssuerDataProviderPlugin implements DataProviderPlugin {
         }
     }
 
-    /**
-     * The record for Certify's template, which substitutes every claim into a quoted slot ({@code "${fullName}"})
-     * except structured fields in {@code structuredKeys} (such as {@code ${courses}}): every top-level string escaped,
-     * structured keys as JSON text, any other primitive value as it is. Unconfigured structured values or a
-     * structured key that is not an array are {@code adapter_error}; so is a {@code null}.
-     */
+    /** {@link TemplateRecord#shape}, with its refusal logged and answered {@code adapter_error}. */
     private JSONObject shape(JSONObject record) throws DataProviderExchangeException {
-        JSONObject data = new JSONObject();
-        for (String key : record.keySet()) {
-            Object value = record.get(key);
-            if (value == JSONObject.NULL) {
-                log.warn("the Adapter's record has null for {}", key);
-                throw new DataProviderExchangeException(ADAPTER_ERROR);
-            }
-            boolean structured = value instanceof JSONObject || value instanceof JSONArray;
-            if (structuredKeys.contains(key) ? !(value instanceof JSONArray) : structured) {
-                log.warn("the Adapter's record has a {} for {}", value.getClass().getSimpleName(), key);
-                throw new DataProviderExchangeException(ADAPTER_ERROR);
-            }
-            if (value instanceof String text) {
-                data.put(key, escapeForQuotedTemplate(text));
-            } else if (structured) {
-                data.put(key, value.toString());
-            } else {
-                data.put(key, value);
-            }
+        try {
+            return TemplateRecord.shape(record, structuredKeys);
+        } catch (IllegalArgumentException e) {
+            log.warn("the Adapter's record {}", e.getMessage());
+            throw new DataProviderExchangeException(ADAPTER_ERROR);
         }
-        return data;
-    }
-
-    /**
-     * JSON string escaping without the surrounding quotes, ASCII only, as Python's {@code json.dumps(value)[1:-1]}
-     * writes it: a quote or a backslash gets a backslash before it, newline, carriage return, tab, backspace and form
-     * feed get their short escapes, and every other character outside printable ASCII becomes a backslash, a
-     * {@code u} and its four hex digits (per UTF-16 code unit, so a surrogate pair is two escapes).
-     */
-    static String escapeForQuotedTemplate(String value) {
-        StringBuilder out = new StringBuilder(value.length());
-        for (char c : value.toCharArray()) {
-            switch (c) {
-                case '"' -> out.append("\\\"");
-                case '\\' -> out.append("\\\\");
-                case '\n' -> out.append("\\n");
-                case '\r' -> out.append("\\r");
-                case '\t' -> out.append("\\t");
-                case '\b' -> out.append("\\b");
-                case '\f' -> out.append("\\f");
-                default -> {
-                    if (c < 0x20 || c > 0x7e) {
-                        out.append(String.format("\\u%04x", (int) c));
-                    } else {
-                        out.append(c);
-                    }
-                }
-            }
-        }
-        return out.toString();
     }
 
     private static String pathSegment(String value) {
