@@ -15,6 +15,7 @@ import dataclasses
 import os
 from pathlib import Path
 from typing import Any, AsyncGenerator, Literal
+from urllib.parse import quote
 
 import httpx
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -100,8 +101,7 @@ def export_pdf(view: View = Query("lab")) -> Response:
     lab = _lab  # one set for the whole request, even if an upload replaces it meanwhile
     html = _render(lab, view)
     pdf = hardcopy.render_pdf(html, lab.background.value if lab.background else None)
-    name = f"{Path(lab.template.filename).stem}-{view}.pdf"
-    return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{name}"'})
+    return _inline_pdf(pdf, f"{Path(lab.template.filename).stem}-{view}.pdf")
 
 
 @app.get("/preview.pdf")
@@ -122,12 +122,16 @@ def preview_pdf() -> Response:
         res = httpx.post(f"{RENDERER_URL}/render", json=request, timeout=120)
     except httpx.HTTPError as e:
         raise HTTPException(status_code=502, detail=f"the renderer at {RENDERER_URL} can't be reached: {e}")
-    if res.status_code == 422:  # the template didn't render: the renderer's message, with its line, is the answer
-        raise HTTPException(status_code=422, detail=res.json()["error"])
+    if res.status_code in (400, 422):  # the set is at fault (422: the template, with its line): pass the reason on
+        raise HTTPException(status_code=res.status_code, detail=res.json()["error"])
     if res.status_code != 200:
         raise HTTPException(status_code=502, detail=f"the renderer answered {res.status_code}: {res.text}")
-    name = f"{Path(lab.template.filename).stem}.pdf"
-    return Response(res.content, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{name}"'})
+    return _inline_pdf(res.content, f"{Path(lab.template.filename).stem}.pdf")
+
+
+def _inline_pdf(pdf: bytes, name: str) -> Response:
+    """A PDF the browser shows, named in RFC 6266's filename* form, so a name in any script fits the header."""
+    return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f"inline; filename*=UTF-8''{quote(name)}"})
 
 
 @app.get("/download")
