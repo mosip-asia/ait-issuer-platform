@@ -7,11 +7,13 @@
 #   1. puts the Thai font the set's template loads through @font-face on the VDR (scripts/thai-font.sh), in a
 #      git-ignored folder it removes afterwards;
 #   2. runs the made-up set through VC Lab's HTTP API (src/tools/parity_check.py preview): uploads its four files one
-#      at a time, and keeps /preview.pdf and the zip /download gives;
+#      at a time, and keeps /preview.pdf and the zip /download gives. VC Lab holds one set, in memory: the set it held
+#      (a designer's work) is downloaded first and uploaded back afterwards;
 #   3. publishes that zip with scripts/publish-set.sh, and prints it from the Wallet with
 #      scripts/print-check.sh --published;
-#   4. compares the two PDFs (parity_check.py compare): the page text with whitespace collapsed, the pixel sizes of the
-#      images each page draws, and the font names. Each difference is named, and the exit status is 1.
+#   4. compares the two PDFs (parity_check.py compare): the page text with whitespace collapsed, each image's pixel
+#      size and the width and height it is drawn at, and the font names; and checks that the preview shows what the set
+#      prints (the font, the Background, Thai, the grid, the joined list). Each difference is named; exit status 1.
 # On exit it puts back what publishing changed: the template and the Background the VDR held, and the committed
 # credential files in Certify. The set and both PDFs are kept in a temporary folder the output names.
 #
@@ -77,6 +79,7 @@ check() {  # parity_check.py in the ait-vc image, which has httpx and pypdf; it 
     "$IMAGE" python /check/parity_check.py "$@"
 }
 
+echo "the set and both PDFs (preview.pdf from VC Lab, wallet.pdf from Mimoto): $OUT"
 bash scripts/thai-font.sh "$FONT_DIR" "$IMAGE"
 check preview --installation /installation --template /check/parity-template.html --out /out ${STUDENT:+--student "$STUDENT"}
 PUBLISHED=1
@@ -84,5 +87,4 @@ PUBLISHED=1
 printed=$(./scripts/print-check.sh --published $STUDENT) || { echo "$printed"; exit 1; }
 echo "$printed"
 cp "$(sed -n 's/^PDFs: //p' <<<"$printed")/published.pdf" "$OUT/wallet.pdf"
-echo "the set and both PDFs (preview.pdf from VC Lab, wallet.pdf from Mimoto): $OUT"
 check compare /out/preview.pdf /out/wallet.pdf

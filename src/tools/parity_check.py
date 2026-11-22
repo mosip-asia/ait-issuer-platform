@@ -31,7 +31,7 @@ import httpx
 from pypdf import PdfReader
 
 from map_course_rows import map_course_rows
-from print_check import BACKGROUND_PX, drawn_images, make_background_png
+from print_check import BACKGROUND_PX, FONT_NAME, drawn_images, make_background_png
 
 VC_LAB = "http://lab.localhost"
 ADAPTER = "http://adapter.localhost"
@@ -76,7 +76,8 @@ def made_up_set(installation: Path, template: Path, student: str | None) -> list
 
 
 def through_vc_lab(files: list[tuple[str, str, bytes]], out: Path) -> None:
-    """Upload the set to VC Lab one file at a time; keep its preview and its download."""
+    """Upload the set to VC Lab one file at a time; keep its preview and its download. VC Lab holds one set, in
+    memory only, so the set it held before (a designer's work) is downloaded first and uploaded back at the end."""
     def check(resp: httpx.Response, what: str, kind: str) -> httpx.Response:
         if resp.status_code != 200 or not resp.headers.get("content-type", "").startswith(kind):
             raise Failed(f"VC Lab: {what} answered {resp.status_code} {resp.headers.get('content-type', '')}: "
@@ -84,16 +85,31 @@ def through_vc_lab(files: list[tuple[str, str, bytes]], out: Path) -> None:
         return resp
 
     with httpx.Client(base_url=VC_LAB, timeout=TIMEOUT) as lab:
-        check(lab.delete("/api/set"), "clearing the set", "application/json")
-        for slot, name, data in files:
-            check(lab.post("/api/set", files={slot: (name, data)}), f"uploading the {slot}", "application/json")
-        print(f"PASS VC Lab: uploaded {', '.join(f'{slot} {name}' for slot, name, _ in files)}")
-        pdf = check(lab.get("/preview.pdf"), "/preview.pdf", "application/pdf").content
-        (out / "preview.pdf").write_bytes(pdf)
-        print(f"PASS VC Lab: /preview.pdf, {len(pdf)} bytes, saved preview.pdf")
-        zipped = check(lab.get("/download"), "/download", "application/zip").content
-        (out / "set.zip").write_bytes(zipped)
-        print(f"PASS VC Lab: /download, {len(zipped)} bytes, saved set.zip")
+        held = any(check(lab.get("/api/set"), "reading the set", "application/json").json()["loaded"].values())
+        # Kept in memory, as VC Lab keeps it: a Background may be an organisation's paper. Written to disk only when
+        # it can't be put back.
+        before = check(lab.get("/download"), "/download of the set it held", "application/zip").content if held else b""
+        try:
+            check(lab.delete("/api/set"), "clearing the set", "application/json")
+            for slot, name, data in files:
+                check(lab.post("/api/set", files={slot: (name, data)}), f"uploading the {slot}", "application/json")
+            print(f"PASS VC Lab: uploaded {', '.join(f'{slot} {name}' for slot, name, _ in files)}")
+            pdf = check(lab.get("/preview.pdf"), "/preview.pdf", "application/pdf").content
+            (out / "preview.pdf").write_bytes(pdf)
+            print(f"PASS VC Lab: /preview.pdf, {len(pdf)} bytes, saved preview.pdf")
+            zipped = check(lab.get("/download"), "/download", "application/zip").content
+            (out / "set.zip").write_bytes(zipped)
+            print(f"PASS VC Lab: /download, {len(zipped)} bytes, saved set.zip")
+        finally:
+            if held:
+                back = lab.post("/api/set", files={"bundle": ("vc-lab-set.zip", before)})
+                if back.status_code != 200:
+                    (out / "vc-lab-set-before.zip").write_bytes(before)
+                    raise Failed(f"VC Lab: couldn't put back the set it held ({back.status_code}: {back.text[:200]}); "
+                                 "it is saved as vc-lab-set-before.zip in the folder named above: upload it as a set")
+                print("PASS VC Lab: put back the set it held before the check")
+            else:
+                check(lab.delete("/api/set"), "clearing the made-up set", "application/json")
 
 
 def font_names(reader: PdfReader) -> set[str]:
@@ -104,18 +120,38 @@ def font_names(reader: PdfReader) -> set[str]:
 
 
 def page_facts(pdf: bytes) -> dict:
+    """Per page, its words and the images it draws as (pixels, width, height), the width and height in points as
+    drawn; and the font names of the whole PDF."""
     reader = PdfReader(io.BytesIO(pdf))
     return {
         "words": [(p.extract_text() or "").split() for p in reader.pages],
-        "images": [sorted(i["px"] for i in drawn_images(reader, n)) for n in range(len(reader.pages))],
+        "images": [sorted((i["px"], round(i["w"]), round(i["h"])) for i in drawn_images(reader, n))
+                   for n in range(len(reader.pages))],
         "fonts": font_names(reader),
     }
 
 
+def missing_features(facts: dict) -> list[str]:
+    """What the made-up set prints that the preview lacks, so a loss on both sides can't pass as a match."""
+    page1 = facts["images"][0] if facts["images"] else []
+    text = " ".join(" ".join(words) for words in facts["words"])
+    checks = [
+        (FONT_NAME in facts["fonts"], f"the @font-face font {FONT_NAME} (fonts: {sorted(facts['fonts'])})"),
+        (any(px == BACKGROUND_PX for px, _, _ in page1),
+         f"the Background, {BACKGROUND_PX[0]}x{BACKGROUND_PX[1]} px, on page 1 (images: {page1})"),
+        (any("฀" <= ch <= "๿" for ch in text), "Thai text"),
+        ("TERM" in text.split(), "the courseRows grid (no TERM row)"),
+        (", ".join(LIST_OF_TEXT) in text, f"the list of text joined: {', '.join(LIST_OF_TEXT)!r}"),
+    ]
+    return [f"VC Lab's preview lacks {what}" for present, what in checks if not present]
+
+
 def differences(preview: bytes, wallet: bytes) -> dict[str, list[str]]:
-    """What differs between VC Lab's preview and the Wallet's print, by kind; an empty list is a match."""
+    """What differs between VC Lab's preview and the Wallet's print, by kind, and what the preview lacks of the set;
+    an empty list is a match."""
     a, b = page_facts(preview), page_facts(wallet)
-    found: dict[str, list[str]] = {"page text": [], "image sizes": [], "font names": []}
+    found: dict[str, list[str]] = {"page text": [], "image sizes": [], "font names": [],
+                                   "the set's features": missing_features(a)}
     if len(a["words"]) != len(b["words"]):
         found["page text"].append(f"VC Lab has {len(a['words'])} pages, the Wallet {len(b['words'])}")
     for n, (mine, theirs) in enumerate(zip(a["words"], b["words"]), start=1):
@@ -126,7 +162,8 @@ def differences(preview: bytes, wallet: bytes) -> dict[str, list[str]]:
                                           f"the Wallet has {' '.join(theirs[j1:j2])!r}")
     for n, (mine, theirs) in enumerate(zip(a["images"], b["images"]), start=1):
         if mine != theirs:
-            found["image sizes"].append(f"page {n}: VC Lab draws {mine}, the Wallet {theirs} (pixels)")
+            found["image sizes"].append(f"page {n}: VC Lab draws {mine}, the Wallet {theirs} "
+                                        "((pixels), width and height drawn in points)")
     if a["fonts"] != b["fonts"]:
         found["font names"].append(f"only VC Lab has {sorted(a['fonts'] - b['fonts'])}, only the Wallet has "
                                    f"{sorted(b['fonts'] - a['fonts'])}")
@@ -137,12 +174,14 @@ def compare(preview: Path, wallet: Path) -> bool:
     preview_pdf, wallet_pdf = preview.read_bytes(), wallet.read_bytes()
     found = differences(preview_pdf, wallet_pdf)
     facts = page_facts(preview_pdf)
-    shown = {"page text": f"{len(facts['words'])} page(s), {sum(map(len, facts['words']))} words",
-             "image sizes": f"{facts['images']} (pixels, per page)",
-             "font names": f"{sorted(facts['fonts'])}"}
+    shown = {"page text": f"the same, {len(facts['words'])} page(s), {sum(map(len, facts['words']))} words",
+             "image sizes": f"the same, {facts['images']} ((pixels), width and height drawn in points, per page)",
+             "font names": f"the same, {sorted(facts['fonts'])}",
+             "the set's features": f"the preview shows the {FONT_NAME} font, the Background, Thai text, the "
+                                   "courseRows grid and the list of text joined"}
     for kind, lines in found.items():
         if not lines:
-            print(f"PASS {kind}: the same, {shown[kind]}")
+            print(f"PASS {kind}: {shown[kind]}")
             continue
         print(f"FAIL {kind}: {len(lines)} difference(s)")
         for line in lines[:SHOWN_DIFFERENCES]:
