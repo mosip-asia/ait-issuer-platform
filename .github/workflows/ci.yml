@@ -60,6 +60,7 @@ jobs:
             src/portal/test_requests.py \
             tests/test_courses.py \
             tests/test_print_check.py \
+            tests/test_publish_set.py \
             tests/test_adapter.py \
             src/gateway/tests/test_credential_types.py \
             src/gateway/tests/test_evaluations.py

@@ -20,56 +20,19 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-KEYCLOAK=http://auth.localhost
-CERTIFY=http://issuer.localhost
+PROG=mimoto-up
+source scripts/local-stack.sh
 MIMOTO=http://mimoto.localhost/v1/mimoto
 # compose.mimoto.yaml's oidc_p12_password.
 KEYSTORE_PASS=local-mimoto
-TIMEOUT=${MIMOTO_TIMEOUT:-300}
 
-die() { echo "mimoto-up: $*" >&2; exit 1; }
-env_value() { grep -E "^$1=" "${2:-.env}" | tail -1 | cut -d= -f2- | tr -d '\r"'; }
-set_env() {  # set_env KEY VALUE: rewrite .env in place, never sed -i (bind-mounted files keep their inode)
-  local tmp; tmp=$(mktemp)
-  awk -v k="$1" -v v="$2" -F= '$1==k{print k "=" v; next} {print}' .env > "$tmp" && cat "$tmp" > .env && rm -f "$tmp"
-}
-json() { python3 -c "import json,sys; d=json.load(open(sys.argv[1], encoding='utf-8')); print($2)" "$1"; }
-wait_for() {  # wait_for URL WHAT: until the URL answers 200
-  local start=$SECONDS
-  until curl -sf -o /dev/null --max-time 5 "$1"; do
-    (( SECONDS - start < TIMEOUT )) || return 1
-    sleep 5
-  done
-  echo "$2 answers after $((SECONDS - start))s"
-}
-
-[ -f .env ] || die "no .env: bring the regular stack up first (scripts/deploy.sh)"
-INSTALLATION=$(env_value INSTALLATION)
+load_stack_env
 [[ -d deploy/$INSTALLATION/vdr/templates ]] \
   || die "the Installation $INSTALLATION has no VDR templates folder (deploy/$INSTALLATION/vdr/templates), so there's nothing for Mimoto to print"
-STACK_FILES=$(env_value COMPOSE_FILE)
-[[ :$STACK_FILES: == *:compose.mock.yaml:* ]] \
-  || die "the local Keycloak runs from compose.mock.yaml: add it to COMPOSE_FILE in .env and run scripts/deploy.sh"
 compose() { COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE="$STACK_FILES:compose.mimoto.yaml" docker compose "$@"; }
 
-# 1. Certify must trust the local Keycloak, whose issuer is its public base plus the stand-in realm. The values
-#    checked are the ones Compose will hand Certify, so a variable exported in the shell, which wins over .env,
-#    counts too.
-REALM=$(json "deploy/$INSTALLATION/mock/keycloak-realm.json" "d['realm']")
-ISSUER="$KEYCLOAK/realms/$REALM"
-JWKS="$ISSUER/protocol/openid-connect/certs"
-CERTIFY_ENV=$(COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE="$STACK_FILES" docker compose config --format json certify 2>/dev/null \
-  | python3 -c "import json,sys; e=json.load(sys.stdin)['services']['certify']['environment']; print(e.get('AUTH_SERVER_ISSUER') or '', e.get('AUTH_SERVER_JWKS_URL') or '')") \
-  || die "Compose can't resolve the certify service with COMPOSE_FILE=$STACK_FILES"
-if [[ $CERTIFY_ENV != "$ISSUER $JWKS" ]]; then
-  echo "mimoto-up: refused: Certify must trust the local Keycloak, so Mimoto never sends a login elsewhere." >&2
-  echo "Certify would get: ${CERTIFY_ENV:-nothing}" >&2
-  echo "Set these two lines in .env, and unset them in the shell if exported there, then run this again:" >&2
-  echo "AUTH_SERVER_ISSUER=$ISSUER" >&2
-  echo "AUTH_SERVER_JWKS_URL=$JWKS" >&2
-  exit 1
-fi
-echo "Certify trusts the local Keycloak ($ISSUER)"
+# 1. Certify must trust the local Keycloak (scripts/local-stack.sh).
+require_local_certify
 
 # 2. Mimoto's client keystore, under the alias the issuers list names. Its certificate goes to Keycloak in step 5.
 ISSUERS=deploy/$INSTALLATION/vcga/issuers.json
@@ -91,17 +54,7 @@ else
 fi
 
 # 3. The live DID replaces whatever other DID .env holds; Compose then re-syncs and recreates Certify (step 4).
-#    did.json's "id" only repeats .env, so the live DID comes from the key Certify signs with.
-wait_for "$CERTIFY/.well-known/did.json" "Certify" \
-  || die "Certify isn't answering at $CERTIFY: bring the regular stack up first (scripts/deploy.sh)"
-LIVE=$(curl -sf "$CERTIFY/.well-known/did.json" \
-  | python3 -c "import json,sys; print('did:key:' + json.load(sys.stdin)['verificationMethod'][0]['publicKeyMultibase'])")
-if [[ $(env_value CERTIFY_DID) != "$LIVE" ]]; then
-  set_env CERTIFY_DID "$LIVE"
-  echo "wrote Certify's live DID into .env (${LIVE:0:24}...)"
-else
-  echo ".env already holds Certify's live DID"
-fi
+write_live_did
 
 # 4. The overlay beside the stack. Docker can't create a mount point inside the VDR's read-only templates mount, so
 #    the files Mimoto's VDR mounts land on are created first (empty, git-ignored).

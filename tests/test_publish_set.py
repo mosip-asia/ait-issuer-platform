@@ -75,7 +75,7 @@ class Root:
     def publish(self, files: dict[str, bytes] | bytes, issuer_id: str = "AITUniversity") -> subprocess.CompletedProcess:
         zip_path = self.dir / "set.zip"
         zip_path.write_bytes(files if isinstance(files, bytes) else make_zip(files))
-        return subprocess.run([sys.executable, str(TOOL), "--set", str(zip_path), "--issuer-id", issuer_id,
+        return subprocess.run([sys.executable, str(TOOL), "--set", str(zip_path), f"--issuer-id={issuer_id}",
                                "--installation", "ait", "--credentials-out", str(self.out)],
                               cwd=self.dir, capture_output=True, text=True)
 
