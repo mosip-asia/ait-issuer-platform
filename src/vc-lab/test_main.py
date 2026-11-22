@@ -416,6 +416,23 @@ def test_preview_pdf_hands_every_claim_in_display_order() -> bool:
     return True
 
 
+def test_preview_pdf_template_error_is_422_with_its_line() -> bool:
+    if _no_renderer("test_preview_pdf_template_error_is_422_with_its_line"):
+        return False
+    cases = {
+        "a directive Velocity can't parse": ("<html><body>\n<p>fine</p>\n<p>#set($x = )</p>\n</body></html>\n", "line 3"),
+        # Java's split drops trailing empty fields: without -1 an ungraded course has 6 fields, not 7.
+        "a field past the end of a split row": (
+            '<html><body>\n#set($f = "C|XY102|Seams|0|45|3|".split("\\|"))<p>$f.get(6)</p>\n</body></html>\n', "line 2"),
+    }
+    for case, (template, line) in cases.items():
+        _upload_print_set(template)
+        res = client.get("/preview.pdf")
+        assert res.status_code == 422, (case, res.status_code, res.text)
+        assert line in res.json()["detail"], (case, res.json())
+    return True
+
+
 def test_export_pdf_lays_the_background_under_page_one() -> bool:
     try:
         import weasyprint  # noqa: F401
@@ -481,6 +498,7 @@ def main() -> None:
         test_preview_pdf_prints_mapped_values,
         test_preview_pdf_flattens_claims_as_mimoto_does,
         test_preview_pdf_hands_every_claim_in_display_order,
+        test_preview_pdf_template_error_is_422_with_its_line,
         test_export_pdf_lays_the_background_under_page_one,
         test_background_with_its_own_rotation_comes_out_portrait,
     ]
