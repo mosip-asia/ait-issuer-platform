@@ -58,7 +58,7 @@ It is safe to run again, so retry it after any failure. It does these things in 
 
 1. Refuses, printing the two `.env` lines to set, unless Certify trusts the local Keycloak.
 2. Generates Mimoto's client key once, in `deploy/ait/mimoto/` (git-ignored). Nothing secret is committed.
-3. Writes Certify's live `did:key` into `.env` when it still holds the example's placeholder, then Compose re-syncs the credential files and recreates Certify. Without the live DID every credential signs with a key nobody can resolve, and every verifier, Mimoto included, rejects it.
+3. Writes Certify's live `did:key` into `.env` when `.env` holds another one: the example's placeholder, or the key `deploy.sh` read from a fresh keystore before Certify replaced it. Then Compose re-syncs the credential files and recreates Certify. Without the live DID every credential signs with a key nobody can resolve, and every verifier, Mimoto included, rejects it.
 4. Starts the overlay: Mimoto and its own Postgres database. The VDR gains three files under `/templates/` (below).
 5. Tells the local Keycloak's `wallet-demo` client to trust Mimoto's key, through Keycloak's admin CLI. The committed realm file is unchanged.
 6. Waits until Mimoto serves its issuers list, and prints `Mimoto is up at http://mimoto.localhost/v1/mimoto`.
@@ -238,7 +238,7 @@ No field may hold `|` or a line break (replace them before sending). A field may
 | `FAIL setup: ... isn't in this ait-vc image` | The image is older than this branch: `./scripts/deploy.sh ait --build`. |
 | `FAIL template fetch: the VDR answers 404 for /templates/mimoto-...` | `./scripts/mimoto-up.sh` has never run on this checkout, so the three files the VDR serves for Mimoto aren't there: run it. |
 | `FAIL setup: Mimoto's issuers list answered ...` | Mimoto isn't running (stopped, or the stack was brought down and only `deploy.sh` ran again). The three Mimoto files stay on the VDR as empty files once `mimoto-up.sh` has run, so the VDR still answers 200 and the check gets as far as asking Mimoto: run `./scripts/mimoto-up.sh`. |
-| `FAIL signature check ... signature_verification_failed` | The placeholder DID is still in Certify's rows (run `./scripts/mimoto-up.sh`), or w3id.org was slow or unreachable. |
+| `FAIL signature check ... signature_verification_failed` | Certify's rows hold a DID other than the key it signs with (run `./scripts/mimoto-up.sh`), or w3id.org was slow or unreachable. |
 | `FAIL token exchange ... invalid_request` | The local Keycloak doesn't trust Mimoto's key: run `./scripts/mimoto-up.sh`. |
 | The PDF shows Thai as garbage | The VDR doesn't send `charset=utf-8` (T2). |
 | A hand-published credential file is gone | A print check ended and put the committed files back: publish it again. |

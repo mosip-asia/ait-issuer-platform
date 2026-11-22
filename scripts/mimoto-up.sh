@@ -6,7 +6,8 @@
 # (COMPOSE_FILE=compose.yaml:compose.mock.yaml). Each step converges, so a half-finished start can be run again:
 #   1. refuses unless Certify trusts the local Keycloak (the code Mimoto exchanges must never reach another server);
 #   2. generates Mimoto's client keystore once (deploy/<installation>/mimoto/, git-ignored);
-#   3. writes Certify's live DID into .env when it still holds .env.example's placeholder;
+#   3. writes Certify's live DID into .env when .env holds another one (the placeholder, or a key deploy.sh read
+#      from the keystore before Certify replaced it);
 #   4. starts compose.mimoto.yaml beside the stack: Compose recreates what step 3 or .env changed (template-sync,
 #      Certify) and the VDR, which gains Mimoto's files under /templates/;
 #   5. sets the local Keycloak's wallet client to trust the keystore's key (the committed realm is untouched);
@@ -89,16 +90,17 @@ else
   echo "Mimoto's client keystore is in $KEYS"
 fi
 
-# 3. The live DID, read from Certify, replaces the placeholder; Compose then re-syncs and recreates Certify (step 4).
+# 3. The live DID replaces whatever other DID .env holds; Compose then re-syncs and recreates Certify (step 4).
+#    did.json's "id" only repeats .env, so the live DID comes from the key Certify signs with.
 wait_for "$CERTIFY/.well-known/did.json" "Certify" \
   || die "Certify isn't answering at $CERTIFY: bring the regular stack up first (scripts/deploy.sh)"
-if [[ $(env_value CERTIFY_DID) == "$(env_value CERTIFY_DID .env.example)" ]]; then
-  LIVE=$(curl -sf "$CERTIFY/.well-known/did.json" \
-    | python3 -c "import json,sys; print('did:key:' + json.load(sys.stdin)['verificationMethod'][0]['publicKeyMultibase'])")
+LIVE=$(curl -sf "$CERTIFY/.well-known/did.json" \
+  | python3 -c "import json,sys; print('did:key:' + json.load(sys.stdin)['verificationMethod'][0]['publicKeyMultibase'])")
+if [[ $(env_value CERTIFY_DID) != "$LIVE" ]]; then
   set_env CERTIFY_DID "$LIVE"
   echo "wrote Certify's live DID into .env (${LIVE:0:24}...)"
 else
-  echo ".env holds a DID other than the placeholder; left as it is"
+  echo ".env already holds Certify's live DID"
 fi
 
 # 4. The overlay beside the stack. Docker can't create a mount point inside the VDR's read-only templates mount, so
