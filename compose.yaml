@@ -60,6 +60,13 @@ services:
       dockerfile: docker/Dockerfile.renderer
     image: ghcr.io/mosip-asia/ait-renderer:${IMAGE_TAG}
     read_only: true  # it writes nothing: an organisation's Background never lands on disk
+    # Contained: a template runs inside it (Velocity 1.7 can reach Java reflection) and VC Lab has no login. It keeps
+    # its network, since it fetches what a template names, as Mimoto does. The limits leave room for an A4
+    # Background at 300 dpi (src/renderer/README.md, "Limits").
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 768m
+    pids_limit: 128
     extra_hosts:
       - "vdr.localhost:host-gateway"
     healthcheck:
