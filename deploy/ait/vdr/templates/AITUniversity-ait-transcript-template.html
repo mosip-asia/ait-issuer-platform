@@ -20,6 +20,7 @@
 </head>
 <body>
 #macro(claimValue $claimName)
+#set($__claim = false)
 #set($__claim = $rowProperties.get($claimName))
 #if($__claim && $__claim.size() > 0)
 #foreach($__entry in $__claim.entrySet())$__entry.value#break#end
