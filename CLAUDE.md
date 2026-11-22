@@ -67,6 +67,7 @@ python3 tests/test_inji_web_vc_readiness.py
 .venv/bin/python tests/test_adapter.py
 .venv/bin/python tests/test_courses.py
 python3 tests/test_print_check.py
+python3 tests/test_publish_set.py
 .venv/bin/python src/gateway/tests/test_evaluations.py
 bash scripts/check-data-guard.sh
 ```
