@@ -1,6 +1,15 @@
+---
+title: "Credential templates in VC Lab"
+description: "How to write a template that prints right in the Wallet the first time: what the Wallet does to the data, the conventions that follow, the four files VC Lab takes, and publishing a set locally."
+tags:
+  - guide
+  - vc-lab
+  - wallet
+  - print
+---
 # Credential templates in VC Lab
 
-How to write a template that prints right in the Wallet the first time. VC Lab ([`src/vc-lab/`](../../src/vc-lab/README.md)) has one view: the PDF the Wallet prints. Its preview is drawn by the [renderer](../../src/renderer/README.md), which runs the Wallet's own print path (Mimoto 0.21), so what you see is what the Wallet prints.
+How to write a template that prints right in the Wallet the first time. VC Lab ([`src/vc-lab/`](../../src/vc-lab/README.md)) has one view: the PDF the Wallet prints. Its preview is drawn by the [renderer](../../src/renderer/README.md), which runs the Wallet's own print path (Mimoto 0.21), so what you see is what the Wallet prints, with the differences under "Known limits". VC Lab prints with the locale fixed to `en`.
 
 Every snippet below was previewed through VC Lab with made-up data. Thas owns this guide; Thas's team keeps it working.
 
@@ -28,7 +37,7 @@ The Background reaches the template as `$backgroundImage`. A Background may be c
 
 **Rotate a photo before you upload it.** A JPEG can carry an EXIF "orientation" tag that tells a viewer to turn it. Mimoto and VC Lab both ignore the tag, so a phone photo of the paper prints sideways. Open the picture, rotate it until the paper is upright, and save it again, so the pixels themselves are upright. Check it in VC Lab's preview.
 
-A small set to start from (made-up data). The credential file:
+A small set to start a **preview** from (made-up data). It is for VC Lab only: a set you will publish starts from the Installation's own credential file instead (see "Publish it locally"). The credential file:
 
 ```json
 {
@@ -36,18 +45,16 @@ A small set to start from (made-up data). The credential file:
   "display": [
     { "name": "Example Card", "locale": "en", "text_color": "#000000", "background_color": "#ffffff" }
   ],
-  "display_order": ["registrationNo", "fullName", "honours", "courses", "courseRows"],
+  "display_order": ["registrationNo", "fullName", "courses", "courseRows"],
   "credential_subject": {
     "registrationNo": { "display": [{ "name": "Registration No.", "locale": "en" }] },
     "fullName": { "display": [{ "name": "Full Name", "locale": "en" }] },
-    "honours": { "display": [{ "name": "Honours", "locale": "en" }] },
     "courses": { "display": [{ "name": "Courses", "locale": "en" }] }
   },
   "vc_template": {
     "credentialSubject": {
       "registrationNo": "${studentId}",
       "fullName": "${fullName}",
-      "honours": "${honours}",
       "courses": "${courses}",
       "courseRows": "${courseRows}"
     }
@@ -61,7 +68,6 @@ The data:
 {
   "studentId": "st000001",
   "fullName": "Somchai Example",
-  "honours": ["Dean's list", "Cum laude"],
   "courses": [{ "no": "CS101", "grade": "A" }],
   "courseRows": "T|Term 1|6|3.50|3.50\nC|CS101|Intro to Computing|0|45|3|A\nC|CS102|Algorithms|0|45|3|"
 }
@@ -71,13 +77,16 @@ The data:
 
 Mimoto prepares the claims before your template sees them. Write the template for what it hands over, not for what the credential holds.
 
-- **Every claim is there.** The template gets all of them as `$rowProperties`: claim name, to display name, to text. A claim with no display name in the credential file still arrives, under its name in title case (`courseRows` shows as `Course Rows`).
-- **`display_order` sets the order** of `$rowProperties`: the claims it lists come first, in its order. **Name every claim a template loops over in `display_order`.** The claims it leaves out reach the Wallet in Certify's internal (HashMap) order, but reach VC Lab in the credential file's order, so a `#foreach` over `$rowProperties` prints them in a different order after the listed ones. A claim read by name (`#claimValue("fullName")`) is not affected.
+- **Nearly every claim is there.** The template gets them as `$rowProperties`: claim name, to display name, to text. A claim with no display name in the credential file still arrives, under its name in title case (`courseRows` shows as `Course Rows`). Not in it: `id` when the credential file gives it no display entry (with one, it arrives); any null claim; and the first non-empty claim named `image`, `face`, `photo`, `picture` or `portrait`, which arrives as `$face` instead.
+- **`display_order` sets the order** of `$rowProperties`: the claims it lists come first, in its order. **Name every claim a template loops over in `display_order`.** The claims it leaves out reach the Wallet in Certify's internal (HashMap) order, but reach VC Lab in the credential file's order, so a `#foreach` over `$rowProperties` prints them in a different order after the listed ones. A claim read by name (`#claimText("fullName")`) is not affected.
 - **`formatValue` flattens each value to text:**
-  - text and numbers stay as they are (`3.0` prints `3.0`);
-  - an object becomes its `value` field;
+  - text and numbers stay as they are;
+  - an object becomes its `value` field, or `""` when it has none;
   - a list of text is joined with `", "` (`Dean's list, Cum laude`);
-  - a list of objects becomes `""`. A template can't loop over `courses`: see "Rows" below.
+  - a list of numbers prints as `[1, 2]`;
+  - a list of objects becomes the `value` of the entry whose `language` matches the locale, else `""`. A template can't loop over `courses`: see "Rows" below.
+- **Values go into the HTML as they are.** A `<` in a value is read as a tag: `R&D <Lab>` prints as `R&D`.
+- **Send anything whose formatting matters as text.** Parsing the JSON can turn `3.50` into `3.5`, so a GPA or a credit count that must print as written goes as a string.
 
 To see what a template really gets, print everything:
 
@@ -92,8 +101,8 @@ To see what a template really gets, print everything:
 To read one claim, use a macro. It prints nothing for a claim the credential lacks:
 
 ```velocity
-#macro(claimValue $claimName)
-#set($__claim = "")
+#macro(claimText $claimName)
+#set($__claim = false)
 #set($__claim = $rowProperties.get($claimName))
 #if($__claim && $__claim.size() > 0)
 #foreach($__entry in $__claim.entrySet())$__entry.value#break#end
@@ -101,7 +110,9 @@ To read one claim, use a macro. It prints nothing for a claim the credential lac
 #end
 ```
 
-The first `#set` to `""` is needed: Velocity 1.7 keeps a variable's old value when `#set` is given null, so without it a missing claim would print the previous claim's value (macro variables are shared by every call). Then `#claimValue("fullName")` where the value goes. The Wallet's Velocity engine is shared by every print and keeps the first body it saw for a macro name, so when you change a macro's body, give it a new name (see [print from the Wallet](./print-from-the-wallet.md#4-swap-a-template)).
+The first `#set` is needed: Velocity 1.7 keeps a variable's old value when `#set` is given null, so without it a missing claim would print the previous claim's value (macro variables are shared by every call). Then `#claimText("fullName")` where the value goes.
+
+**A macro name must be new to the Wallet.** Mimoto's Velocity engine is shared by every print and keeps the first body it saw for a macro name until Mimoto restarts. Don't reuse a name that another template on that Mimoto already defines (a committed template may define `claimValue`, for one): your body would be ignored. When you change a macro's body, give it a new name too (see [print from the Wallet](./print-from-the-wallet.md#4-swap-a-template)).
 
 ## Conventions
 
@@ -125,7 +136,9 @@ Set `@page { margin: 0 }` and `body { margin: 0 }`, or the printer's default 36 
 </div>
 ```
 
-**Keep the layout out of the page box's flow.** A flowing block such as a `<p>` with a top margin, placed as the first child of `.page`, has that margin collapse through the box and push the whole box, Background included, down (a 12 pt margin moved the image 12 pt off the top). Put the layout in an absolutely placed box, as `.content` is above, whose margins stay inside it. Nothing then sits in `.page` but the image and that box.
+**Keep the layout out of the page box's flow.** A flowing block such as a `<p>` with a top margin, placed as a child of `.page`, has that margin collapse through the box and push the whole box, Background included, down (a 12 pt margin moved the image 12 pt off the top). Put the layout in an absolutely placed box, as `.content` is above, whose margins stay inside it. Nothing then sits in `.page` but the image and that box.
+
+**The page is one page.** An absolutely placed box never breaks onto a second page: what doesn't fit is cut off, with no error (120 course rows gave one page with about 37 of them visible). Design for the longest record you expect, and check it in the preview.
 
 ### Rows: delimited text and the split idiom
 
@@ -133,6 +146,7 @@ A list of objects reaches the template as `""`, so a template can't loop over `c
 
 ```velocity
 #set($cr = "")
+#set($crMap = false)
 #set($crMap = $rowProperties.get("courseRows"))
 #if($crMap)#foreach($e in $crMap.entrySet())#set($cr = $e.value)#end#end
 <table>
@@ -146,14 +160,14 @@ A list of objects reaches the template as `""`, so a template can't loop over `c
 ```
 
 - **The `-1` is required.** Java's `String.split` drops trailing empty fields, so `C|CS102|Algorithms|0|45|3|` (no grade yet) would split into 6 fields, not 7, and `$f.get(6)` fails.
-- **Set the variable to `""` first.** Velocity 1.7 keeps the old value when `#set` is given null, so for a claim the credential lacks, `$cr` would keep the previous text. The `#set($cr = "")` line is what stops that.
+- **Reset both variables first.** Velocity 1.7 keeps the old value when `#set` is given null, so for a claim the credential lacks, `$crMap` would keep the previous claim's map and refill `$cr` from it. The `#set($cr = "")` and `#set($crMap = false)` lines stop that. Reset them again if you read a second claim the same way.
 - **Place a table through a `<div>`.** iText honours `position: absolute` with `left` and `top` on a `<div>`. On a `<table>` it honours `left` but ignores `top`: the table lands at the top of the box it sits in. Put the table in an absolutely placed `<div>` and leave the table static.
 
 For the transcript, the Adapter's `courseRows` format and what the template does with it are in [print from the Wallet](./print-from-the-wallet.md#t4-courserows-a-text-copy-of-the-course-grid) (an AIT example).
 
 ### The QR code
 
-Mimoto 0.21 hands the template `$qrCodeImage` (a bare base64 PNG, so the `src` needs the `data:image/png;base64,` prefix) only when the credential's data is under 4096 bytes. Above that the Wallet prints no QR, and a long credential (a transcript with many courses) can pass it. VC Lab always draws a placeholder QR, so its preview can show one where the Wallet prints none. Guard it, and design the page so it looks right without it:
+Mimoto 0.21 hands the template `$qrCodeImage` (a bare base64 PNG, so the `src` needs the `data:image/png;base64,` prefix) only when the issuer's `qr_code_type` is `EmbeddedVC` and the encoded QR data is under 4096 characters. Above that, the Wallet prints no QR, and a long credential (a transcript with many courses) can pass it. With `OnlineSharing` there is no such limit, and any other type gives `""`. VC Lab always draws a placeholder QR, so its preview can show one where the Wallet prints none. Guard it, and design the page so it looks right without it:
 
 ```velocity
 #if($qrCodeImage && $qrCodeImage != "")<img src="data:image/png;base64,$qrCodeImage" style="width:80pt; height:80pt"/>#end
@@ -178,7 +192,7 @@ If the file isn't at that address, the page falls back silently. Check the PDF's
 
 ### UTF-8 or HTML entities
 
-Put `<meta charset="UTF-8"/>` in the `<head>` and save the file as UTF-8. Text typed into a template (Thai, accents) is read by Mimoto as ISO-8859-1 unless the VDR serves the template with `charset=utf-8` (ask T2 in [print from the Wallet](./print-from-the-wallet.md#t2-mimoto-reads-its-files-from-the-vdr)). The safe form is an HTML entity:
+Save the template as UTF-8. Text typed into it (Thai, accents) is read by Mimoto as ISO-8859-1 unless the VDR serves the template with `charset=utf-8` (ask T2 in [print from the Wallet](./print-from-the-wallet.md#t2-mimoto-reads-its-files-from-the-vdr)). A `<meta charset="UTF-8"/>` in the `<head>` is for browsers only: it does not change what Mimoto reads. The safe form is an HTML entity:
 
 ```html
 <p>&#x0E20;&#x0E32;&#x0E29;&#x0E32;&#x0E44;&#x0E17;&#x0E22;</p>
@@ -186,12 +200,10 @@ Put `<meta charset="UTF-8"/>` in the `<head>` and save the file as UTF-8. Text t
 
 VC Lab prints raw Thai correctly, because it hands the renderer the file as UTF-8, so its preview can look right where the Wallet's print would not: use entities for text typed into the template. Claim values are not affected: they arrive as the credential holds them.
 
-More about how these conventions follow from Mimoto, and the asks T2 to T4: [Template conventions](./print-from-the-wallet.md#template-conventions) in the print guide.
-
 ## Adding or changing a box
 
-1. **The template:** place `#claimValue("newClaim")` where the value goes.
-2. **The credential file:** add `"newClaim": "${sisField}"` to `vc_template.credentialSubject` (and to `credential_subject` for its display name).
+1. **The template:** place `#claimText("newClaim")` where the value goes.
+2. **The credential file:** add `"newClaim": "${sisField}"` to `vc_template.credentialSubject` (and to `credential_subject` for its display name), and add the claim to `display_order`.
 3. **The context:** a new claim name needs a term in the installation's JSON-LD context (`deploy/<installation>/vdr/contexts/`), which lists every claim. Keep today's claim names where possible.
 4. **SIS:** if the response has no field for it, the box stays empty until the Adapter team adds one. Ask in their field names.
 
@@ -205,11 +217,17 @@ VC Lab's Download gives a zip of the four files. To print with it from the real 
 ./scripts/publish-set.sh ~/Downloads/set.zip AITUniversity
 ```
 
-The second argument is the issuer id, the Wallet's `issuer_id` (`AITUniversity` is the AIT example). The command puts the template and the Background on the local VDR and loads the credential file into Certify, and the next Wallet print uses them. Run `./scripts/print-check.sh --published` to print once and keep the PDF. It works only on the local stack, and git tracks the template file it replaces, so a published set is a test, not a release. On a deployment, placing the files is infra's step (T3). What each step does, and how to put the committed files back: [Publish a set](./print-from-the-wallet.md#publish-a-set). To check that VC Lab's preview and the real Wallet print the same page for a set, run `./scripts/parity-check.sh`: see [section 6](./print-from-the-wallet.md#6-check-that-vc-lab-shows-what-the-wallet-prints).
+The second argument is the issuer id, the Wallet's `issuer_id` (`AITUniversity` is the AIT example). The command puts the template and the Background on the local VDR and loads the credential file into Certify, and the next Wallet print uses them. What to know before you publish:
+
+- **Start from the Installation's own credential file** (`deploy/<installation>/certify/credentials/`) and keep its `credential_config_key_id`. The starter above is for previews: Certify's plugin refuses any list or object in the Adapter's response except `courses`, and the sync tool unquotes only `"courses": "${courses}"`.
+- **`print-check.sh --published`** prints once and keeps the PDF, but it prints the Installation's smoke credential (`ait-transcript` for AIT) and asserts the student's name is on the page.
+- **"Git tracks the template" holds only when the ids match a committed file.** Publishing a set whose issuer id and credential id match a committed template replaces that tracked file: the next checkout puts it back, so a published set is a test, not a release.
+- It works only on the local stack. On a deployment, placing the files is infra's step (T3).
+
+What each step does, and how to put the committed files back: [Publish a set](./print-from-the-wallet.md#publish-a-set). To check that VC Lab's preview and the real Wallet print the same page for a set, run `./scripts/parity-check.sh`: see [section 6](./print-from-the-wallet.md#6-check-that-vc-lab-shows-what-the-wallet-prints).
 
 ## Known limits
 
-- **Certify takes only flat fields.** Its data-provider plugin passes the Adapter's top-level fields and lists named in `mosip.certify.adapter.structured-keys` (default `courses`); it refuses nested objects and does not unwrap `credentialSubject`. VC Lab accepts both, so a mapping that reads `${thesis.title}` works in VC Lab but not yet in Certify.
-- **Numbers print as sent.** A credit sent as `3.0` prints `3.0`.
-- **VC Lab's preview is the renderer's copy of Mimoto's print**, not Mimoto itself. [The renderer's README](../../src/renderer/README.md) lists what it repeats and where it differs (the QR code is a placeholder, the logo comes from the credential file, each print gets a new Velocity engine so a `#macro` body is never stale).
+- **Certify takes only flat fields.** Its data-provider plugin refuses any list or object in the Adapter's response except `courses` (and the lists named in `mosip.certify.adapter.structured-keys`, default `courses`); it does not unwrap `credentialSubject`. VC Lab accepts both, so a mapping that reads `${thesis.title}` or a list of text works in VC Lab but not yet in Certify.
+- **VC Lab's preview is the renderer's copy of Mimoto's print**, not Mimoto itself. [The renderer's README](../../src/renderer/README.md) lists what it repeats and where it differs: the QR code is a placeholder, the logo comes from the credential file, the locale is fixed to `en`, each print gets a new Velocity engine so a `#macro` body is never stale, and claims outside `display_order` come in another order.
 - **Issuing with a credential file from VC Lab:** run the sync tool with its folder mounted; see [VC Lab's README](../../src/vc-lab/README.md#issuing-with-a-credential-file-from-vc-lab).

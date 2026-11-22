@@ -189,43 +189,7 @@ Two known differences:
 
 ## Template conventions
 
-What Mimoto does to a credential decides how a template is written (Velocity 1.7 and iText html2pdf 5.0.3):
-
-- **Rows come from delimited text.** Mimoto hands every list of objects, `courses` included, to the template as an empty string, so a template can't loop over it. Anything drawn as rows reaches the credential as one text claim (`courseRows`, T4), which the template splits:
-
-  ```velocity
-  #set($cr = "")
-  #set($crMap = $rowProperties.get("courseRows"))
-  #if($crMap)#foreach($e in $crMap.entrySet())#set($cr = $e.value)#end#end
-  #foreach($row in $cr.split("\n"))
-  #set($f = $row.split("\|", -1))
-  ## $f.get(0) is T (term heading) or C (course)
-  #end
-  ```
-
-  **The `-1` is required.** Java's `String.split` drops trailing empty fields, so an ungraded course (`C|CS701|X|0|45|3|`) splits into 6 fields, not 7, and `$f.get(6)` fails. Use `split("\|", -1)` wherever a template reads the last field of a row.
-- **Every claim reaches the template** as `$rowProperties` (claim to display name to text), whether or not it has a display name, ordered by the credential file's `display_order` first. A list of text is joined with `", "`.
-- **A full-bleed Background needs two things.** Set `@page { margin: 0 }` and `body { margin: 0 }`, or iText's 36 pt page margin moves the image in from the edge. And wrap the layout in a page-sized `position: relative` box, with the image absolutely placed inside it. An `<img src="$backgroundImage">` placed straight in `<body>` is drawn above the page and is lost:
-
-  ```html
-  <style>
-    @page { size: A4; margin: 0; }
-    body { margin: 0; }
-    .page { position: relative; width: 595.28pt; height: 841.89pt; }
-    .background { position: absolute; left: 0; top: 0; width: 595.28pt; height: 841.89pt; }
-  </style>
-  <div class="page">
-    #if($backgroundImage && $backgroundImage != "")<img class="background" src="$backgroundImage"/>#end
-    <!-- layout -->
-  </div>
-  ```
-- **`#set` with a missing claim keeps the old value.** Velocity 1.7 leaves a variable as it was when `#set` is given null, so `#set($v = $rowProperties.get("department"))` for a claim the credential lacks leaves `$v` holding the previous claim's text: the box prints the wrong value. Set the variable to `""` first, as the `#set($cr = "")` above does, and test `#if($v && $v.size() > 0)` after.
-- **Place a table through a `<div>`.** iText honours `position: absolute` with `left` and `top` on a `<div>` but not on a `<table>`, which lands at the page's top left. Put the table in an absolutely placed `<div>` and leave the table static.
-- **Images and fonts use absolute addresses.** Mimoto sets no base URL.
-- **Fonts:** only the 14 standard PDF fonts are built in, so Arial and Arial Narrow fall back. Any other font, Thai included, comes through `@font-face` with an absolute URL, see "Fonts" above for where the file goes and why git ignores it.
-- **Non-ASCII text typed into a template** needs the VDR's `charset=utf-8` (T2), or HTML entities. Claim values are not affected.
-
-The generic template the print check uses, `tests/fixtures/print-check-template.html`, shows each of these working.
+How a template is written for the Wallet's print (Velocity 1.7 and iText html2pdf 5.0.3) is in [Credential templates in VC Lab](./vc-lab-templates.md): what Mimoto does to a credential's data, rows from delimited text (T4's `courseRows` and the split idiom), a full-bleed Background, fonts and UTF-8. The generic template the print check uses, `tests/fixtures/print-check-template.html`, shows each of them working.
 
 ## T2: Mimoto reads its files from the VDR
 
