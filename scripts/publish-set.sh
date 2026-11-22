@@ -43,7 +43,8 @@ require_local_certify
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 # the VDR and CDN addresses this stack's template-sync rewrites to: Compose reads them from .env, a shell export wins
-VDR_BASE_URL=${VDR_BASE_URL:-$(env_value VDR_BASE_URL || true)} CDN_BASE_URL=${CDN_BASE_URL:-$(env_value CDN_BASE_URL || true)}   python3 src/tools/publish_set.py --set "$SET" "--issuer-id=$ISSUER_ID" --installation "$INSTALLATION" \
+VDR_BASE_URL=${VDR_BASE_URL:-$(env_value VDR_BASE_URL || true)} CDN_BASE_URL=${CDN_BASE_URL:-$(env_value CDN_BASE_URL || true)} \
+  python3 src/tools/publish_set.py --set "$SET" "--issuer-id=$ISSUER_ID" --installation "$INSTALLATION" \
   --credentials-out "$TMP/credentials"
 chmod -R a+rX "$TMP"
 
