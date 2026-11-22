@@ -80,29 +80,37 @@ def find_seed_sql_path():
     return repo_root / "deploy" / installation / "certify" / "certify_seed.sql"
 
 
+def address_substitutions():
+    """The values the credential files' ${...} variables take on this stack, from the environment."""
+    vdr_base = os.getenv("VDR_BASE_URL") or "http://vdr.localhost"
+    cdn_base = os.getenv("CDN_BASE_URL") or vdr_base
+    certify_did = os.getenv("CERTIFY_DID") or "did:key:z6MkpPLACEHOLDERreplaceMeViaBootstrapDidRefreshScript1"
+    return {
+        "VDR_BASE_URL": vdr_base.rstrip("/"),
+        "CDN_BASE_URL": cdn_base.rstrip("/"),
+        "CERTIFY_DID": certify_did,
+    }
+
+
+def rewrite_file_text(content, substitutions):
+    """The rewrite load_credential_configs applies to a credential file's text before parsing it."""
+    for var_name, var_val in substitutions.items():
+        content = content.replace(f"${{{var_name}}}", var_val)
+    content = content.replace("http://vdr.localhost", substitutions["VDR_BASE_URL"])
+    return content.replace("http://cdn.localhost", substitutions["VDR_BASE_URL"])
+
+
 def load_credential_configs(creds_dir):
     configs = []
     if not creds_dir.exists():
         print(f"[-] Error: Credentials directory not found: {creds_dir}", file=sys.stderr)
         sys.exit(1)
 
-    vdr_base = os.getenv("VDR_BASE_URL") or "http://vdr.localhost"
-    cdn_base = os.getenv("CDN_BASE_URL") or vdr_base
-    certify_did = os.getenv("CERTIFY_DID") or "did:key:z6MkpPLACEHOLDERreplaceMeViaBootstrapDidRefreshScript1"
-
-    substitutions = {
-        "VDR_BASE_URL": vdr_base.rstrip("/"),
-        "CDN_BASE_URL": cdn_base.rstrip("/"),
-        "CERTIFY_DID": certify_did,
-    }
+    substitutions = address_substitutions()
 
     for p in sorted(creds_dir.glob("*.json")):
         with open(p, "r", encoding="utf-8") as f:
-            content = f.read()
-            for var_name, var_val in substitutions.items():
-                content = content.replace(f"${{{var_name}}}", var_val)
-            content = content.replace("http://vdr.localhost", substitutions["VDR_BASE_URL"])
-            content = content.replace("http://cdn.localhost", substitutions["VDR_BASE_URL"])
+            content = rewrite_file_text(f.read(), substitutions)
             try:
                 data = json.loads(content)
                 configs.append((p.name, data))

@@ -7,7 +7,8 @@ A set is the zip VC Lab's Download gives: template/, credential/, sample/ and ba
 - the Background, as the bytes it came in, at <credential configuration id>/background.png under the VDR's templates
   folder (git ignores it), whatever its type: the printer reads the type from the bytes. A set without one removes
   what was published, so the VDR mirrors the set, unless the credential file's display[0].background_image.uri names
-  that address (paper placed by hand, with no copy in git): then it keeps it and says so;
+  that address once template-sync has rewritten it for this stack (paper placed by hand, with no copy in git): then it
+  keeps it and says so;
 - the credential file into --credentials-out, a folder holding the Installation's credential files with the set's in
   place of the committed one, for template-sync to read. The set's file gets the live DID (did_url ${CERTIFY_DID}) and,
   with a Background, display[0].background_image.uri at the published address.
@@ -27,7 +28,9 @@ import subprocess
 import sys
 import zipfile
 from pathlib import Path
-from urllib.parse import urlsplit
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # src, for certify_template_sync
+from certify_template_sync.sync import address_substitutions, rewrite_file_text  # noqa: E402
 
 VDR_TEMPLATES = "http://vdr.localhost/templates"  # template-sync rewrites it for each stack's VDR (VDR_BASE_URL)
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
@@ -99,18 +102,18 @@ def for_template_sync(the_set: Set) -> dict:
 
 
 def names_published_background(the_set: Set) -> bool:
-    """True when the credential file's display[0].background_image.uri is the address a Background is published at:
-    the local VDR's host (template-sync rewrites it for each stack) and /templates/<id>/background.png, whatever the
-    query or the spaces around it. That is paper placed by hand, which has no copy in git."""
+    """True when template-sync would publish the credential file's display[0].background_image.uri as the address a
+    Background is published at, whatever the query or the spaces around it: that is paper placed by hand, which has no
+    copy in git. Both addresses go through template-sync's own rewrite for this stack (VDR_BASE_URL, CDN_BASE_URL)."""
     display = the_set.parsed.get("display")
     first = display[0] if isinstance(display, list) and display and isinstance(display[0], dict) else {}
     image = first.get("background_image")
     uri = image.get("uri") if isinstance(image, dict) else None
     if not isinstance(uri, str):
         return False
-    address = urlsplit(uri.strip())
-    return (address.hostname == urlsplit(VDR_TEMPLATES).hostname
-            and address.path == f"{urlsplit(VDR_TEMPLATES).path}/{the_set.config_id}/background.png")
+    substitutions = address_substitutions()
+    published = rewrite_file_text(f"{VDR_TEMPLATES}/{the_set.config_id}/background.png", substitutions)
+    return re.split(r"[?#]", rewrite_file_text(uri.strip(), substitutions), maxsplit=1)[0] == published
 
 
 def tracked(path: Path) -> bool:
@@ -129,6 +132,8 @@ def publish(set_zip: Path, issuer_id: str, installation: str, credentials_out: P
     except OSError as e:
         raise Refused(f"can't read {set_zip}: {e.strerror}") from None
 
+    keeps_background = names_published_background(the_set)  # decided before anything is written
+
     template = templates / f"{issuer_id}-{the_set.config_id}-template.html"
     was_tracked = tracked(template)
     template.write_bytes(the_set.template)
@@ -143,7 +148,7 @@ def publish(set_zip: Path, issuer_id: str, installation: str, credentials_out: P
         print(f"background: {background} ({image_kind(the_set.background)}, {len(the_set.background)} bytes)")
     else:
         background = templates / the_set.config_id / "background.png"
-        if background.exists() and names_published_background(the_set):
+        if background.exists() and keeps_background:
             print(f"no Background in the set, but its credential file names {background}: keeping it")
         else:
             removed = background.exists()

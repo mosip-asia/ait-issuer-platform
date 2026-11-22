@@ -11,7 +11,8 @@
 #   2. puts the template on the VDR as <issuer id>-<credential configuration id>-template.html and warns that git
 #      tracks that file; puts the Background at <credential configuration id>/background.png under the VDR's
 #      templates folder (git-ignored), whatever its type, or removes the one there when the set has none, so the VDR
-#      mirrors the set, unless the set's credential file names that file on the local VDR (paper placed by hand,
+#      mirrors the set, unless template-sync would publish the set's display[0].background_image.uri as that file's
+#      address (the same rewrite, with this stack's VDR_BASE_URL and CDN_BASE_URL from .env: paper placed by hand,
 #      kept) (src/tools/publish_set.py);
 #   3. writes Certify's live DID into .env when .env holds another one;
 #   4. loads the credential file into Certify through template-sync, from a temporary folder holding the
@@ -41,7 +42,8 @@ require_local_certify
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
-python3 src/tools/publish_set.py --set "$SET" "--issuer-id=$ISSUER_ID" --installation "$INSTALLATION" \
+# the VDR and CDN addresses this stack's template-sync rewrites to: Compose reads them from .env, a shell export wins
+VDR_BASE_URL=${VDR_BASE_URL:-$(env_value VDR_BASE_URL || true)} CDN_BASE_URL=${CDN_BASE_URL:-$(env_value CDN_BASE_URL || true)}   python3 src/tools/publish_set.py --set "$SET" "--issuer-id=$ISSUER_ID" --installation "$INSTALLATION" \
   --credentials-out "$TMP/credentials"
 chmod -R a+rX "$TMP"
 
