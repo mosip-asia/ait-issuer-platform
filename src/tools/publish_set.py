@@ -6,7 +6,8 @@ A set is the zip VC Lab's Download gives: template/, credential/, sample/ and ba
   git tracks that file, because the next checkout puts the committed one back;
 - the Background, as the bytes it came in, at <credential configuration id>/background.png under the VDR's templates
   folder (git ignores it), whatever its type: the printer reads the type from the bytes. A set without one removes
-  what was published, so the VDR mirrors the set;
+  what was published, so the VDR mirrors the set, unless the credential file's display[0].background_image.uri names
+  that address (paper placed by hand, with no copy in git): then it keeps it and says so;
 - the credential file into --credentials-out, a folder holding the Installation's credential files with the set's in
   place of the committed one, for template-sync to read. The set's file gets the live DID (did_url ${CERTIFY_DID}) and,
   with a Background, display[0].background_image.uri at the published address.
@@ -96,6 +97,16 @@ def for_template_sync(the_set: Set) -> dict:
     return credential
 
 
+def names_published_background(the_set: Set) -> bool:
+    """True when the credential file's display[0].background_image.uri is the address a Background is published at
+    (on any VDR host): paper placed by hand, which has no copy in git."""
+    display = the_set.parsed.get("display")
+    first = display[0] if isinstance(display, list) and display and isinstance(display[0], dict) else {}
+    image = first.get("background_image")
+    uri = image.get("uri") if isinstance(image, dict) else None
+    return isinstance(uri, str) and uri.endswith(f"/templates/{the_set.config_id}/background.png")
+
+
 def tracked(path: Path) -> bool:
     return subprocess.run(["git", "ls-files", "--error-unmatch", str(path)], capture_output=True).returncode == 0
 
@@ -126,9 +137,12 @@ def publish(set_zip: Path, issuer_id: str, installation: str, credentials_out: P
         print(f"background: {background} ({image_kind(the_set.background)}, {len(the_set.background)} bytes)")
     else:
         background = templates / the_set.config_id / "background.png"
-        removed = background.exists()
-        background.unlink(missing_ok=True)
-        print(f"no Background in the set: {'removed ' + str(background) if removed else 'none at ' + str(background)}")
+        if background.exists() and names_published_background(the_set):
+            print(f"no Background in the set, but its credential file names {background}: keeping it")
+        else:
+            removed = background.exists()
+            background.unlink(missing_ok=True)
+            print(f"no Background in the set: {'removed ' + str(background) if removed else 'none at ' + str(background)}")
 
     credentials_out.mkdir(parents=True, exist_ok=True)
     for stale in credentials_out.glob("*.json"):
