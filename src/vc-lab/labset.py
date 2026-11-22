@@ -21,10 +21,11 @@ MAX_UPLOAD = 8 * 1024 * 1024  # bytes: one request, and the files unpacked from 
 # The files of a set together, so that Download's zip (the files plus its own headers) is a request VC Lab takes
 # back. The slack is far above a zip's headers and deflate's worst case on an incompressible PNG.
 MAX_SET = MAX_UPLOAD - 64 * 1024
-# The biggest Background, in pixels. A4 at 300 dpi is 2480 x 3508 = 8.7 million, so this keeps 15% above print
-# quality. The renderer decodes the image, 4 bytes a pixel, inside a 640 MB heap shared by up to four prints: a
-# file's size says little (a PNG of one colour is tiny), so the size in its header is what's bounded.
-MAX_PIXELS = 10_000_000
+# The biggest Background, as the renderer decodes it: pixels x channels x bytes per sample, read from the file's
+# header (a PNG of one colour is tiny, so the file's size says little). 40 MB holds A4 at 300 dpi (2480 x 3508) in
+# RGBA, 35 MB, with room; a 16-bit RGBA page, which takes 70 MB, doesn't fit. What the renderer's 640 MB heap, shared
+# by up to four prints, takes of this was measured: see notes/07.md, gate round 2.
+MAX_DECODED = 40_000_000
 REQUIRED = ("template", "credential", "sample")
 
 T = TypeVar("T")
@@ -57,9 +58,8 @@ class LabSet:
         new = dataclasses.replace(self, **{slot: parse(slot, name, data) for slot, (name, data) in files.items()})
         total = sum(len(f.data) for slot in SLOTS if (f := getattr(new, slot)) is not None)
         if total > MAX_SET:
-            mb = 1024 * 1024
-            raise ValueError(f"the set would hold {total / mb:.1f} MB of files in all; it can hold {MAX_SET / mb:.1f} MB "
-                             "in all, so that Download's zip uploads back")
+            raise ValueError(f"the set would hold {total:,} bytes of files in all: {total - MAX_SET:,} over the "
+                             f"{MAX_SET:,}-byte limit that lets Download's zip upload back")
         return new
 
 
@@ -82,16 +82,25 @@ def _template(name: str, data: bytes) -> str:
     return source  # Velocity checks the rest when it renders: /preview.pdf answers 422 with the line
 
 
-def _png_size(data: bytes) -> tuple[int, int] | None:
-    """(width, height) from the IHDR chunk, which a PNG starts with; None when it isn't there."""
-    if len(data) < 24 or data[12:16] != b"IHDR":
+class NotAnImage(ValueError):
+    """The Background isn't a PNG or JPEG whose header can be read."""
+
+
+def _png_size(data: bytes) -> tuple[int, int, int] | None:
+    """(width, height, decoded bytes per pixel) from the IHDR chunk, which a PNG starts with; None when it isn't there
+    or says something a PNG can't. A palette decodes to RGB; a sample of 16 bits takes 2 bytes, any less 1."""
+    if len(data) < 26 or data[12:16] != b"IHDR":
         return None
-    return struct.unpack(">II", data[16:24])
+    width, height, depth, colour = struct.unpack(">IIBB", data[16:26])
+    channels = {0: 1, 2: 3, 3: 3, 4: 2, 6: 4}.get(colour)
+    if channels is None or depth not in (1, 2, 4, 8, 16):
+        return None
+    return width, height, channels * (2 if depth == 16 else 1)
 
 
-def _jpeg_size(data: bytes) -> tuple[int, int] | None:
-    """(width, height) from the first start-of-frame marker (SOF0 to SOF15, not DHT, JPG or DAC); None when the
-    marker segments end, or run past the data, before one."""
+def _jpeg_size(data: bytes) -> tuple[int, int, int] | None:
+    """(width, height, decoded bytes per pixel) from the first start-of-frame marker (SOF0 to SOF15, not DHT, JPG or
+    DAC); None when the marker segments end, or run past the data, before one."""
     i = 2  # after SOI
     while i + 4 <= len(data):
         if data[i] != 0xFF:
@@ -106,10 +115,12 @@ def _jpeg_size(data: bytes) -> tuple[int, int] | None:
         else:
             length = int.from_bytes(data[i + 2:i + 4], "big")
             if 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC):
-                if length < 8 or i + 9 > len(data):
+                if length < 8 or i + 10 > len(data):
                     return None
+                precision = data[i + 4]
                 height, width = struct.unpack(">HH", data[i + 5:i + 9])
-                return width, height
+                components = data[i + 9]
+                return (width, height, components * (2 if precision > 8 else 1)) if components else None
             if length < 2:
                 return None
             i += 2 + length
@@ -121,17 +132,22 @@ _IMAGES = ((b"\x89PNG\r\n\x1a\n", "image/png", _png_size), (b"\xff\xd8\xff", "im
 
 def _background(name: str, data: bytes) -> str:
     """The image as a data: URI. Its kind and size are read from the file's own header, never from its name; a file
-    whose header can't be read, or whose image is over MAX_PIXELS, is refused."""
+    whose header can't be read is NotAnImage, and one that decodes to more than MAX_DECODED is refused. Only the
+    header is read: a damaged image behind a good header is accepted, and the preview then draws no Background."""
     for signature, media_type, read_size in _IMAGES:
         if data.startswith(signature):
             size = read_size(data)
             if size is None or 0 in size:
                 break
-            if size[0] * size[1] > MAX_PIXELS:
-                raise ValueError(f"background {name!r} is {size[0]} x {size[1]} pixels; VC Lab takes at most "
-                                 f"{MAX_PIXELS:,} (A4 at 300 dpi is 2480 x 3508): scale the image down")
+            width, height, per_pixel = size
+            if width * height * per_pixel > MAX_DECODED:
+                raise ValueError(
+                    f"background {name!r} is {width} x {height} pixels at {per_pixel} bytes each, "
+                    f"{width * height * per_pixel // 1_000_000} MB decoded; VC Lab takes at most "
+                    f"{MAX_DECODED // 1_000_000} MB decoded (A4 at 300 dpi in RGBA is 35 MB): scale the image down, "
+                    "or save it with fewer colour channels or bits")
             return f"data:{media_type};base64,{base64.b64encode(data).decode('ascii')}"
-    raise ValueError(f"background {name!r} is not a PNG or JPEG image; upload the organisation's paper as PNG or JPEG")
+    raise NotAnImage(f"background {name!r} is not a PNG or JPEG image; upload the organisation's paper as PNG or JPEG")
 
 
 def _json_object(slot: str, name: str, data: bytes) -> dict[str, Any]:
@@ -168,11 +184,24 @@ _PARSERS: dict[str, Callable[[str, bytes], Any]] = {
 assert set(_PARSERS) == set(SLOTS), "every slot of LabSet needs a parser"
 
 
+MAX_NAME_BYTES = 255  # a file name's limit on common file systems; also keeps a zip's headers within MAX_SET's slack
+
+
+def _cut(name: str, limit: int) -> str:
+    """The name within `limit` bytes of UTF-8, whole characters only, keeping a short extension."""
+    if len(name.encode("utf-8")) <= limit:
+        return name
+    stem, dot, extension = name.rpartition(".")
+    tail = dot + extension if dot and len(extension.encode("utf-8")) <= 16 else ""
+    head = (stem if tail else name).encode("utf-8")[: limit - len(tail.encode("utf-8"))]
+    return head.decode("utf-8", "ignore") + tail
+
+
 def safe_filename(filename: str, fallback: str) -> str:
     """The file name without any path parts or control characters; the fallback when nothing is left."""
     name = re.split(r"[\\/]", filename or "")[-1]
     name = re.sub(r"[\x00-\x1f\x7f\"]", "", name).strip().lstrip(".")
-    return name or fallback
+    return _cut(name, MAX_NAME_BYTES) or fallback
 
 
 def to_zip(lab: LabSet) -> bytes:
@@ -208,7 +237,5 @@ def from_zip(data: bytes) -> LabSet:
         raise ValueError("bundle holds no files")
     try:
         return LabSet().replace(files)
-    except ValueError as e:
-        if "background" in files and str(e).startswith("background"):
-            raise ValueError(f"{e}; remove background/ from the zip, or upload the files one at a time") from None
-        raise
+    except NotAnImage as e:  # an older VC Lab's zip holds a PDF here
+        raise ValueError(f"{e}; remove background/ from the zip, or upload the files one at a time") from None
