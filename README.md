@@ -214,7 +214,7 @@ ait-issuer-platform/
 ├── docker/                               # CONTAINER PACKAGING RECIPES
 │   ├── Dockerfile.ait-vc                 # Unified Python container (Gateway, Portal, Tools, VC Lab, Template Sync)
 │   ├── Dockerfile.certify                # Bakes src/issuer SPI plugin into Inji Certify
-│   └── Dockerfile.renderer               # VC Lab's renderer: Mimoto 0.21's print path (src/renderer)
+│   └── Dockerfile.renderer               # VC Lab's renderer: Certify 0.14's claim mapping, Mimoto 0.21's print path (src/renderer)
 │
 ├── compose.yaml                          # Root orchestrator (includes certify, verify, web-wallet, trust, traefik)
 ├── compose.certify.yaml                  # Core Inji Certify Issuer Engine (internal DB & ingress Nginx)
@@ -365,7 +365,7 @@ cd src/issuer && mvn test
 
 | Module | Test Target | What It Verifies |
 |---|---|---|
-| **VC Lab** | `src/vc-lab/test_main.py` | The upload-only API, the claim mapping, and the request it sends the renderer |
+| **VC Lab** | `src/vc-lab/test_main.py` | The upload-only API, the request it sends the renderer, and (with the renderer) the claims Certify would sign |
 | **Gateway** | `src/gateway/tests/test_credential_types.py` | Credential clearance rules, hold checks, zero balance, conferral predicates |
 | **Gateway** | `src/gateway/tests/test_evaluations.py` | In-process evaluation of `POST /evaluations` across all installation personas |
 | **Issuer Plugin** | `src/issuer/` (`mvn test`) | SPI `fetchData()` contract, HTTP retry/timeouts, strict JSON escaping, trace keys |

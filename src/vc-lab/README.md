@@ -1,6 +1,6 @@
 # VC Lab
 
-VC Lab renders a credential's HTML template from files you upload and shows the PDF the Wallet prints from them. Its preview comes from the [renderer](../renderer/README.md), which runs Mimoto 0.21's print path; VC Lab gets its address from `RENDERER_URL`, which Compose sets. It knows nothing about any organisation: it has no built-in template, data or branding, and it reads nothing from the repo's folders, so a deployed VC Lab behaves the same as a local one.
+VC Lab renders a credential's HTML template from files you upload and shows the PDF the Wallet prints from them. Its preview comes from the [renderer](../renderer/README.md), which maps the data to claims as Certify 0.14 does and runs Mimoto 0.21's print path; VC Lab gets its address from `RENDERER_URL`, which Compose sets. It knows nothing about any organisation: it has no built-in template, data or branding, and it reads nothing from the repo's folders, so a deployed VC Lab behaves the same as a local one.
 
 ## The set
 
@@ -9,7 +9,7 @@ What each file is, and how a value travels from SIS to the page, is in [the temp
 | Slot | File | What VC Lab reads from it |
 |---|---|---|
 | `template` | the HTML (Velocity) render template | the whole file |
-| `credential` | Certify's whole credential configuration file | `vc_template.credentialSubject` (the mapping) and the first `display` entry |
+| `credential` | Certify's whole credential configuration file | `vc_template` (the mapping), `display`, `display_order` and `credential_subject` |
 | `sample` | the Adapter's response, exactly as the Adapter sends it | its `credentialSubject`, or the whole file when it has none |
 | `background` (optional) | a PNG or JPEG of the organisation's paper | the whole image: the preview hands it to the template as `$backgroundImage`, overriding `display[0].background_image.uri` |
 
@@ -18,8 +18,8 @@ Uploading a file replaces that slot only; uploading a zip from Download replaces
 ## From sample to page
 
 1. The record is the sample's `credentialSubject`, or the whole sample.
-2. The mapping is evaluated against the record. `${name}`, `$name` and dotted paths (`${thesis.title}`) read the record; a value that is exactly one reference passes a list or object through unchanged. Certify's own variables (`${_holderId}`, `${_issuer}`, any name starting with `_`) get placeholders. The result is the credential's claims, keyed by the mapping's left side.
-3. VC Lab sends the template, the claims, the credential file and the Background (if any) to the renderer, which hands the template Mimoto's variables (`$rowProperties`, `$titleName`, `$logoUrl`, `$textColor`, `$backgroundColor`, `$qrCodeImage`, `$backgroundImage`, and the rest) as Mimoto 0.21 does, and draws the PDF. A list of objects reaches the template as `""` and a list of text joined with `", "`, as in the Wallet. Where it differs: the claims `display_order` leaves out come in the credential file's order here and in Certify's (a Java `HashMap`'s) in the Wallet, so a template that loops over `$rowProperties` names every claim it loops over in `display_order`; and the QR is always a placeholder here, while the Wallet prints none above 4096 bytes of QR data. See [the renderer's README](../renderer/README.md).
+2. The `vc_template` becomes the text the sync tool stores for Certify, by the sync tool's own function (`build_vc_template_base64` in `src/certify_template_sync/sync.py`), so `"courses": "${courses}"` is unquoted as in Certify. VC Lab maps nothing itself.
+3. VC Lab sends the template, the record, that text, the credential file and the Background (if any) to the renderer. The renderer maps the claims by Certify's steps: the Data-provider plugin's record step, Certify's variables (placeholders for `${_holderId}`, `${validFrom}` and the rest), Velocity 1.7 and org.json, and refuses what Certify would refuse (see the renderer's README, "How it maps the claims"). Then it hands the template Mimoto's variables (`$rowProperties`, `$titleName`, `$logoUrl`, `$textColor`, `$backgroundColor`, `$qrCodeImage`, `$backgroundImage`, and the rest) as Mimoto 0.21 does, and draws the PDF. A list of objects reaches the template as `""` and a list of text joined with `", "`, as in the Wallet. Where it differs: the order of the claims `display_order` leaves out is not checked against the Wallet's, so a template that loops over `$rowProperties` names every claim it loops over in `display_order`; and the QR is always a placeholder here, while the Wallet prints none above 4096 bytes of QR data. See [the renderer's README](../renderer/README.md).
 
 ## Dashboard and API
 
@@ -31,7 +31,7 @@ The dashboard (`/`) has a file input per slot (or one for a zip), the list of lo
 | `GET /api/set` | which slots are loaded, with their file names, and which required ones are missing |
 | `DELETE /api/set` | clears the set |
 | `DELETE /api/set/background` | removes the background only |
-| `GET /preview.pdf` | the PDF the Wallet prints from the set, drawn by the renderer. The renderer's refusals pass through with its reason: 422 when the set doesn't print (a Velocity error names its line), 400 when it can't read the credential file, 503 when it runs out of memory |
+| `GET /preview.pdf` | the PDF the Wallet prints from the set, drawn by the renderer. The renderer's refusals pass through with its reason: 422 when the set doesn't print (Certify would refuse the data or the `vc_template`, or the template has an error: a Velocity error names its line), 400 when it can't read the credential file, 503 when it runs out of memory |
 | `GET /download` | a zip with `template/`, `credential/`, `sample/` and `background/`, each file as uploaded |
 | `GET /health` | liveness |
 
@@ -53,7 +53,7 @@ Not checked yet: whether Certify needs a restart to pick up the new version.
 
 ```bash
 docker compose up -d vc-lab   # starts the renderer first; then open http://lab.localhost
-python3 src/vc-lab/main.py    # or locally, on port 4200 (set RENDERER_URL for /preview.pdf)
+PYTHONPATH=src python3 src/vc-lab/main.py    # or locally, on port 4200 (set RENDERER_URL for /preview.pdf)
 ```
 
 Tests (script-style). The tests that need a real renderer run in the `ait-vc` image through Compose and skip on a host; the rest use a stand-in renderer and run anywhere:
@@ -69,6 +69,5 @@ docker compose run --rm vc-lab python src/vc-lab/test_main.py  # the web API, wi
 src/vc-lab/
 ├── main.py                  # the web app: dashboard and API over the one set
 ├── labset.py                # the set: its slots, upload parsing and validation, the zip
-├── template_engine.py       # pure: the claim mapping (the credential file's vc_template)
 └── test_main.py             # API tests
 ```

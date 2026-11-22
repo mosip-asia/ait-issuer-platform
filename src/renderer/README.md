@@ -1,6 +1,6 @@
 # Renderer
 
-The renderer prints a credential the way the Wallet's printer prints it, so VC Lab's preview is the Wallet's printout. It runs **Mimoto 0.21.0**'s HTML print path (`injistack/mimoto:0.21.0`, source `mosip/mimoto` tag `v0.21.0`) with the same library versions. It's a small Java service with no Spring. It writes nothing to disk (Compose runs it with a read-only filesystem). It keeps nothing between calls, as long as a template doesn't use reflection to reach past Velocity (see Limits).
+The renderer prints a credential the way the Wallet's printer prints it, so VC Lab's preview is the Wallet's printout. It first maps the data to claims the way **Certify 0.14** does (see "How it maps the claims"), then runs **Mimoto 0.21.0**'s HTML print path (`injistack/mimoto:0.21.0`, source `mosip/mimoto` tag `v0.21.0`) with the same library versions. It's a small Java service with no Spring. It writes nothing to disk (Compose runs it with a read-only filesystem). It keeps nothing between calls, as long as a template doesn't use reflection to reach past Velocity (see Limits).
 
 Only VC Lab calls it, at the address in VC Lab's `RENDERER_URL`.
 
@@ -10,18 +10,45 @@ Only VC Lab calls it, at the address in VC Lab's `RENDERER_URL`.
 POST /render  application/json  ->  200 application/pdf  |  422 {"error": "<message>"}  |  400 {"error": "<message>"}
 {
   "template": "<HTML with Velocity>",
-  "credentialSubject": { ...the claims as Certify signs them... },
-  "credentialFile": { "display": [...], "display_order": [...], "credential_subject": {...} },
+  "record": { ...the Adapter's record... },
+  "vcTemplate": "<the credential file's vc_template, as the text template-sync stores for Certify>",
+  "credentialFile": { "display": [...], "display_order": [...], "credential_subject": {...}, ... },
   "backgroundImage": "data:image/png;base64,..." | null,
   "locale": "en"
 }
 ```
 
-- `credentialFile` is Certify's credential file. The renderer reads it the way Certify publishes it and Mimoto reads it: `display`, `display_order` as `order`, and `credential_subject` as `credential_definition.credentialSubject`.
+- `record` and `vcTemplate` give the claims, mapped as Certify maps them. VC Lab makes `vcTemplate` with template-sync's own function (`build_vc_template_base64` in `src/certify_template_sync/sync.py`), so it holds template-sync's rewrites (`"courses": ${courses}` unquoted).
+- `credentialFile` is Certify's credential file. The renderer reads it the way Certify publishes it and Mimoto reads it: `display`, `display_order` as `order`, and `credential_subject` as `credential_definition.credentialSubject`. For the claims it reads `credential_type`, `context` and `credential_status_purpose`.
 - `backgroundImage`, when not null, replaces `display[0].background_image.uri`.
+- A record or `vcTemplate` that Certify would not sign answers 422 with the reason: the plugin refuses the record (a `null`, or a list or object other than `courses`), Velocity can't evaluate the text, or org.json can't read what it makes (`json_processing_error`, as in Certify).
 - A template that Velocity or iText can't render answers 422. A Velocity error names its line and column; a template nested too deep to parse says so.
 - A body that isn't the request above, or a credential file it can't read, answers 400.
 - Running out of memory answers 503. `GET /health` answers 200.
+
+## How it maps the claims
+
+`CertifyMapping.java` does what Certify 0.14 does for an `ldp_vc` credential, read from the bytecode of `certify-service.jar` in `ghcr.io/mosip-asia/ait-certify` (`CertifyIssuanceServiceImpl.getVerifiableCredential` and `VelocityTemplatingEngineImpl.format`), on Certify's library versions (`BOOT-INF/lib`): Velocity 1.7 and org.json 20241224.
+
+1. The record goes through this platform's Data-provider plugin: `TemplateRecord.shape`, the plugin's own file (`src/issuer/.../TemplateRecord.java`, which `docker/Dockerfile.renderer` copies into the build). Every string is JSON-escaped, `courses` becomes its JSON text, and a `null` or any other list or object is refused (`adapter_error`).
+2. Certify's variables are added, as Certify adds them. The values are fixed placeholders, since VC Lab issues nothing:
+
+   | Variable | From | Preview value |
+   |---|---|---|
+   | `tokenSub`, `tokenClientId` | the plugin's `fetchData` | `preview-sub`, `preview-client` |
+   | `type` | the Wallet's request (`credential_definition.type`); it replaces a record's own `type` | the credential file's `credential_type`, split at `,` |
+   | `credentialStatus` | `StatusListCredentialService.addCredentialStatus`, when `credential_status_purpose` is set and `context` has the VC 2.0 context | `id`, `type` `BitstringStatusListEntry`, `statusPurpose` (the first purpose), `statusListIndex` `0`, `statusListCredential` |
+   | `_holderId` | the holder's DID, from the proof | `did:example:holder` |
+   | `templateName`, `didUrl`, `_issuer` | Certify's template key, and its DID (`mosip.certify.data-provider-plugin.did-url`) | `preview-template-name`, `did:example:issuer` |
+   | `validFrom`, `validUntil` | the issuance time, and it plus `P730D` | `2000-01-01T00:00:00.000Z`, `2001-12-31T00:00:00.000Z` |
+   | `_dateTool`, `_esc` | velocity-tools `DateTool` and `EscapeTool` | the same tools, from velocity-tools 2.0 (Certify has 3.1) |
+
+   Not added, because this platform's Certify doesn't set them: `credentialId` (no `id-field-prefix-uri`) and `renderingTemplateId` (`rendering-template-id` is empty).
+3. A new Velocity engine with Certify's two settings (`input.encoding` and `output.encoding` UTF-8) evaluates `vcTemplate` with those variables, and org.json reads the result. Its `credentialSubject` is the claims, handed to Mimoto's print as Mimoto would read them from the signed credential (Jackson, in org.json's order).
+
+So a `${field}` the record lacks stays the text `${field}`, `$!{field}` gives nothing, `$name-$id` reads a variable `$name-` (a Velocity name may hold `-`), and `${name.toUpperCase()}` calls Java, all as in Certify.
+
+Not repeated: the plugin's checks before `shape` (strict JSON, no reserved key such as `id`), since VC Lab's sample is no HTTP answer and the Adapter contract already excludes those keys. And Certify has one Velocity engine for every issuance, so a `#macro` in a `vc_template` would stay defined there, while the renderer starts a new engine per call.
 
 ## What it repeats from Mimoto 0.21
 
@@ -40,7 +67,7 @@ The copied code is in `src/main/java/asia/mosip/renderer/mimoto/`. Each file nam
 Where it differs from Mimoto, because VC Lab has no signed credential and no issuers list:
 
 - `qrCodeImage` is a placeholder QR code holding a fixed text, 400 × 400 like Mimoto's (`mosip.inji.qr.code.width` in `deploy/base/mimoto-default.properties`). The Wallet prints none when the credential's QR data is over 4096 bytes (`mosip.inji.qr.data.size.limit`); the preview still draws the placeholder.
-- The order of the claims `display_order` leaves out. Both hand `rowProperties` in `display_order`, then the other claims in the order they get them: the Wallet in the signed credential's order, which Certify makes a Java `HashMap`'s; the preview in the credential file's. So a template that loops over `rowProperties` must name every claim it loops over in `display_order` to print the same order in both.
+- The order of the claims `display_order` leaves out. Both hand `rowProperties` in `display_order`, then the other claims in the order they get them: the Wallet in the signed credential's order, which Certify makes org.json's (a Java `HashMap`'s); the preview in the order org.json gives the same claims. They should agree, but that is not checked claim for claim, so a template that loops over `rowProperties` names every claim it loops over in `display_order`.
 - `logoUrl` comes from the credential file's `display[0].logo.url`. Mimoto takes it from the issuers list.
 - `credentialValidity` is `-1`, what Mimoto uses when the Wallet sends no limit.
 - Each print gets a new Velocity engine. Mimoto renders with the Velocity singleton, where the first definition of a macro name stays until Mimoto restarts. So the preview always shows a template's own macro body, while the Wallet may print an older body, if a template defining the same macro name printed earlier since Mimoto's restart.
@@ -57,7 +84,7 @@ Measured on 2026-11-22 inside the container at those limits: the AIT transcript 
 
 ## Libraries
 
-Pinned in `pom.xml` to the versions inside `injistack/mimoto:0.21.0`: Velocity 1.7, velocity-tools 2.0, html2pdf 5.0.3, itext7-core 8.0.3, Jackson 2.13.2, commons-collections 3.2.2 and ZXing 3.3.3. When the Wallet moves to another Mimoto version, update the versions, the copied code and the version named here together.
+Pinned in `pom.xml` to the versions inside `injistack/mimoto:0.21.0`: Velocity 1.7, velocity-tools 2.0, html2pdf 5.0.3, itext7-core 8.0.3, Jackson 2.13.2, commons-collections 3.2.2 and ZXing 3.3.3; and, for the claims, Certify 0.14's org.json 20241224 (its Velocity is 1.7 too). When the Wallet moves to another Mimoto version, or the Issuer to another Certify, update the versions, the copied code and the version named here together.
 
 ## Running
 

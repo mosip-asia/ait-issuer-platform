@@ -22,7 +22,7 @@ SIS response ──(credential file: vc_template)──► claims ──(templat
 
 1. **Certify** reads the Adapter's (SIS's) response and fills the credential file's `vc_template` with it (Apache Velocity). The right side names a field of the response (`${studentId}`); the left side is the claim name the issued credential carries (`registrationNo`).
 2. **Mimoto**, the Wallet's backend, prints the credential with your template (Velocity 1.7, then iText html2pdf 5.0.3). The template reads claim names, the left side of the mapping, never SIS field names.
-3. **VC Lab** maps the uploaded data to claims the same way (`src/vc-lab/template_engine.py`) and has the renderer print them, so you can check a template without issuing anything.
+3. **VC Lab** has the renderer map the uploaded data to claims with Certify's own steps (the Data-provider plugin's escaping, then Velocity 1.7 and org.json on the `vc_template` text the sync tool stores) and print them, so you can check a template without issuing anything. Data or a `vc_template` that Certify would refuse is refused in VC Lab too, with the reason.
 
 ## The four files
 
@@ -32,6 +32,14 @@ SIS response ──(credential file: vc_template)──► claims ──(templat
 | Credential file | `.json` | Certify's credential file; `vc_template.credentialSubject` is the mapping, `display` and `display_order` shape the print | nothing renders |
 | Data (the API's `sample`) | `.json` | one record, as the Adapter sends it, with or without a `credentialSubject` envelope | nothing renders; a `${field}` it lacks is signed and printed as the literal text `${field}`, a `$!{field}` as nothing |
 | Background | `.png` or `.jpg` | a picture of the organisation's paper (watermark, seal, signature) | optional: the preview uses the credential file's `display[0].background_image.uri`, or draws none |
+
+How a reference in `vc_template` previews is how Certify signs it:
+
+- A `${field}` (or `$field`) the data lacks is the literal text `${field}`; a quiet `$!{field}` is nothing.
+- A `null` in the data, or a list or object other than `courses`, is refused, as Certify's plugin refuses it (`adapter_error`). A list of text or an object can still be a claim, written as JSON in `vc_template` itself.
+- A Velocity name may hold `-`: `"$name-$id"` reads a variable `name-`. Write `"${name}-${id}"`.
+- `##` starts a Velocity comment to the end of the line, so `"## note"` breaks the JSON and is refused; so is any text that doesn't make JSON.
+- References are Java: `${name.toUpperCase()}` works, as do Thai or other text right after a name (`"คุณ${name}ครับ"`).
 
 The Background reaches the template as `$backgroundImage`. A Background may be confidential and VC Lab has no login: upload it only on a VC Lab on your own machine, and never commit it.
 
@@ -78,7 +86,7 @@ The data:
 Mimoto prepares the claims before your template sees them. Write the template for what it hands over, not for what the credential holds.
 
 - **Nearly every claim is there.** The template gets them as `$rowProperties`: claim name, to display name, to text. A claim with no display name in the credential file still arrives, under its name in title case (`courseRows` shows as `Course Rows`). Not in it: `id` when the credential file gives it no display entry (with one, it arrives); any null claim; and the first non-empty claim named `image`, `face`, `photo`, `picture` or `portrait`, which arrives as `$face` instead.
-- **`display_order` sets the order** of `$rowProperties`: the claims it lists come first, in its order. **Name every claim a template loops over in `display_order`.** The claims it leaves out reach the Wallet in Certify's internal (HashMap) order, but reach VC Lab in the credential file's order, so a `#foreach` over `$rowProperties` prints them in a different order after the listed ones. A claim read by name (`#claimText("fullName")`) is not affected.
+- **`display_order` sets the order** of `$rowProperties`: the claims it lists come first, in its order. **Name every claim a template loops over in `display_order`.** The claims it leaves out reach the Wallet in Certify's internal (HashMap) order; VC Lab builds them the same way, but that is not checked claim for claim, so don't rely on the order of the claims after the listed ones. A claim read by name (`#claimText("fullName")`) is not affected.
 - **`formatValue` flattens each value to text:**
   - text and numbers stay as they are;
   - an object becomes its `value` field, or `""` when it has none;
@@ -205,7 +213,7 @@ VC Lab prints raw Thai correctly, because it hands the renderer the file as UTF-
 1. **The template:** place `#claimText("newClaim")` where the value goes.
 2. **The credential file:** add `"newClaim": "${sisField}"` (`"$!{sisField}"` when the Adapter may not send the field yet, see step 4) to `vc_template.credentialSubject` (and to `credential_subject` for its display name), and add the claim to `display_order`.
 3. **The context:** a new claim name needs a term in the installation's JSON-LD context (`deploy/<installation>/vdr/contexts/`), which lists every claim. Keep today's claim names where possible.
-4. **SIS:** if the response has no field for it yet, write the reference quiet: `"newClaim": "$!{sisField}"`. Certify gives a quiet reference nothing when the field is missing, and a plain `${sisField}` would sign the literal text `${sisField}` (VC Lab previews it the same way). The box stays empty until the Adapter team adds the field. Ask in their field names.
+4. **SIS:** if the response has no field for it yet, write the reference quiet: `"newClaim": "$!{sisField}"`. Certify gives a quiet reference nothing when the field is missing, and a plain `${sisField}` would sign the literal text `${sisField}` (VC Lab previews it the same way, by Certify's own steps). The box stays empty until the Adapter team adds the field. Ask in their field names.
 
 Check it in VC Lab with data that has the field.
 
@@ -219,7 +227,7 @@ VC Lab's Download gives a zip of the four files. To print with it from the real 
 
 The second argument is the issuer id, the Wallet's `issuer_id` (`AITUniversity` is the AIT example). The command puts the template and the Background on the local VDR and loads the credential file into Certify, and the next Wallet print uses them. What to know before you publish:
 
-- **Start from the Installation's own credential file** (`deploy/<installation>/certify/credentials/`) and keep its `credential_config_key_id`. The starter above is for previews: Certify's plugin refuses any list or object in the Adapter's response except `courses`, and the sync tool unquotes only `"courses": "${courses}"`.
+- **Start from the Installation's own credential file** (`deploy/<installation>/certify/credentials/`) and keep its `credential_config_key_id`. The starter above is for previews only. Certify's plugin refuses any list or object in the Adapter's response except `courses`, and the sync tool unquotes only `"courses": "${courses}"`; VC Lab's preview does both too.
 - **`print-check.sh --published`** prints once and keeps the PDF, but it prints the Installation's smoke credential (`ait-transcript` for AIT) and asserts the student's name is on the page.
 - **"Git tracks the template" holds only when the ids match a committed file.** Publishing a set whose issuer id and credential id match a committed template replaces that tracked file: the next checkout puts it back, so a published set is a test, not a release.
 - It works only on the local stack. On a deployment, placing the files is infra's step (T3).
@@ -228,6 +236,6 @@ What each step does, and how to put the committed files back: [Publish a set](./
 
 ## Known limits
 
-- **Certify takes only flat fields.** Its data-provider plugin refuses any list or object in the Adapter's response except `courses` (and the lists named in `mosip.certify.adapter.structured-keys`, default `courses`); it does not unwrap `credentialSubject`. VC Lab accepts both, so a mapping that reads `${thesis.title}` or a list of text works in VC Lab but not yet in Certify.
-- **VC Lab's preview is the renderer's copy of Mimoto's print**, not Mimoto itself. [The renderer's README](../../src/renderer/README.md) lists what it repeats and where it differs: the QR code is a placeholder, the logo comes from the credential file, the locale is fixed to `en`, each print gets a new Velocity engine so a `#macro` body is never stale, and claims outside `display_order` come in another order.
+- **Certify takes only flat fields.** Its data-provider plugin refuses any list or object in the Adapter's response except `courses` (and the lists named in `mosip.certify.adapter.structured-keys`, default `courses`); it does not unwrap `credentialSubject`. VC Lab refuses the same lists and objects (it knows only the default, `courses`), but it does unwrap a `credentialSubject` envelope in the data.
+- **VC Lab's preview is the renderer's copy of Mimoto's print**, not Mimoto itself. [The renderer's README](../../src/renderer/README.md) lists what it repeats and where it differs: the QR code is a placeholder, the logo comes from the credential file, the locale is fixed to `en`, each print gets a new Velocity engine so a `#macro` body is never stale, and the order of claims outside `display_order` is not checked against the Wallet's. Certify's own variables (`${_holderId}`, `${validFrom}` and the rest) get fixed placeholders.
 - **Issuing with a credential file from VC Lab:** run the sync tool with its folder mounted; see [VC Lab's README](../../src/vc-lab/README.md#issuing-with-a-credential-file-from-vc-lab).

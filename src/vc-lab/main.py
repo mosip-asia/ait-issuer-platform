@@ -6,8 +6,8 @@ holds it in memory only and forgets it on restart. /preview.pdf is the PDF the W
 renderer (src/renderer), whose address comes from RENDERER_URL, maps the data to claims as Certify does and prints them
 as Mimoto does. See README.md.
 
-Usage:
-    python3 src/vc-lab/main.py
+Usage (src/ on PYTHONPATH, as the image has it, for the sync tool's vc_template function):
+    PYTHONPATH=src python3 src/vc-lab/main.py
 """
 
 from __future__ import annotations

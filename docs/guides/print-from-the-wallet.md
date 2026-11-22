@@ -184,7 +184,7 @@ and the exit status is 1. On exit the command puts back what publishing changed:
 
 Two known differences:
 
-- **The order of the claims `display_order` leaves out.** Mimoto hands `$rowProperties` in `display_order`, then the other claims in the order of the signed credential, and Certify signs them in a Java `HashMap`'s order, not the credential file's. VC Lab hands them in the credential file's order. So a template that loops over `$rowProperties` names every claim it loops over in `display_order`: that is the convention, and the set follows it.
+- **The order of the claims `display_order` leaves out.** Mimoto hands `$rowProperties` in `display_order`, then the other claims in the order of the signed credential, and Certify signs them in a Java `HashMap`'s order (org.json's), not the credential file's. VC Lab maps the claims with the same org.json, so it should hand them in the same order, but that is not checked claim for claim. So a template that loops over `$rowProperties` names every claim it loops over in `display_order`: that is the convention, and the set follows it.
 - **The QR.** VC Lab always draws a 400 × 400 placeholder. The Wallet prints the credential's own QR at the same size, and none when the credential's QR data is over 4096 bytes (`src/renderer/README.md`). The set's template then prints `NO-QR`, and the check fails on the text and the image sizes. The made-up record is under that limit, so both draw one. The check compares the QR's size, not what it encodes.
 
 ## Template conventions
