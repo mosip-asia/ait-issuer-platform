@@ -405,6 +405,17 @@ def test_preview_pdf_flattens_claims_as_mimoto_does() -> bool:
     return True
 
 
+def test_preview_pdf_hands_every_claim_in_display_order() -> bool:
+    if _no_renderer("test_preview_pdf_hands_every_claim_in_display_order"):
+        return False
+    _upload_print_set()
+    text, _ = _printed()
+    assert "Note: Printed from made-up data" in text, "a claim with no display entry still reaches the template"
+    assert "Order: thesisTitle holderName terms majors honours courseRows printNote" in text,         "display_order first, then the other claims; id is not a claim to print"
+    assert "Names: Thesis; Holder; Terms; Majors; Honours; Course Rows; Print Note;" in text,         "display names from the credential file, and a title-case fallback for a claim without one"
+    return True
+
+
 def test_export_pdf_lays_the_background_under_page_one() -> bool:
     try:
         import weasyprint  # noqa: F401
@@ -469,6 +480,7 @@ def main() -> None:
         test_large_upload_stays_in_memory,
         test_preview_pdf_prints_mapped_values,
         test_preview_pdf_flattens_claims_as_mimoto_does,
+        test_preview_pdf_hands_every_claim_in_display_order,
         test_export_pdf_lays_the_background_under_page_one,
         test_background_with_its_own_rotation_comes_out_portrait,
     ]
