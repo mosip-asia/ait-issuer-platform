@@ -73,14 +73,22 @@ public final class RendererServer {
                 error(exchange, 400, "template, credentialSubject and credentialFile are required");
                 return;
             }
+            CredentialsSupportedResponse metadata;
+            try {
+                metadata = issuerMetadata(request.credentialFile());
+            } catch (IllegalArgumentException e) {
+                error(exchange, 400, "credentialFile isn't shaped as Certify's credential file: " + e.getMessage());
+                return;
+            }
             byte[] pdf;
             try {
-                pdf = PRINTER.generatePdf(request.template(), request.credentialSubject(),
-                        issuerMetadata(request.credentialFile()), request.backgroundImage(),
-                        request.locale() != null ? request.locale() : "en");
+                pdf = PRINTER.generatePdf(request.template(), request.credentialSubject(), metadata,
+                        request.backgroundImage(), request.locale() != null ? request.locale() : "en");
             } catch (Exception e) {
+                // The input parsed, so what failed is printing it, as Mimoto would fail: the message is the answer.
+                // Velocity's names the template's line and column; iText's names what it couldn't lay out.
                 e.printStackTrace();
-                error(exchange, 500, String.valueOf(e.getMessage()));
+                error(exchange, 422, String.valueOf(e.getMessage()));
                 return;
             }
             send(exchange, 200, "application/pdf", pdf);

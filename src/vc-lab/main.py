@@ -122,6 +122,8 @@ def preview_pdf() -> Response:
         res = httpx.post(f"{RENDERER_URL}/render", json=request, timeout=120)
     except httpx.HTTPError as e:
         raise HTTPException(status_code=502, detail=f"the renderer at {RENDERER_URL} can't be reached: {e}")
+    if res.status_code == 422:  # the template didn't render: the renderer's message, with its line, is the answer
+        raise HTTPException(status_code=422, detail=res.json()["error"])
     if res.status_code != 200:
         raise HTTPException(status_code=502, detail=f"the renderer answered {res.status_code}: {res.text}")
     name = f"{Path(lab.template.filename).stem}.pdf"
