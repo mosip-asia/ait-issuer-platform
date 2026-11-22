@@ -62,7 +62,8 @@
             <artifactId>javase</artifactId>
             <version>3.3.3</version>
         </dependency>
-        <!-- iText and Velocity log through these; Mimoto sends them to logback, the renderer to stderr. -->
+        <!-- iText logs through slf4j; Mimoto sends it to logback, the renderer to stderr. (Velocity 1.7 logs through
+             commons-logging, which velocity-tools brings.) -->
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-simple</artifactId>

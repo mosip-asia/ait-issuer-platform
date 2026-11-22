@@ -213,7 +213,8 @@ ait-issuer-platform/
 │
 ├── docker/                               # CONTAINER PACKAGING RECIPES
 │   ├── Dockerfile.ait-vc                 # Unified Python container (Gateway, Portal, Tools, VC Lab, Template Sync)
-│   └── Dockerfile.certify                # Bakes src/issuer SPI plugin into Inji Certify
+│   ├── Dockerfile.certify                # Bakes src/issuer SPI plugin into Inji Certify
+│   └── Dockerfile.renderer               # VC Lab's renderer: Mimoto 0.21's print path (src/renderer)
 │
 ├── compose.yaml                          # Root orchestrator (includes certify, verify, web-wallet, trust, traefik)
 ├── compose.certify.yaml                  # Core Inji Certify Issuer Engine (internal DB & ingress Nginx)

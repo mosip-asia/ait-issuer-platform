@@ -42,6 +42,12 @@ Where it differs from Mimoto, because VC Lab has no signed credential and no iss
 - `logoUrl` comes from the credential file's `display[0].logo.url`. Mimoto takes it from the issuers list.
 - `credentialValidity` is `-1`, what Mimoto uses when the Wallet sends no limit.
 
+## Limits
+
+A template runs inside the renderer, and Velocity 1.7's default settings let it reach Java reflection, while VC Lab has no login. So Compose contains the container: a read-only filesystem, uid 1000, no capabilities, `no-new-privileges`, 1 GB of memory and 128 processes. Its network stays open, because it fetches the images and fonts a template names, as Mimoto does. The JVM takes 75% of the memory limit as heap (`docker/Dockerfile.renderer`).
+
+Measured on 2026-11-22: the AIT transcript template with an 8 MB A4 Background (2480 × 3508 PNG), three times in a row and then four at once, all printed; the container peaked at about 860 MB and 39 processes. At the JVM's default heap (25% of the limit), three of the four at once ran out of heap.
+
 ## Libraries
 
 Pinned in `pom.xml` to the versions inside `injistack/mimoto:0.21.0`: Velocity 1.7, velocity-tools 2.0, html2pdf 5.0.3, itext7-core 8.0.3, Jackson 2.13.2, commons-collections 3.2.2 and ZXing 3.3.3. When the Wallet moves to another Mimoto version, update the versions, the copied code and the version named here together.
