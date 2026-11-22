@@ -34,13 +34,13 @@ The dashboard (`/`) has a file input per slot (or one for a zip), the list of lo
 | `GET /api/set` | which slots are loaded, with their file names, and which required ones are missing |
 | `DELETE /api/set` | clears the set |
 | `DELETE /api/set/background` | removes the background only |
-| `GET /preview.pdf` | the PDF the Wallet prints from the set, drawn by the renderer; a template that doesn't print answers 422 with the renderer's message (a Velocity error names its line) |
-| `GET /preview?view=lab\|wallet` | the rendered HTML, never with the background |
-| `GET /export.pdf?view=lab\|wallet` | the PDF, with the background under page 1 when one is loaded |
+| `GET /preview.pdf` | the PDF the Wallet prints from the set, drawn by the renderer. The renderer's refusals pass through with its reason: 422 when the set doesn't print (a Velocity error names its line), 400 when it can't read the credential file, 503 when it runs out of memory |
+| `GET /preview?view=lab\|wallet` | the rendered HTML, never with the background; 422 when the template's `#if`/`#foreach`/`#macro` blocks don't balance |
+| `GET /export.pdf?view=lab\|wallet` | the PDF, with the background under page 1 when one is loaded; 422 for unbalanced blocks, as `/preview` |
 | `GET /download` | a zip with `template/`, `credential/`, `sample/` and `background/`, each file as uploaded |
 | `GET /health` | liveness |
 
-Rendering needs the template, the credential file and the sample; without them the previews and export answer 409, naming what is missing. `/preview.pdf` answers 503 without `RENDERER_URL` and 502 when the renderer can't be reached. A wrong file answers 400 with the reason.
+Rendering needs the template, the credential file and the sample; without them the previews and export answer 409, naming what is missing. `/preview.pdf` answers 503 without `RENDERER_URL`, and 502 when the renderer can't be reached or answers anything else. A wrong file answers 400 with the reason.
 
 ## The hard copy (`hardcopy.py`)
 
