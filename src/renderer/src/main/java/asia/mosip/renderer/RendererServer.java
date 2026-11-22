@@ -90,6 +90,13 @@ public final class RendererServer {
                 e.printStackTrace();
                 error(exchange, 422, String.valueOf(e.getMessage()));
                 return;
+            } catch (StackOverflowError e) {
+                // Velocity parses and renders nested blocks recursively.
+                error(exchange, 422, "the template nests its blocks too deep to print");
+                return;
+            } catch (OutOfMemoryError e) {
+                error(exchange, 503, "the renderer ran out of memory for this print; try again, or use a smaller Background");
+                return;
             }
             send(exchange, 200, "application/pdf", pdf);
         }
