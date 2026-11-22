@@ -163,6 +163,7 @@ def test_mock_adapter_on_the_hackathon_roster() -> None:
 
 OPENAPI = REPO_ROOT / "docs" / "contracts" / "adapter-openapi.yaml"
 PLUGIN = REPO_ROOT / "src/issuer/src/main/java/asia/mosip/issuer/plugin/IssuerDataProviderPlugin.java"
+TEMPLATE_RECORD = REPO_ROOT / "src/issuer/src/main/java/asia/mosip/issuer/plugin/TemplateRecord.java"
 # Certify's reserved keys and the plugin's trace keys: no record may carry one (spec, "Shaping the data map").
 FORBIDDEN_KEYS = {"id", "_holderId", "_issuer", "validFrom", "validUntil", "credentialStatus", "tokenSub", "tokenClientId"}
 
@@ -453,12 +454,11 @@ def test_the_plugin_refuses_exactly_the_keys_openapi_yaml_forbids() -> None:
 
 
 def test_the_plugin_refuses_exactly_the_structured_fields_openapi_yaml_forbids() -> None:
-    """The plugin's `shape` refuses an object or array at the top of a record except the one named by its COURSES
-    constant, which must be an array. openapi.yaml must say the same: in every record schema, only that name is
-    declared an array, and any other field is a string, number or boolean (`additionalProperties`)."""
+    """The plugin's `shape` (TemplateRecord) refuses an object or array at the top of a record except the one named
+    by its STRUCTURED_KEYS, which must be an array. openapi.yaml must say the same: in every record schema, only that
+    name is declared an array, and any other field is a string, number or boolean (`additionalProperties`)."""
     contract = load_contract()
-    source = PLUGIN.read_text(encoding="utf-8")
-    (courses,) = re.findall(r'\bCOURSES\s*=\s*"([^"]*)"', source)
+    (courses,) = java_string_set(TEMPLATE_RECORD.read_text(encoding="utf-8"), "STRUCTURED_KEYS")
     for scope in template_claims():
         schema = record_schema(contract, scope)
         arrays = {n for n, p in schema["properties"].items() if resolve(p, contract).get("type") == "array"}
@@ -466,7 +466,7 @@ def test_the_plugin_refuses_exactly_the_structured_fields_openapi_yaml_forbids()
         extra = resolve(schema["additionalProperties"], contract)
         assert extra["type"] == ["string", "number", "boolean"], (scope, extra)
     # The parse reads the constant as the plugin writes it, so a rename in the plugin fails the test.
-    assert re.findall(r'\bCOURSES\s*=\s*"([^"]*)"', 'private static final String COURSES = "terms";') == ["terms"]
+    assert java_string_set('STRUCTURED_KEYS = Set.of("terms")', "STRUCTURED_KEYS") == {"terms"}
 
 
 def shape_of(schema: dict, resolve_ref, top: bool = True) -> object:
