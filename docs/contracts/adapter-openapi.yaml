@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Issuer data adapter
-  version: 0.5.0
+  version: 0.6.0
   description: |
     The Adapter contract: the API any Adapter serves to the Issuer, read-only. This file and
     `docs/schemas/ait-transcript-credential.v2.schema.json` are the master files: the transcript record here holds
@@ -169,6 +169,14 @@ components:
         GPAs `Decimal`. Each claim's meaning is in `docs/schemas/ait-transcript-credential.v2.schema.json`, which
         pins the same formats; `docs/project/issuer-v0.1/sis-adapter-handover.md` explains them in prose. Which fields may leave the student information system
         is OSA's decision.
+
+        Requested since 0.6.0, not yet checked: `courseRows`, a string holding the course grid as text, for the
+        printed transcript (the Wallet's printer empties `courses`). One line per row, lines joined with `\n`, fields
+        joined with `|`: a term is `T|<term>|<credits>|<gpa>|<cumGpa>`, and each of its courses follows it as
+        `C|<no>|<title>|<lab>|<lec>|<credits>|<grade>`, in the order of `courses`. A field may be empty, the last one
+        included (an ungraded course ends in `|`). No field may hold `|` or a line break; replace them before joining.
+        An Adapter that can't send it tells Thas why. Until the SIS Adapter sends it, it travels as an extra field;
+        once it does, it becomes a required claim here and the AIT credential file maps it.
       propertyNames:
         $ref: '#/components/schemas/RecordKey'
       additionalProperties:

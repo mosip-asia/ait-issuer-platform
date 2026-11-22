@@ -60,6 +60,11 @@ A JSON object holding the 24 fields `TranscriptRecord` lists in `adapter/openapi
 - **Dates and numbers can't be empty.** Text fields may be empty strings. If the SIS has no value for a date or a number, tell Thas before go-live rather than sending `""`.
 - **`courses`** is the terms in order. Each term is `{ term, courses, credits, gpa, cumGpa }`, with `term` the semester's name, like `August Semester 2024`. Its `courses` are in order, each `{ no, title, lec, lab, credits, grade }`. `lec` and `lab` are lecture and lab hours. `grade` is the letter as printed (`A`, `B+`, `S`).
 - **`courseList`** is the short version a wallet card shows: one line per course, `<title> — <grade>` (with an em dash), lines separated by a newline. Use the title alone when there is no grade.
+- **`courseRows` (requested since contract 0.6.0, not yet checked)** is the course grid as text, for the printed transcript: the Wallet's printer turns `courses` into an empty string, so it can't draw a grid from it. One line per row, lines separated by a newline, fields separated by `|`:
+  - a term heading, `T|<term>|<credits>|<gpa>|<cumGpa>`, followed by its courses;
+  - each course, `C|<no>|<title>|<lab>|<lec>|<credits>|<grade>`.
+
+  Keep the order of `courses`. A field may be empty, the last one included: an ungraded course ends in `|`. No field may contain `|` or a line break; replace them before joining. For example, `T|August Semester 2023|9|3.75|3.75` then `C|EX70.01|Foundations of Example Analytics|0|3|3|A`. If the SIS Adapter can't send it, tell Thas why. Until it sends `courseRows`, the field is an extra one; once it does, it becomes required and the AIT credential carries it.
 - **`programCommittee`** holds one member per line, the chair first, marked `(Chair)`.
 - **`notes`** is `-` when there are none.
 - **Text fields:** `fullName` is the whole name in one string. `country` is a country name, like `Thailand`, not a code.
