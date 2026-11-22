@@ -5,14 +5,14 @@ Run, with the renderer beside VC Lab (the /preview.pdf tests need it):
 On a host, without Compose:
     python3 src/vc-lab/test_main.py
 
-The /preview.pdf tests skip without RENDERER_URL, and the /export.pdf tests need WeasyPrint's system libraries
-(Pango): both run in the ait-vc image through Compose and skip on a host.
+The /preview.pdf tests that need a real renderer skip without RENDERER_URL (a host run); they run in the ait-vc
+image through Compose. The rest, which use a stand-in renderer, run anywhere.
 """
 
 from __future__ import annotations
 
-import html
 import base64
+import contextlib
 import io
 import json
 import os
@@ -330,6 +330,17 @@ def test_health_and_dashboard() -> None:
     page = client.get("/")
     assert page.status_code == 200 and "VC Lab" in page.text
     assert "/preview.pdf" in page.text, "the dashboard shows the Wallet's print"
+    for gone in ('name="view"', "Export PDF", "/export.pdf"):
+        assert gone not in page.text, f"the dashboard has no {gone}"
+    for kept in ('data-field="template"', 'data-field="credential"', 'data-field="sample"',
+                 'data-field="background"', 'data-field="bundle"', 'id="download"', 'id="removeBackground"', 'id="clear"'):
+        assert kept in page.text, f"the dashboard keeps {kept}"
+
+
+def test_the_old_rendering_endpoints_are_gone() -> None:
+    _upload_set()  # a complete set: the answer is 404 for the route, not 409 for a missing file
+    for path in ("/preview", "/preview?view=lab", "/preview?view=wallet", "/export.pdf", "/export.pdf?view=wallet"):
+        assert client.get(path).status_code == 404, path
 
 
 def test_starts_empty_and_asks_for_the_missing_files() -> None:
@@ -337,39 +348,52 @@ def test_starts_empty_and_asks_for_the_missing_files() -> None:
     status = client.get("/api/set").json()
     assert status["loaded"] == {"template": None, "credential": None, "sample": None, "background": None}
     _upload(template=("record.html", TEMPLATE.encode()))
-    for path in ("/preview", "/preview?view=wallet", "/export.pdf", "/preview.pdf"):
-        res = client.get(path)
-        assert res.status_code == 409, (path, res.status_code)
-        assert "credential" in res.json()["detail"] and "sample" in res.json()["detail"]
-        assert "template" not in res.json()["detail"]
+    res = client.get("/preview.pdf")
+    assert res.status_code == 409, res.status_code
+    assert "credential" in res.json()["detail"] and "sample" in res.json()["detail"]
+    assert "template" not in res.json()["detail"]
 
 
-def test_preview_shows_mapped_values() -> None:
+@contextlib.contextmanager
+def _renderer_stand_in():
+    """Yields a function that gets /preview.pdf from a stand-in renderer and returns the request VC Lab sent it.
+    That request is what VC Lab decides (the template as uploaded, the claims the credential file maps, the
+    Background); it runs on a host too, without Compose."""
+    bodies: list = []
+    server = _stand_in_renderer(bodies)
+    saved, vc_lab.RENDERER_URL = vc_lab.RENDERER_URL, f"http://127.0.0.1:{server.server_port}"
+
+    def sent() -> dict:
+        res = client.get("/preview.pdf")
+        assert res.status_code == 200, res.text
+        return bodies[-1]
+
+    try:
+        yield sent
+    finally:
+        vc_lab.RENDERER_URL = saved
+        server.shutdown()
+        server.server_close()
+
+
+def test_the_renderer_is_sent_the_mapped_claims() -> None:
     _upload_set()
-    page = client.get("/preview").text
-    assert "Ada Example" in page, "a mapped field"
-    assert "On Small Fixtures" in page, "a nested field (${thesis.title})"
-    assert "Term One" in page and "XY101" in page and "XY201" in page, "a looped list, with its nested list"
-    assert "Courses are not listed" not in page
-    assert "Example Record" in page and "#123456" in page, "the title and colours come from the display entry"
-    assert "data:image/png;base64,iVBOR" in page, "a mock QR"
-    assert TRICKY_TITLE in html.unescape(page), "loop data with $ and # prints as written"
-    assert "#claimValue" not in page and "#foreach" not in page and "#end" not in page
-
-
-def test_wallet_view_drops_the_list() -> None:
-    _upload_set()
-    page = client.get("/preview?view=wallet").text
-    assert "Ada Example" in page and "On Small Fixtures" in page
-    assert "XY101" not in page and "Term One" not in page
-    assert "Courses are not listed in this copy." in page, "the template's fallback"
-
-
-def test_sample_without_credential_subject() -> None:
-    _upload_set()
-    with_envelope = client.get("/preview").text
-    assert _upload(sample=("bare.json", _json(SUBJECT))).status_code == 200
-    assert client.get("/preview").text == with_envelope, "a bare record renders the same"
+    with _renderer_stand_in() as sent:
+        request = sent()
+        assert request["template"] == TEMPLATE and request["credentialFile"] == CREDENTIAL and request["locale"] == "en"
+        assert request["credentialSubject"] == {
+            "id": "did:example:holderId",  # Certify's own variables get a placeholder
+            "holderName": "Ada Example",
+            "thesisTitle": "On Small Fixtures",  # a nested reference, ${thesis.title}
+            "terms": SUBJECT["records"],  # a reference that is the whole value keeps its list
+        }
+        credential = {**CREDENTIAL, "vc_template": {**CREDENTIAL["vc_template"], "credentialSubject": {
+            "label": "Dr. ${name} of ${nowhere}", "kept": 3}}}
+        assert _upload(credential=("record.json", _json(credential))).status_code == 200
+        assert sent()["credentialSubject"] == {"label": "Dr. Ada Example of ", "kept": 3}, "text around a reference"
+        envelope = sent()["credentialSubject"]
+        assert _upload(sample=("bare.json", _json(SUBJECT))).status_code == 200
+        assert sent()["credentialSubject"] == envelope, "a bare record maps the same as an enveloped one"
 
 
 def test_replace_one_slot() -> None:
@@ -377,7 +401,10 @@ def test_replace_one_slot() -> None:
     res = _upload(template=("v2.html", b"<p>v2 for #claimValue('holderName')</p>"))
     assert res.json()["loaded"] == {"template": "v2.html", "credential": "record.json",
                                     "sample": "adapter-response.json", "background": None}
-    assert client.get("/preview").text == "<p>v2 for Ada Example</p>"
+    with _renderer_stand_in() as sent:
+        request = sent()
+        assert request["template"] == "<p>v2 for #claimValue('holderName')</p>"
+        assert request["credentialSubject"]["holderName"] == "Ada Example", "the other slots are kept"
 
 
 def test_remove_background_then_clear() -> None:
@@ -388,14 +415,15 @@ def test_remove_background_then_clear() -> None:
     cleared = client.delete("/api/set").json()
     assert set(cleared["loaded"].values()) == {None}
     assert cleared["missing"] == ["template", "credential", "sample"]
-    assert client.get("/preview").status_code == 409
+    assert client.get("/preview.pdf").status_code == 409
 
 
 def test_download_and_upload_back() -> None:
     _upload_set()
     paper = _png(20, 30)
     assert _upload(background=("../../secret/paper.png", paper)).status_code == 200
-    before_status, before_page = client.get("/api/set").json(), client.get("/preview").text
+    with _renderer_stand_in() as sent:
+        before_status, before_request = client.get("/api/set").json(), sent()
     assert before_status["loaded"]["background"] == "paper.png", "no path parts in a stored name"
 
     res = client.get("/download")
@@ -409,7 +437,8 @@ def test_download_and_upload_back() -> None:
     client.delete("/api/set")
     assert _upload(bundle=("vc-lab-set.zip", res.content)).status_code == 200
     assert client.get("/api/set").json() == before_status
-    assert client.get("/preview").text == before_page
+    with _renderer_stand_in() as sent:
+        assert sent() == before_request, "the renderer is sent the same request after the round trip"
 
 
 def test_rejects_wrong_files() -> None:
@@ -578,6 +607,7 @@ def test_the_renderer_is_sent_the_uploaded_background() -> None:
     finally:
         vc_lab.RENDERER_URL = saved
         server.shutdown()
+        server.server_close()
 
 
 def test_large_upload_stays_in_memory() -> None:
@@ -593,7 +623,10 @@ def test_large_upload_stays_in_memory() -> None:
     finally:
         tempfile.SpooledTemporaryFile.rollover = original
     assert not spilled, "the upload was written to a temporary file on disk"
-    assert "Ada Example" in client.get("/preview").text
+    with _renderer_stand_in() as sent:
+        request = sent()
+        assert request["credentialSubject"]["holderName"] == "Ada Example" and len(request["template"]) > 3 * 1024 * 1024
+        assert request["backgroundImage"].startswith("data:image/png;base64,")
 
 
 def test_preview_pdf_prints_mapped_values() -> bool:
@@ -607,6 +640,20 @@ def test_preview_pdf_prints_mapped_values() -> bool:
     assert "Colours: #123456 on #ffffff, logo https://example.org/logo.png, validity -1" in text
     assert (400, 400) in _images(pages[0]), "a placeholder QR the size Mimoto draws it (mosip.inji.qr.code.width)"
     assert "$rowProperties" not in text and "#claimValue" not in text
+    return True
+
+
+def test_preview_pdf_prints_data_as_written() -> bool:
+    """A claim that looks like template code prints as text: the data is never read as Velocity."""
+    if _no_renderer("test_preview_pdf_prints_data_as_written"):
+        return False
+    note = "Costs in $titleName #if(1)x#end"
+    client.delete("/api/set")
+    res = _upload(template=("print.html", PRINT_TEMPLATE.encode()), credential=("print.json", _json(PRINT_CREDENTIAL)),
+                  sample=("adapter-response.json", _json({"credentialSubject": {**PRINT_SUBJECT, "note": note}})))
+    assert res.status_code == 200, res.text
+    text, _ = _printed()
+    assert f"Note: {note}" in text, "the claim, verbatim"
     return True
 
 
@@ -658,7 +705,7 @@ def test_preview_pdf_template_error_is_422_with_its_line() -> bool:
 
 
 def test_preview_pdf_takes_any_velocity_1_7_directive() -> bool:
-    """Velocity 1.7 has directives VC Lab's own engine never knew (#define, #{end}); a template using them uploads
+    """Velocity 1.7 has directives the old engine never knew (#define, #{end}); a template using them uploads
     and prints."""
     if _no_renderer("test_preview_pdf_takes_any_velocity_1_7_directive"):
         return False
@@ -724,6 +771,7 @@ def test_preview_pdf_reports_any_renderer_refusal() -> bool:
     finally:
         vc_lab.RENDERER_URL = saved
         server.shutdown()
+        server.server_close()
     return True
 
 
@@ -908,6 +956,7 @@ def test_no_background_uploaded_uses_the_credential_files_address() -> bool:
         assert _printed_images() == [(120, 160)], "an upload overrides display[0].background_image.uri"
     finally:
         server.shutdown()
+        server.server_close()
     return True
 
 
@@ -927,6 +976,7 @@ def test_remove_background_goes_back_to_the_files_address_or_none() -> bool:
         assert _printed_images() == [], "no address in the credential file: no Background"
     finally:
         server.shutdown()
+        server.server_close()
     return True
 
 
@@ -947,23 +997,6 @@ def test_background_survives_download_and_upload_back() -> bool:
     return True
 
 
-def test_export_pdf_refuses_an_image_background() -> bool:
-    """The old Export PDF can't lay an image under its page: it says so, and works again without one."""
-    try:
-        import weasyprint  # noqa: F401
-    except Exception as e:  # Pango missing on this host; the ait-vc image has it
-        print(f"SKIP test_export_pdf_refuses_an_image_background ({type(e).__name__})")
-        return False
-    _upload_set()
-    assert len(_pages("/export.pdf")) == 2
-    assert _upload(background=("paper.png", _png(20, 30))).status_code == 200
-    res = client.get("/export.pdf")
-    assert res.status_code == 422 and "Export PDF" in res.json()["detail"] and "preview.pdf" in res.json()["detail"], res.text
-    assert client.delete("/api/set/background").status_code == 200
-    assert len(_pages("/export.pdf")) == 2
-    return True
-
-
 def _snapshot() -> dict[str, tuple[int, int]]:
     roots = [REPO_ROOT / "deploy", VC_LAB_DIR]
     return {
@@ -977,15 +1010,15 @@ def main() -> None:
     tests: list[Callable[[], object]] = [
         test_health_and_dashboard,
         test_starts_empty_and_asks_for_the_missing_files,
-        test_preview_shows_mapped_values,
-        test_wallet_view_drops_the_list,
-        test_sample_without_credential_subject,
+        test_the_old_rendering_endpoints_are_gone,
+        test_the_renderer_is_sent_the_mapped_claims,
         test_replace_one_slot,
         test_remove_background_then_clear,
         test_download_and_upload_back,
         test_rejects_wrong_files,
         test_large_upload_stays_in_memory,
         test_preview_pdf_prints_mapped_values,
+        test_preview_pdf_prints_data_as_written,
         test_preview_pdf_flattens_claims_as_mimoto_does,
         test_preview_pdf_hands_every_claim_in_display_order,
         test_preview_pdf_template_error_is_422_with_its_line,
@@ -1003,7 +1036,6 @@ def main() -> None:
         test_an_old_zip_with_a_pdf_background_says_what_to_do,
         test_the_renderer_is_sent_the_uploaded_background,
         test_the_worst_accepted_background_prints_four_at_once,
-        test_export_pdf_refuses_an_image_background,
         test_background_png_lands_as_the_pages_image,
         test_background_jpeg_lands_as_the_pages_image,
         test_no_background_uploaded_uses_the_credential_files_address,

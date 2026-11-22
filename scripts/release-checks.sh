@@ -95,7 +95,6 @@ run_release_checks() {
     src/tools/test_generate_csv.py \
     src/tools/test_render_mimoto_issuers_config.py \
     src/tools/test_did.py \
-    src/vc-lab/test_template_engine.py \
     src/vc-lab/test_main.py \
     src/verifier/test_verifier.py \
     tests/test_installations.py \

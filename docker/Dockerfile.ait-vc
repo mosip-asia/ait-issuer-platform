@@ -5,21 +5,17 @@
 # - Gateway (Approval gate checklist evaluator, FastAPI :8000)
 # - Portal (Admin / Student VC portal, FastAPI :4100)
 # - Tools CLI (Typer CLI: did, generate-csv, render-mimoto, issue-and-verify)
-# - VC Lab (Visual VC Studio & Template Designer, FastAPI :4200)
+# - VC Lab (Template Designer: previews the Wallet's PDF through the renderer, FastAPI :4200)
 # - Certify Template Sync (Velocity template & PostgreSQL seed synchronizer)
 # ==============================================================================
 
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
-# Install system runtime requirements (OpenSSL for PKCS12 / Ed25519, curl for healthchecks,
-# Pango and the Liberation fonts for VC Lab's hard-copy PDF through WeasyPrint)
+# Install system runtime requirements (OpenSSL for PKCS12 / Ed25519, curl for healthchecks)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssl \
     curl \
     ca-certificates \
-    libpango-1.0-0 \
-    libpangoft2-1.0-0 \
-    fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
