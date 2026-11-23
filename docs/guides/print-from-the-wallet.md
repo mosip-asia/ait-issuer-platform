@@ -17,12 +17,14 @@ Everything here is local. The Mimoto overlay (`compose.mimoto.yaml`) is never us
 
 Upstream Mimoto turns every claim into one string before the template sees it, and every list of objects becomes `""`. So a template can't loop over `courses`. `ait-mimoto` is upstream `injistack/mimoto:0.21.0` with one line added (`src/mimoto/`): the template also gets the claims as Mimoto received them, as `$credentialSubject`. `$rowProperties` and every other variable are unchanged, so a template written for upstream Mimoto prints the same.
 
+That lets a template loop over `courses`; it doesn't change what any template prints by itself. The grid prints only once the template on the VDR uses the convention in "Template conventions". The committed demo template (`deploy/ait/vdr/templates/AITUniversity-ait-transcript-template.html`) has no `$credentialSubject` branch: it prints `courseList` on either image. The print check swaps in a test template that does, and puts the committed one back.
+
 ## What you need
 
 - A Linux shell with these tools on its `PATH`: `bash`, `docker` (with Compose v2 and, if Docker's config names one, its credential helper), `git`, `curl`, `jq`, `openssl`, `python3` (3.8 or later; standard library only), `awk` and the usual coreutils (`sed`, `grep`, `tr`, `cut`, `base64`, `mktemp`, `id`, `wc`, `seq`, `timeout`, `cp`, `chmod`). `jq` is the one most boxes lack: `scripts/deploy.sh` runs a smoke test that exits without it. On Windows, run everything in WSL, from a clone inside WSL's own home folder (bind mounts fail from `/mnt/c`).
 - Ports 80 and 8088 free (Traefik publishes 80 and its dashboard on `TRAEFIK_DASHBOARD_PORT`, 8088 in `.env.example`), and `*.localhost` names resolving to this machine (Linux and recent Windows do this).
 - The internet. Certify and Mimoto fetch a JSON-LD context from `https://w3id.org` every time they sign or verify, the print check installs a font from Debian's package mirrors, and the first build pulls `injistack/mimoto:0.21.0` and `eclipse-temurin:21-jdk`. When w3id.org is slow, a print can fail with `signature_verification_failed`; run it again.
-- Room for the images: the stack's four `ait-*` images are built from your clone, and each `ait-mimoto` build adds about 330 MB.
+- Free disk for the stack's four `ait-*` images, which are built from your clone, and for the base images they pull (`ait-mimoto` alone adds a layer of a few hundred MB).
 - One stack at a time: the stack's Compose project is `vc-stack`, with fixed container names and ports.
 
 ## 1. Bring the stack up
@@ -51,7 +53,7 @@ Then:
 ./scripts/deploy.sh ait --build
 ```
 
-`--build` builds the images from your clone instead of pulling published ones. It matters until this work is released: the print check (`src/tools/print_check.py`) is part of the `ait-vc` image, so a published `ghcr.io/mosip-asia/ait-vc` that predates it can't run it. A check that finds an old image says `FAIL setup: ... isn't in this ait-vc image: rebuild it with scripts/deploy.sh <installation> --build`.
+`--build` builds the images from your clone instead of pulling published ones. The print check itself is not in the `ait-vc` image: `scripts/print-check.sh` mounts `src/tools/print_check.py` from your checkout and runs it inside `ait-vc`, which supplies Python and the libraries the check imports, `pypdf` (its PDF reader) among them. So an `ait-vc` published before `pypdf` was added to `pyproject.toml` can't run it. A check that finds such an image says `FAIL setup: ... isn't in this ait-vc image: rebuild it with scripts/deploy.sh <installation> --build`.
 
 ## 2. Start Mimoto
 
@@ -76,7 +78,7 @@ Mimoto has no host port; it is reached through Traefik at `http://mimoto.localho
 ./scripts/print-check.sh
 ```
 
-It takes about a minute. It signs the made-up student `st120001` in at the local Keycloak, takes the transcript from Certify and prints it through Mimoto, the way Inji Web does. Then it checks the PDF. Every step prints `PASS`, and the last line is `print check: PASS`. When a step fails, the line names it (`FAIL sign-in`, `token exchange`, `issuance`, `signature check`, `template fetch` or `PDF content`) and the exit status is 1.
+It signs the made-up student `st120001` in at the local Keycloak, takes the transcript from Certify and prints it through Mimoto, the way Inji Web does, twice (your template, then the check's own). Then it checks the PDF. Every check prints a `PASS` line. The run ends with these lines, in this order: `restored the original AITUniversity-ait-transcript-template.html`, `print check: PASS`, `PDFs: <folder>` and `restored the committed credential file in Certify`, and the exit status is 0. A run that ends without `print check: PASS` failed. When a step fails, the line names it (`FAIL sign-in`, `token exchange`, `issuance`, `signature check`, `template fetch` or `PDF content`) and the exit status is 1.
 
 What it proves:
 
@@ -93,10 +95,10 @@ The check also publishes a test copy of the credential files to the local stack 
 
 The PDFs of the run are kept in a temporary folder, named on the line `PDFs: <folder>`. `original.pdf` is the print of whatever template the VDR held, and `swapped.pdf` the print of the check's test template.
 
-To see the grid, read the text of `swapped.pdf` (the `ait-vc` image has the PDF reader). Replace `<folder>` with the folder on the `PDFs:` line:
+To see the grid, read the text of `swapped.pdf` (the `ait-vc` image has the PDF reader). Replace `<folder>` with the folder on the `PDFs:` line; the image tag is `.env`'s `IMAGE_TAG`:
 
 ```bash
-docker run --rm -v <folder>:/pdf:ro ghcr.io/mosip-asia/ait-vc:latest \
+docker run --rm -v <folder>:/pdf:ro ghcr.io/mosip-asia/ait-vc:$(grep ^IMAGE_TAG= .env | cut -d= -f2) \
   python -c "from pypdf import PdfReader; print(PdfReader('/pdf/swapped.pdf').pages[0].extract_text())" \
   | grep -E '^(TERM|COURSE) '
 ```
@@ -124,7 +126,7 @@ The check's first print (`original`, saved as `original.pdf`) is from your templ
 
 Git tracks this file. `git checkout -- deploy/ait/vdr/templates/AITUniversity-ait-transcript-template.html` puts the committed one back (and discards your own template if it is still there: keep a copy elsewhere), and CD's `git checkout -f` does it at every deploy, so a template placed this way lasts only until then. Real deployments need their own way to place it (T3).
 
-**A `#macro` is the one thing a swap doesn't replace.** Mimoto's Velocity engine is shared by every print, and it registers a template's `#macro` the first time it sees that name: a later template that defines a macro of the same name prints with the first body until Mimoto restarts. Everything else in the template (markup, `#set`, loops) is read fresh at each print. When you change a macro's body, give it a new name, or recreate Mimoto (`docker compose up -d --force-recreate mimoto`, with the command from step 2). Shown with Mimoto's own Velocity 1.7: the first of two templates that define the same macro wins, in either order. The AIT template's `claimValue` macro hit this: the print check's first print had registered the committed template's version, and the AIT template's corrected macro came out wrong until a fresh Mimoto printed it first.
+**A `#macro` is the one thing a swap doesn't replace.** Mimoto's Velocity engine is shared by every print, and it registers a template's `#macro` the first time it sees that name: a later template that defines a macro of the same name prints with the first body until Mimoto restarts. Everything else in the template (markup, `#set`, loops) is read fresh at each print. When you change a macro's body, give it a new name, or recreate Mimoto (`docker compose up -d --force-recreate mimoto`, with the command in section 2). Shown with Mimoto's own Velocity 1.7: the first of two templates that define the same macro wins, in either order. The AIT template's `claimValue` macro hit this: the print check's first print had registered the committed template's version, and the AIT template's corrected macro came out wrong until a fresh Mimoto printed it first.
 
 If a run is killed between the swap and the restore, the next check refuses:
 - `FAIL setup: ... is still the print check's test template`: restore the template with the `git checkout --` it prints. That discards whatever template git doesn't hold, so if the leftover replaced your own template, put your copy back instead.
@@ -140,10 +142,12 @@ A Background is the picture of an organisation's pre-printed paper. The platform
 
 Two things connect it:
 
-1. The file, at `<VDR>/templates/<credential configuration id>/background.png`. Locally: `deploy/ait/vdr/templates/ait-transcript/background.png` (make the folder). Use any PNG or JPEG of the paper, saved under that name.
-2. The credential file's `display[0].background_image.uri`, set to `http://vdr.localhost/templates/ait-transcript/background.png`. Certify publishes it in its metadata, and Mimoto hands it to the template as `$backgroundImage`. The file git holds sets no address, so publish the credential file with one (next section).
+1. The file, at `<VDR>/templates/<credential configuration id>/background.png`. Locally: `deploy/ait/vdr/templates/ait-transcript/background.png` (make the folder). It has to be an image, PNG or JPEG, of the paper, saved under that name: the template draws it with `<img>`. VC Lab's Background is a PDF on `dev`, which the Wallet can't draw, so the image comes from the organisation, not from VC Lab.
+2. The credential file's `display[0].background_image.uri`, set to `http://vdr.localhost/templates/ait-transcript/background.png`. Certify publishes it in its metadata, and Mimoto hands it to the template as `$backgroundImage`.
 
-The template then draws it. See "Template conventions".
+An Installation therefore needs both: its credential file points `display[0].background_image.uri` at the Background on its VDR, and its template draws `$backgroundImage`. The committed demo files do neither (`deploy/ait/certify/credentials/ait-transcript.json` sets only `background_color`, and the committed template doesn't use `$backgroundImage`), so publish the credential file with an address (next section). The print check does both for its own run.
+
+The template draws it as shown in "Template conventions".
 
 To see your own Background in the print check: the check's test copy of the credential file already points `display[0].background_image` at `<VDR>/templates/<credential configuration id>/background.png`, so a Background you place there prints in the check. `original.pdf` shows it behind your template. For the swapped print the check puts its own made-up Background at that path and afterwards puts yours back byte for byte.
 
@@ -155,14 +159,14 @@ There is no publish command yet. From the repository root, with the file's folde
 mkdir -p /tmp/creds && cp deploy/ait/certify/credentials/*.json /tmp/creds/
 cp my-ait-transcript.json /tmp/creds/ait-transcript.json
 chmod -R a+rX /tmp/creds
-export COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE="$(grep ^COMPOSE_FILE= .env | cut -d= -f2-):compose.mimoto.yaml"
-docker compose run --rm -T -e CREDENTIALS_DIR=/test-credentials -v /tmp/creds:/test-credentials:ro template-sync
-docker compose restart certify
+compose() { COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE="$(grep ^COMPOSE_FILE= .env | cut -d= -f2-):compose.mimoto.yaml" docker compose "$@"; }
+compose run --rm -T -e CREDENTIALS_DIR=/test-credentials -v /tmp/creds:/test-credentials:ro template-sync
+compose restart certify
 ```
 
-`template-sync` keeps Certify's live DID because `.env` holds it as `CERTIFY_DID` and the overlay passes it on (step 2 of the start command); with the placeholder every credential would fail to verify. Certify has to restart to serve the new metadata. Mimoto fetches that metadata from Certify with a cache, which the local Mimoto sets to 0 so a published address shows at once; a Mimoto that was already running keeps its old setting until it is recreated.
+`template-sync` keeps Certify's live DID because `.env` holds it as `CERTIFY_DID` and the overlay passes it on (steps 3 and 4 of the start command in section 2); with the placeholder every credential would fail to verify. Certify has to restart to serve the new metadata. Mimoto fetches that metadata from Certify with a cache, which the local Mimoto sets to 0 so a published address shows at once; a Mimoto that was already running keeps its old setting until it is recreated.
 
-To put the committed files back: `docker compose up -d --force-recreate template-sync certify`.
+To put the committed files back: `compose up -d --force-recreate template-sync certify`, with the `compose` function above. The function sets the two variables for its own command only, so nothing leaks into a later `deploy.sh`.
 
 ## Template conventions
 
@@ -187,7 +191,7 @@ What Mimoto does to a credential decides how a template is written (Velocity 1.7
   ```
 
   **Use quiet references (`$!c.grade`, not `$c.grade`) for every field.** A missing or null value then prints an empty cell. A plain reference prints its own name, `$c.grade`, in the cell. `$credentialSubject` is the claims as received, so a template that prints from it decides what shows: `ait-mimoto` doesn't mask SD-JWT disclosures or drop the face there as it does for `$rowProperties`.
-- **Every claim reaches the template** as `$rowProperties` (claim to display name to text), whether or not it has a display name, ordered by the credential file's `display_order` first. A list of text is joined with `", "`. A list of objects is `""` there, which is why the grid reads `$credentialSubject`.
+- **Every claim reaches the template** as `$rowProperties` (claim to display name to text), whether or not it has a display name, ordered by the credential file's `display_order` first. A list of text is joined with `", "`. Claims `display_order` leaves out come in Certify's internal (HashMap) order, so name every claim a template loops over in `display_order`. A list of objects is `""` there, which is why the grid reads `$credentialSubject`.
 - **A full-bleed Background needs two things.** Set `@page { margin: 0 }` and `body { margin: 0 }`, or iText's 36 pt page margin moves the image in from the edge. And wrap the layout in a page-sized `position: relative` box, with the image absolutely placed inside it. An `<img src="$backgroundImage">` placed straight in `<body>` is drawn above the page and is lost:
 
   ```html
@@ -208,12 +212,13 @@ What Mimoto does to a credential decides how a template is written (Velocity 1.7
 - **Fonts:** only the 14 standard PDF fonts are built in, so Arial and Arial Narrow fall back. Any other font, Thai included, comes through `@font-face` with an absolute URL, see "Fonts" above for where the file goes and why git ignores it.
 - **Non-ASCII text typed into a template** needs the VDR's `charset=utf-8` (T2), or HTML entities. Claim values are not affected.
 - **Claim values reach the template as they are, unescaped,** in both `$rowProperties` and `$credentialSubject`.
+- **A template must look right without the QR.** Mimoto 0.21 draws `$qrCodeImage` only when the credential's encoded QR data is under 4096 characters, and a long transcript may pass that.
 
-The generic template the print check uses, `tests/fixtures/print-check-template.html`, shows each of these working.
+The generic template the print check uses, `tests/fixtures/print-check-template.html`, shows the grid (with its fallback and quiet references), the Background, the font and Thai working. Its loop over the claims uses plain references, so it isn't a model for a missing claim.
 
 ## T2: Mimoto reads its files from the VDR
 
-**The ask, for whoever runs Mimoto and the VDR on a deployment:** set Mimoto's `config.server.file.storage.uri` to the VDR's `/templates/` (with a trailing `/`), so a template replaced on the VDR prints at the next print with no restart (a changed `#macro` body is the one exception, see section 4). Three conditions come with it:
+**The ask, for whoever runs Mimoto and the VDR on a deployment:** set Mimoto's `config.server.file.storage.uri` to the VDR's `/templates/` (with a trailing `/`), so a template replaced on the VDR prints at the next print with no restart (a changed `#macro` body is the one exception, see section 4). No contract change is needed. Three conditions come with it:
 
 1. **Mimoto's own config files are served from the same address.** Mimoto fetches `mimoto-issuers-config.json` and `mimoto-trusted-verifiers.json` from it, and its CBEFF schema `mosip-cbeff.xsd` from `mosip.kernel.xsdstorage-uri`. The VDR's `/templates/` serves them, or something in front of it does. Today VCGA serves the first two.
 2. **`charset=utf-8`.** The VDR's `/templates/` block carries `charset utf-8;` in `deploy/base/vdr-nginx.conf`. Without it Mimoto reads the template as ISO-8859-1 and Thai typed into it prints as `à¸ à¸²à¸©à¸²...`.
@@ -230,7 +235,9 @@ Locally the three mount points are empty files that `mimoto-up.sh` creates first
 
 ## T3: A place for the template and the Background on each VDR
 
-**The ask, for infra:** give each deployment a way to place two files on its VDR by hand. The template and the Background both come from VC Lab's download, as the files the template designer uploaded or made there. The Background is a PNG or JPEG of the organisation's paper. Neither comes from git, and CD's `git checkout -f` puts back any tracked file replaced in the checkout.
+**The ask, for infra:** give each deployment a way to place two files on its VDR by hand. The template comes from VC Lab's download. The Background is a PNG or JPEG of the organisation's paper that the organisation supplies: VC Lab's own Background is a PDF on `dev`, and the Wallet draws it with `<img>`, which can't show a PDF. Neither comes from git, and CD's `git checkout -f` puts back any tracked file replaced in the checkout. No contract change is needed.
+
+Placing the files isn't enough on its own. The deployment's credential file has to point `display[0].background_image.uri` at the Background on its VDR, and its template has to draw `$backgroundImage`; the committed demo files do neither (section 5).
 
 - The template: `<VDR>/templates/AITUniversity-ait-transcript-template.html`. Mimoto fixes this name and looks only at the top of its template address.
 - The Background: `<VDR>/templates/ait-transcript/background.png`. The credential file's `display[0].background_image.uri` points there; `template-sync` rewrites that address for each deployment's VDR (`VDR_BASE_URL`).
@@ -241,15 +248,17 @@ Locally the three mount points are empty files that `mimoto-up.sh` creates first
 
 **The ask, for whoever runs Mimoto on a deployment:** run `ghcr.io/mosip-asia/ait-mimoto:<tag>` in place of `injistack/mimoto:0.21.0`. Nothing else changes: the same configuration, the same files, the same ports. `<tag>` is a release tag that `scripts/build.sh` published (it builds and publishes `ait-mimoto` like `ait-certify`).
 
-**Why:** Mimoto 0.21 hands every list of objects to the template as `""`, so a template can't draw the course grid by term. `ait-mimoto` also hands the template the claims as received, as `$credentialSubject`, and the template loops over `$credentialSubject.courses` (see "Template conventions"). The SIS Adapter sends nothing new: `courses` is already in contract 0.5.0.
+**Why:** Mimoto 0.21 hands every list of objects to the template as `""`, so a template can't draw the course grid by term. `ait-mimoto` also hands the template the claims as received, as `$credentialSubject`, so a template can loop over `$credentialSubject.courses` (see "Template conventions"). The SIS Adapter sends nothing new: `courses` is already in contract 0.5.0.
+
+**The image alone changes nothing a Wallet prints.** The grid prints only once the template on the VDR uses that convention, placed as T3 describes. The committed demo template (`AITUniversity-ait-transcript-template.html`) has no `$credentialSubject` branch and keeps printing `courseList` on either image.
 
 **Where the change is:** `src/mimoto/` holds the one changed file, one line added to upstream's `CredentialPDFGeneratorService.java`, with its MPL-2.0 notice and the upstream tag and commit it came from (`src/mimoto/README.md`). `docker/Dockerfile.mimoto` puts it into `injistack/mimoto:0.21.0`.
 
-**Until a deployment runs `ait-mimoto`,** its Wallet prints the template's fallback branch: `courseList` as one line per course, not the grid. That is what a Wallet prints today, so nothing gets worse.
+**Until a deployment runs `ait-mimoto`,** a template that follows the convention prints its fallback branch, `courseList` as one line per course, not the grid; the committed demo template does that on every image. That is what a Wallet prints today, so nothing gets worse.
 
 **Where to see it working:**
 
-- The grid: step 3's print check. `PASS PDF content (swapped): the course grid holds 2 term headings and 6 course rows, in order` is the grid printed from `courses`, compared with the record's structured `courses`; the command under it lists the rows from `swapped.pdf`.
+- The grid: section 3's print check, whose test template follows the convention. `PASS PDF content (swapped): the course grid holds 2 term headings and 6 course rows, in order` is the grid printed from `courses`, compared with the record's structured `courses`; the command under it lists the rows from `swapped.pdf`.
 - The one-image swap: `compose.mimoto.yaml`'s `mimoto` service differs from a plain Mimoto only by its `image:` (and `build:`, which only the local stack uses).
 - The fallback, on upstream Mimoto: put `injistack/mimoto:0.21.0` back in place of `ait-mimoto` (a Compose file that overrides the image), then print again:
 
@@ -277,5 +286,5 @@ Locally the three mount points are empty files that `mimoto-up.sh` creates first
 | The PDF shows Thai as garbage | The VDR doesn't send `charset=utf-8` (T2). |
 | A grid cell prints `$c.grade` (or another field's name) | The template uses a plain reference: write `$!c.grade`. |
 | A hand-published credential file is gone | A print check ended and put the committed files back: publish it again. |
-| A change to `mimoto-*.properties` has no effect | Mimoto keeps its settings until it is recreated (step 2). |
-| A swapped template prints with an old macro body | Mimoto registers a `#macro` once; rename it or recreate Mimoto (step 4). |
+| A change to `mimoto-*.properties` has no effect | Mimoto keeps its settings until it is recreated (section 2). |
+| A swapped template prints with an old macro body | Mimoto registers a `#macro` once; rename it or recreate Mimoto (section 4). |
