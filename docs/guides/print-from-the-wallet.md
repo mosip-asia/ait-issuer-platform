@@ -66,7 +66,7 @@ It is safe to run again, so retry it after any failure. It does these things in 
 1. Refuses, printing the two `.env` lines to set, unless Certify trusts the local Keycloak.
 2. Generates Mimoto's client key once, in `deploy/ait/mimoto/` (git-ignored). Nothing secret is committed.
 3. Writes Certify's live `did:key` into `.env` as `CERTIFY_DID` when `.env` holds another one: the example's placeholder, or the key `deploy.sh` read from a fresh keystore before Certify replaced it. Without the live DID every credential signs with a key nobody can resolve, and every verifier, Mimoto included, rejects it.
-4. Builds the `ait-mimoto` image from this checkout (the first build takes a few minutes; a build with nothing changed takes seconds), then starts the overlay: Mimoto and its own Postgres database. The overlay passes `CERTIFY_DID` to `template-sync`, so Compose re-syncs the credential files with the live DID and recreates Certify. The VDR gains three files under `/templates/` (below).
+4. Builds the `ait-mimoto` image from this checkout (the first build takes a few minutes; a build with nothing changed takes seconds), then starts the overlay: Mimoto and its own Postgres database. The overlay passes `CERTIFY_DID` to `template-sync`, so Compose re-syncs the credential files with the live DID and recreates Certify. The VDR gains four files under `/templates/` (below).
 5. Tells the local Keycloak's `wallet-demo` client to trust Mimoto's key, through Keycloak's admin CLI. The committed realm file is unchanged.
 6. Waits until Mimoto serves its issuers list, and prints `Mimoto is up at http://mimoto.localhost/v1/mimoto`.
 

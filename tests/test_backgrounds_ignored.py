@@ -76,6 +76,7 @@ def test_the_print_checks_font_folder_is_ignored() -> None:
 def test_templates_and_brand_assets_are_not_ignored() -> None:
     for path in (
         f"{TEMPLATES}/AITUniversity-ait-transcript-template.html",
+        "deploy/base/vdr/templates/credential-template.html",  # Mimoto's fallback template, which the overlay mounts
         "deploy/ait/vdr/assets/AIT_globe.png",  # the logo: brand assets are committed
     ):
         assert not ignored(path), f"git ignores {path}"
