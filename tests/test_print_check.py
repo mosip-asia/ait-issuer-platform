@@ -7,6 +7,7 @@ Run: python3 tests/test_print_check.py
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
 import shutil
@@ -164,6 +165,8 @@ def _pdf_with_rows(*rows: tuple[int, str]) -> bytes:
 
 
 def test_a_grid_row_drawn_below_the_page_edge_is_named() -> None:
+    if importlib.util.find_spec("pypdf") is None:  # CI's host tests don't install it; the live print check covers this
+        return
     on_page = _pdf_with_rows((700, "Name"), (500, "TERM | T1 | 6 | 3.5 | 3.5 ;"), (20, "COURSE | A1 | Algebra ;"))
     assert _pc.grid_rows_off_page(on_page) == []
     off = _pdf_with_rows((700, "Name"), (20, "COURSE | A1 | Algebra ;"), (-30, "COURSE | A2 | Biology ;"))
