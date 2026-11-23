@@ -260,7 +260,7 @@ Locally the three mount points are empty files that `mimoto-up.sh` creates first
   ./scripts/print-check.sh
   ```
 
-  The check then ends `FAIL PDF content (swapped)`, because it expects the grid. `swapped.pdf` shows the fallback: the same `grep` as above, with `^COURSE-LINE ` in place of `^(TERM|COURSE) `, prints one line for each of the 6 courses, and no `TERM` or `COURSE |` rows. Put `ait-mimoto` back with `./scripts/mimoto-up.sh`.
+  The check then ends `FAIL PDF content: st120001's grid holds 0 term headings and 0 course rows, not 2 and 6, ...`, because it expects the grid. `swapped.pdf` shows the fallback: the same `grep` as above, with `^COURSE-LINE ` in place of `^(TERM|COURSE) `, prints one line for each of the 6 courses, and no `TERM` or `COURSE |` rows. Put `ait-mimoto` back with `./scripts/mimoto-up.sh`.
 
 ## When something fails
 
@@ -273,7 +273,7 @@ Locally the three mount points are empty files that `mimoto-up.sh` creates first
 | `FAIL setup: Mimoto's issuers list answered ...` | Mimoto isn't running (stopped, or the stack was brought down and only `deploy.sh` ran again). The three Mimoto files stay on the VDR as empty files once `mimoto-up.sh` has run, so the VDR still answers 200 and the check gets as far as asking Mimoto: run `./scripts/mimoto-up.sh`. |
 | `FAIL signature check ... signature_verification_failed` | Certify's rows hold a DID other than the key it signs with (run `./scripts/mimoto-up.sh`), or w3id.org was slow or unreachable. |
 | `FAIL token exchange ... invalid_request` | The local Keycloak doesn't trust Mimoto's key: run `./scripts/mimoto-up.sh`. |
-| `FAIL PDF content (swapped)` and the PDF has `COURSE-LINE` lines | Mimoto is upstream's `injistack/mimoto:0.21.0`, not `ait-mimoto` (T4): run `./scripts/mimoto-up.sh`, which recreates it from the built image. |
+| `FAIL PDF content: ... grid holds 0 term headings` and the PDF has `COURSE-LINE` lines | Mimoto is upstream's `injistack/mimoto:0.21.0`, not `ait-mimoto` (T4): run `./scripts/mimoto-up.sh`, which recreates it from the built image. |
 | The PDF shows Thai as garbage | The VDR doesn't send `charset=utf-8` (T2). |
 | A grid cell prints `$c.grade` (or another field's name) | The template uses a plain reference: write `$!c.grade`. |
 | A hand-published credential file is gone | A print check ended and put the committed files back: publish it again. |
