@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Start the real Mimoto 0.21, the Wallet's printer, beside the regular local stack. Local only.
+# Start ait-mimoto, the Wallet's printer, beside the regular local stack. Local only.
 # ==============================================================================
 # Run from the repository root after scripts/deploy.sh has brought up the regular stack with the mock services
 # (COMPOSE_FILE=compose.yaml:compose.mock.yaml). Each step converges, so a half-finished start can be run again:
@@ -8,8 +8,9 @@
 #   2. generates Mimoto's client keystore once (deploy/<installation>/mimoto/, git-ignored);
 #   3. writes Certify's live DID into .env when .env holds another one (the placeholder, or a key deploy.sh read
 #      from the keystore before Certify replaced it);
-#   4. starts compose.mimoto.yaml beside the stack: Compose recreates what step 3 or .env changed (template-sync,
-#      Certify) and the VDR, which gains Mimoto's files under /templates/;
+#   4. builds the ait-mimoto image when it's missing, then starts compose.mimoto.yaml beside the stack: Compose
+#      recreates what step 3 or .env changed (template-sync, Certify) and the VDR, which gains Mimoto's files under
+#      /templates/;
 #   5. sets the local Keycloak's wallet client to trust the keystore's key (the committed realm is untouched);
 #   6. waits until Mimoto serves its issuers list.
 # Then print with scripts/print-check.sh. Stop everything with the same COMPOSE_FILE plus compose.mimoto.yaml.
@@ -108,6 +109,13 @@ fi
 for f in mimoto-issuers-config.json mimoto-trusted-verifiers.json mosip-cbeff.xsd; do
   [[ -e deploy/$INSTALLATION/vdr/templates/$f ]] || : > "deploy/$INSTALLATION/vdr/templates/$f"
 done
+# Built from this checkout when missing, not pulled: with a build: entry, Compose would try the registry first.
+# After changing src/mimoto, rebuild it with: docker compose build mimoto (with this script's COMPOSE_FILE).
+MIMOTO_IMAGE=$(compose config --images mimoto)
+if ! docker image inspect "$MIMOTO_IMAGE" >/dev/null 2>&1; then
+  echo "building $MIMOTO_IMAGE"
+  compose build mimoto
+fi
 compose up -d
 wait_for "$CERTIFY/.well-known/openid-credential-issuer" "Certify" || die "Certify didn't come back"
 

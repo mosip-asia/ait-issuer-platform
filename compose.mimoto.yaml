@@ -1,9 +1,10 @@
 # ==============================================================================
 # Mimoto overlay: the Wallet's printer beside the regular local stack (local only)
 # ==============================================================================
-# The real Mimoto 0.21, the service that turns a credential into the Wallet's PDF, with its own database. CD and
-# every deployment never use this file. Start it with scripts/mimoto-up.sh, which adds this file to .env's
-# COMPOSE_FILE for its own commands, and print with scripts/print-check.sh.
+# ait-mimoto, the service that turns a credential into the Wallet's PDF, with its own database. ait-mimoto is
+# Mimoto 0.21 whose templates also get the claims whole, as $credentialSubject (src/mimoto/README.md). CD and every
+# deployment never use this file. Start it with scripts/mimoto-up.sh, which builds ait-mimoto when it's missing and
+# adds this file to .env's COMPOSE_FILE for its own commands, and print with scripts/print-check.sh.
 #
 # Mimoto reaches Certify, Keycloak and the VDR as a browser does: through Traefik on the host, by their *.localhost
 # names. It reads its template, issuers list and trusted verifiers from the VDR's /templates/ (ask T2), so this file
@@ -41,7 +42,10 @@ services:
       retries: 30
 
   mimoto:
-    image: injistack/mimoto:0.21.0
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.mimoto
+    image: ghcr.io/mosip-asia/ait-mimoto:${IMAGE_TAG}
     user: root
     environment:
       - container_user=mosip
