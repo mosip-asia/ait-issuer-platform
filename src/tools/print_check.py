@@ -329,9 +329,15 @@ def check_background_font_and_thai(label: str, pdf: bytes, text: str, ctx: dict)
     print(f"PASS PDF content ({label}): Thai text is in the page, typed in the template and as a claim value")
 
 
-# What the made-up student's grid holds, written out, so an Adapter serving another record can't pass by matching
-# itself: (term headings, course rows).
-GRID_COUNTS = {"st120001": (2, 6)}
+# What the made-up student's grid holds, written out from the committed data (deploy/ait/adapter/student_identity_data.csv),
+# so an Adapter that served another record, or a mapping that changed a value, can't pass by matching itself:
+# the term headings, the first and last course rows, and the counts.
+PINNED = {"st120001": {
+    "terms": ("TERM | August Semester 2024 | 9 | 3.67 | 3.67 ;", "TERM | January Semester 2025 | 9 | 3.89 | 3.78 ;"),
+    "first": "COURSE | CS601 | Advanced Algorithms | 0 | 45 | 3 | A ;",
+    "last": "COURSE | CS606 | Cloud Computing | 45 | 30 | 3 | A- ;",
+    "counts": (2, 6),
+}}
 
 
 def expected_grid(courses: list[dict]) -> str:
@@ -354,20 +360,17 @@ def check_grid(text: str, courses: list[dict], student: str = "") -> str:
     grid = text[start + len("COURSE-GRID-START"):end].strip()
     terms, rows = len(courses), sum(len(t["courses"]) for t in courses)
     printed = (grid.count("TERM |"), grid.count("COURSE |"))
-    if student in GRID_COUNTS and printed != GRID_COUNTS[student]:
-        raise StepFailed("PDF content", f"{student}'s grid holds {printed[0]} term headings and {printed[1]} course "
-                                        f"rows, not {GRID_COUNTS[student][0]} and {GRID_COUNTS[student][1]}")
+    pin = PINNED.get(student)
+    if pin:
+        printed_rows = [r.strip() for r in grid.split(";")]
+        missing = [r for r in (*pin["terms"], pin["first"], pin["last"]) if r.removesuffix(" ;") not in printed_rows]
+        if printed != pin["counts"] or missing:
+            raise StepFailed("PDF content", f"{student}'s grid holds {printed[0]} term headings and {printed[1]} course "
+                                            f"rows, not {pin['counts'][0]} and {pin['counts'][1]}, or lacks {missing}")
     if grid != expected_grid(courses):
         raise StepFailed("PDF content", f"the course grid isn't the {terms} term headings and {rows} course rows of "
                                         f"courses: it printed {grid[:300]!r}")
     return f"{terms} term headings and {rows} course rows, in order"
-
-
-def without_grade(courses: list[dict], no: str) -> list[dict]:
-    """`courses` with the grade of course `no` emptied, as print-check.sh publishes it."""
-    if not any(c["no"] == no for t in courses for c in t["courses"]):
-        raise StepFailed("setup", f"the record has no course {no} to leave ungraded")
-    return [{**t, "courses": [{**c, "grade": ""} if c["no"] == no else c for c in t["courses"]]} for t in courses]
 
 
 def check_charset(template: str) -> None:
@@ -388,10 +391,8 @@ def background_file(templates: Path, uri: str) -> Path:
 
 
 def run(installation: Path, templates: Path, test_template: Path, out: Path, student: str | None,
-        templates_shown: str, thai_note: str, ungraded: str = "") -> None:
+        templates_shown: str, thai_note: str) -> None:
     ctx = context(installation, student)
-    if ungraded:  # the published copy of the credential leaves this course without a grade
-        ctx["courses"] = without_grade(ctx["courses"], ungraded)
     ctx["thai_note"] = " ".join(thai_note.split())
     target = templates / ctx["template"]
     check_vdr(ctx["template"])  # first: a template the VDR doesn't serve is a template fetch failure
@@ -459,15 +460,12 @@ def main() -> int:
     parser.add_argument("--student")
     parser.add_argument("--thai-note", required=True,
                         help="the made-up Thai text print-check.sh published as the credential's notes claim")
-    parser.add_argument("--ungraded", default="",
-                        help="the number of the course print-check.sh published without a grade")
     args = parser.parse_args()
     # As PID 1 in a container Python ignores SIGTERM; exit on it instead, so `docker stop` still restores the
     # template. A SIGKILL can't be caught: the next run notices the leftover (run()).
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     try:
-        run(args.installation, args.templates, args.test_template, args.out, args.student, args.templates_shown, args.thai_note,
-            args.ungraded)
+        run(args.installation, args.templates, args.test_template, args.out, args.student, args.templates_shown, args.thai_note)
     except StepFailed as e:
         print(f"FAIL {e}")
         return 1

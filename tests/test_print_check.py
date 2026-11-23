@@ -7,6 +7,8 @@ Run: python3 tests/test_print_check.py
 
 from __future__ import annotations
 
+import json
+import re
 import shutil
 import subprocess
 import sys
@@ -107,9 +109,48 @@ def test_the_grid_fails_on_a_shifted_row_a_missing_row_or_missing_markers() -> N
     assert "markers aren't in the page text" in _grid_failure("no grid here")
 
 
-def test_the_made_up_students_grid_counts_are_written_out_apart_from_the_record() -> None:
-    # A record that held other terms must not pass for st120001 even when the page matches the record.
-    assert "holds 2 term headings and 3 course rows, not 2 and 6" in _grid_failure(GRID, COURSES, "st120001")
+ST120001 = [
+    {"term": "August Semester 2024", "credits": "9", "gpa": "3.67", "cumGpa": "3.67", "courses": [
+        {"no": "CS601", "title": "Advanced Algorithms", "lab": "0", "lec": "45", "credits": "3", "grade": "A"},
+        {"no": "CS602", "title": "Machine Learning", "lab": "45", "lec": "30", "credits": "3", "grade": "A-"},
+        {"no": "CS603", "title": "Distributed Systems", "lab": "45", "lec": "30", "credits": "3", "grade": "B+"}]},
+    {"term": "January Semester 2025", "credits": "9", "gpa": "3.89", "cumGpa": "3.78", "courses": [
+        {"no": "CS604", "title": "Computer Vision", "lab": "45", "lec": "30", "credits": "3", "grade": "A"},
+        {"no": "CS605", "title": "Cryptography and Network Security", "lab": "0", "lec": "45", "credits": "3",
+         "grade": "A"},
+        {"no": "CS606", "title": "Cloud Computing", "lab": "45", "lec": "30", "credits": "3", "grade": "A-"}]},
+]
+GRID_ST120001 = (
+    "COURSE-GRID-START TERM | August Semester 2024 | 9 | 3.67 | 3.67 ; "
+    "COURSE | CS601 | Advanced Algorithms | 0 | 45 | 3 | A ; COURSE | CS602 | Machine Learning | 45 | 30 | 3 | A- ; "
+    "COURSE | CS603 | Distributed Systems | 45 | 30 | 3 | B+ ; "
+    "TERM | January Semester 2025 | 9 | 3.89 | 3.78 ; COURSE | CS604 | Computer Vision | 45 | 30 | 3 | A ; "
+    "COURSE | CS605 | Cryptography and Network Security | 0 | 45 | 3 | A ; "
+    "COURSE | CS606 | Cloud Computing | 45 | 30 | 3 | A- ; COURSE-GRID-END")
+
+
+def test_the_made_up_students_grid_is_pinned_to_the_committed_data_not_to_the_record() -> None:
+    assert _pc.check_grid(GRID_ST120001, ST120001, "st120001") == "2 term headings and 6 course rows, in order"
+    # A record and a page that agree with each other but not with the committed data must fail: a wrong title on
+    # the first course, a wrong grade on the last.
+    wrong_title = json.loads(json.dumps(ST120001))
+    wrong_title[0]["courses"][0]["title"] = "Advanced Algorithm"
+    assert "lacks" in _grid_failure(GRID_ST120001.replace("Advanced Algorithms", "Advanced Algorithm"), wrong_title,
+                                    "st120001")
+    wrong_grade = json.loads(json.dumps(ST120001))
+    wrong_grade[1]["courses"][2]["grade"] = "A"
+    assert "lacks" in _grid_failure(GRID_ST120001.replace("Cloud Computing | 45 | 30 | 3 | A-",
+                                                           "Cloud Computing | 45 | 30 | 3 | A"), wrong_grade, "st120001")
+    shorter = [ST120001[0], {**ST120001[1], "courses": ST120001[1]["courses"][:2]}]
+    page = GRID_ST120001.replace("COURSE | CS606 | Cloud Computing | 45 | 30 | 3 | A- ; ", "")
+    assert "not 2 and 6" in _grid_failure(page, shorter, "st120001")
+
+
+def test_the_template_prints_every_grid_field_quietly_so_a_missing_one_is_empty_not_its_own_name() -> None:
+    template = (REPO_ROOT / "tests" / "fixtures" / "print-check-template.html").read_text(encoding="utf-8")
+    refs = re.findall(r"\$!?\{?(?:term|c)\.\w+", template)
+    assert len(refs) == 11, refs  # 4 term fields and 6 course fields, plus the `$term.courses` loop source
+    assert all(r.startswith("$!") for r in refs if not r.endswith(".courses")), refs
 
 
 def test_a_key_missing_from_dot_env_falls_back_instead_of_ending_print_check_sh() -> None:

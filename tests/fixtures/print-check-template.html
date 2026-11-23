@@ -35,9 +35,9 @@
 <p>COURSE-GRID-START</p>
 #if($credentialSubject && $credentialSubject.courses)
 #foreach($term in $credentialSubject.courses)
-<p>TERM | $term.term | $term.credits | $term.gpa | $term.cumGpa ;</p>
+<p>TERM | $!term.term | $!term.credits | $!term.gpa | $!term.cumGpa ;</p>
 #foreach($c in $term.courses)
-<p>COURSE | $c.no | $c.title | $c.lab | $c.lec | $c.credits | $c.grade ;</p>
+<p>COURSE | $!c.no | $!c.title | $!c.lab | $!c.lec | $!c.credits | $!c.grade ;</p>
 #end
 #end
 #else
@@ -47,7 +47,7 @@
 #if($listed)#foreach($e in $listed.entrySet())#set($courseList = $e.value)#end#end
 #foreach($line in $courseList.split("
 "))
-<p>$line</p>
+<p>COURSE-LINE | $!line ;</p>
 #end
 <p>COURSE-LIST-END</p>
 #end
