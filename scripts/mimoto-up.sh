@@ -8,7 +8,7 @@
 #   2. generates Mimoto's client keystore once (deploy/<installation>/mimoto/, git-ignored);
 #   3. writes Certify's live DID into .env when .env holds another one (the placeholder, or a key deploy.sh read
 #      from the keystore before Certify replaced it);
-#   4. builds the ait-mimoto image when it's missing, then starts compose.mimoto.yaml beside the stack: Compose
+#   4. builds the ait-mimoto image from this checkout, then starts compose.mimoto.yaml beside the stack: Compose
 #      recreates what step 3 or .env changed (template-sync, Certify) and the VDR, which gains Mimoto's files under
 #      /templates/;
 #   5. sets the local Keycloak's wallet client to trust the keystore's key (the committed realm is untouched);
@@ -109,13 +109,8 @@ fi
 for f in mimoto-issuers-config.json mimoto-trusted-verifiers.json mosip-cbeff.xsd; do
   [[ -e deploy/$INSTALLATION/vdr/templates/$f ]] || : > "deploy/$INSTALLATION/vdr/templates/$f"
 done
-# Built from this checkout when missing, not pulled: with a build: entry, Compose would try the registry first.
-# After changing src/mimoto, rebuild it with: docker compose build mimoto (with this script's COMPOSE_FILE).
-MIMOTO_IMAGE=$(compose config --format json mimoto | python3 -c "import json,sys; print(json.load(sys.stdin)['services']['mimoto']['image'])")
-if ! docker image inspect "$MIMOTO_IMAGE" >/dev/null 2>&1; then
-  echo "building $MIMOTO_IMAGE"
-  compose build mimoto
-fi
+# ait-mimoto, built from this checkout every time (the layer cache makes an unchanged build quick).
+compose build mimoto
 compose up -d
 wait_for "$CERTIFY/.well-known/openid-credential-issuer" "Certify" || die "Certify didn't come back"
 

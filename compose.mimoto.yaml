@@ -3,7 +3,7 @@
 # ==============================================================================
 # ait-mimoto, the service that turns a credential into the Wallet's PDF, with its own database. ait-mimoto is
 # Mimoto 0.21 whose templates also get the claims whole, as $credentialSubject (src/mimoto/README.md). CD and every
-# deployment never use this file. Start it with scripts/mimoto-up.sh, which builds ait-mimoto when it's missing and
+# deployment never use this file. Start it with scripts/mimoto-up.sh, which builds ait-mimoto from this checkout and
 # adds this file to .env's COMPOSE_FILE for its own commands, and print with scripts/print-check.sh.
 #
 # Mimoto reaches Certify, Keycloak and the VDR as a browser does: through Traefik on the host, by their *.localhost
