@@ -70,6 +70,48 @@ def test_a_template_the_vdr_does_not_serve_is_a_template_fetch_failure_not_a_tra
         _pc.context, _pc._get = original
 
 
+COURSES = [
+    {"term": "T1", "credits": "6", "gpa": "3.5", "cumGpa": "3.5",
+     "courses": [{"no": "A1", "title": "Algebra", "lab": "0", "lec": "45", "credits": "3", "grade": "A"},
+                 {"no": "A2", "title": "Biology", "lab": "45", "lec": "30", "credits": "3", "grade": ""}]},
+    {"term": "T2", "credits": "3", "gpa": "4.0", "cumGpa": "3.7",
+     "courses": [{"no": "B1", "title": "Chemistry", "lab": "0", "lec": "45", "credits": "3", "grade": "B+"}]},
+]
+# What the PDF's page text holds for COURSES, written out: a row is its kind and fields between bars, then a semicolon,
+# so a missing grade shows as "3 | ;" and a shifted field can't pass.
+GRID = ("COURSE-GRID-START TERM | T1 | 6 | 3.5 | 3.5 ; COURSE | A1 | Algebra | 0 | 45 | 3 | A ; "
+        "COURSE | A2 | Biology | 45 | 30 | 3 | ; TERM | T2 | 3 | 4.0 | 3.7 ; "
+        "COURSE | B1 | Chemistry | 0 | 45 | 3 | B+ ; COURSE-GRID-END")
+
+
+def _grid_failure(text: str, courses=COURSES, student: str = "") -> str:
+    try:
+        _pc.check_grid(text, courses, student)
+    except _pc.StepFailed as e:
+        assert e.step == "PDF content", e.step
+        return str(e)
+    raise AssertionError("the grid should have failed")
+
+
+def test_the_grid_is_every_term_heading_and_course_row_in_order_with_an_empty_grade_cell() -> None:
+    assert _pc.check_grid("Name " + GRID + " footer", COURSES, "") == "2 term headings and 3 course rows, in order"
+
+
+def test_the_grid_fails_on_a_shifted_row_a_missing_row_or_missing_markers() -> None:
+    shifted = GRID.replace("3 | ; TERM", "; TERM")  # the empty grade cell is gone
+    assert "isn't the 2 term headings and 3 course rows" in _grid_failure(shifted)
+    assert "isn't the" in _grid_failure(GRID.replace("COURSE | B1 | Chemistry | 0 | 45 | 3 | B+ ; ", ""))
+    out_of_order = GRID.replace("COURSE | A1 | Algebra | 0 | 45 | 3 | A ; COURSE | A2 | Biology | 45 | 30 | 3 | ;",
+                                "COURSE | A2 | Biology | 45 | 30 | 3 | ; COURSE | A1 | Algebra | 0 | 45 | 3 | A ;")
+    assert out_of_order != GRID and "isn't the" in _grid_failure(out_of_order)
+    assert "markers aren't in the page text" in _grid_failure("no grid here")
+
+
+def test_the_made_up_students_grid_counts_are_written_out_apart_from_the_record() -> None:
+    # A record that held other terms must not pass for st120001 even when the page matches the record.
+    assert "holds 2 term headings and 3 course rows, not 2 and 6" in _grid_failure(GRID, COURSES, "st120001")
+
+
 def test_a_key_missing_from_dot_env_falls_back_instead_of_ending_print_check_sh() -> None:
     """scripts/print-check.sh runs under `set -euo pipefail`: env_value's grep exits 1 for a missing key, which used to
     end the script silently before `${IMAGE_TAG:-latest}` could apply."""

@@ -208,6 +208,7 @@ def context(installation: Path, student: str | None) -> dict:
         "student": student,
         "password": user["credentials"][0]["value"],
         "name": " ".join(record.json()["fullName"].split()),
+        "courses": record.json()["courses"],
     }
 
 
@@ -328,6 +329,47 @@ def check_background_font_and_thai(label: str, pdf: bytes, text: str, ctx: dict)
     print(f"PASS PDF content ({label}): Thai text is in the page, typed in the template and as a claim value")
 
 
+# What the made-up student's grid holds, written out, so an Adapter serving another record can't pass by matching
+# itself: (term headings, course rows).
+GRID_COUNTS = {"st120001": (2, 6)}
+
+
+def expected_grid(courses: list[dict]) -> str:
+    """The text the test template's grid prints for the structured `courses`, whitespace-collapsed as page_text is: a
+    row is its kind and fields between bars, then a semicolon, so an empty grade shows as `3 | ;`."""
+    rows = []
+    for term in courses:
+        rows.append(" | ".join(["TERM", *(str(term.get(k, "")) for k in ("term", "credits", "gpa", "cumGpa"))]) + " ;")
+        for c in term["courses"]:
+            fields = (str(c.get(k, "")) for k in ("no", "title", "lab", "lec", "credits", "grade"))
+            rows.append(" | ".join(["COURSE", *fields]) + " ;")
+    return " ".join(" ".join(rows).split())
+
+
+def check_grid(text: str, courses: list[dict], student: str = "") -> str:
+    """The page text between the grid's markers is every term heading and course row of `courses`, in order."""
+    start, end = text.find("COURSE-GRID-START"), text.find("COURSE-GRID-END")
+    if start < 0 or end < start:
+        raise StepFailed("PDF content", "the course grid's markers aren't in the page text")
+    grid = text[start + len("COURSE-GRID-START"):end].strip()
+    terms, rows = len(courses), sum(len(t["courses"]) for t in courses)
+    printed = (grid.count("TERM |"), grid.count("COURSE |"))
+    if student in GRID_COUNTS and printed != GRID_COUNTS[student]:
+        raise StepFailed("PDF content", f"{student}'s grid holds {printed[0]} term headings and {printed[1]} course "
+                                        f"rows, not {GRID_COUNTS[student][0]} and {GRID_COUNTS[student][1]}")
+    if grid != expected_grid(courses):
+        raise StepFailed("PDF content", f"the course grid isn't the {terms} term headings and {rows} course rows of "
+                                        f"courses: it printed {grid[:300]!r}")
+    return f"{terms} term headings and {rows} course rows, in order"
+
+
+def without_grade(courses: list[dict], no: str) -> list[dict]:
+    """`courses` with the grade of course `no` emptied, as print-check.sh publishes it."""
+    if not any(c["no"] == no for t in courses for c in t["courses"]):
+        raise StepFailed("setup", f"the record has no course {no} to leave ungraded")
+    return [{**t, "courses": [{**c, "grade": ""} if c["no"] == no else c for c in t["courses"]]} for t in courses]
+
+
 def check_charset(template: str) -> None:
     """The VDR's /templates/ declares UTF-8 for an HTML template, which Mimoto otherwise reads as ISO-8859-1."""
     kind = _get(f"{VDR_TEMPLATES}/{template}").headers.get("content-type", "")
@@ -346,8 +388,10 @@ def background_file(templates: Path, uri: str) -> Path:
 
 
 def run(installation: Path, templates: Path, test_template: Path, out: Path, student: str | None,
-        templates_shown: str, thai_note: str) -> None:
+        templates_shown: str, thai_note: str, ungraded: str = "") -> None:
     ctx = context(installation, student)
+    if ungraded:  # the published copy of the credential leaves this course without a grade
+        ctx["courses"] = without_grade(ctx["courses"], ungraded)
     ctx["thai_note"] = " ".join(thai_note.split())
     target = templates / ctx["template"]
     check_vdr(ctx["template"])  # first: a template the VDR doesn't serve is a template fetch failure
@@ -387,6 +431,7 @@ def run(installation: Path, templates: Path, test_template: Path, out: Path, stu
         print(f"PASS template fetch: the swapped template printed at the next print ({MARKER})")
         check_background_font_and_thai("swapped", (out / "swapped.pdf").read_bytes(), text, ctx)
         check_charset(ctx["template"])
+        print(f"PASS PDF content (swapped): the course grid holds {check_grid(text, ctx['courses'], ctx['student'])}")
     finally:
         target.write_bytes(original)
         if kept is None:
@@ -414,12 +459,15 @@ def main() -> int:
     parser.add_argument("--student")
     parser.add_argument("--thai-note", required=True,
                         help="the made-up Thai text print-check.sh published as the credential's notes claim")
+    parser.add_argument("--ungraded", default="",
+                        help="the number of the course print-check.sh published without a grade")
     args = parser.parse_args()
     # As PID 1 in a container Python ignores SIGTERM; exit on it instead, so `docker stop` still restores the
     # template. A SIGKILL can't be caught: the next run notices the leftover (run()).
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     try:
-        run(args.installation, args.templates, args.test_template, args.out, args.student, args.templates_shown, args.thai_note)
+        run(args.installation, args.templates, args.test_template, args.out, args.student, args.templates_shown, args.thai_note,
+            args.ungraded)
     except StepFailed as e:
         print(f"FAIL {e}")
         return 1
