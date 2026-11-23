@@ -8,9 +8,9 @@
 #
 # Mimoto reaches Certify, Keycloak and the VDR as a browser does: through Traefik on the host, by their *.localhost
 # names. It reads its template, issuers list and trusted verifiers from the VDR's /templates/ (ask T2), so this file
-# also places the Installation's issuers list, the trusted verifiers and the CBEFF schema there, under the names
-# Mimoto asks for. Docker can't create a file inside the VDR's read-only templates mount, so mimoto-up.sh first
-# creates the three empty, git-ignored files these mounts land on.
+# also places the Installation's issuers list, the trusted verifiers, the CBEFF schema and the fallback template
+# there, under the names Mimoto asks for. Docker can't create a file inside the VDR's read-only templates mount, so
+# mimoto-up.sh first creates the four empty, git-ignored files these mounts land on.
 # ==============================================================================
 services:
   vdr:
@@ -18,6 +18,9 @@ services:
       - ./deploy/${INSTALLATION}/vcga/issuers.json:/usr/share/nginx/html/templates/mimoto-issuers-config.json:ro
       - ./deploy/base/vcga/trusted-verifiers.json:/usr/share/nginx/html/templates/mimoto-trusted-verifiers.json:ro
       - ./deploy/base/mosip-cbeff.xsd:/usr/share/nginx/html/templates/mosip-cbeff.xsd:ro
+      # The template Mimoto prints a credential with when it has none of its own (mosip.openid.htmlTemplate in
+      # mimoto-default.properties). The VDR serves this file at /base-templates/; Mimoto asks for /templates/.
+      - ./deploy/base/vdr/templates/credential-template.html:/usr/share/nginx/html/templates/credential-template.html:ro
 
   # template-sync writes each credential file's did_url, and `dev` hands it no CERTIFY_DID: it then takes the DID from
   # the keystore deploy.sh generated, which is not the key Certify signs with, so Mimoto's signature check fails.

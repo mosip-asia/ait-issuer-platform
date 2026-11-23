@@ -120,7 +120,7 @@ cp my-template.html deploy/ait/vdr/templates/AITUniversity-ait-transcript-templa
 ./scripts/print-check.sh
 ```
 
-Copy over the file or edit it however you like: the VDR mounts the whole `templates` folder, so a replaced file is still served. (The in-place rule, no `sed -i`, applies only to single-file bind mounts, such as the three files `compose.mimoto.yaml` adds; you don't edit those.) The VDR's nginx sends a 7-day `Cache-Control`, which Mimoto ignores; a browser or proxy in front doesn't.
+Copy over the file or edit it however you like: the VDR mounts the whole `templates` folder, so a replaced file is still served. (The in-place rule, no `sed -i`, applies only to single-file bind mounts, such as the four files `compose.mimoto.yaml` adds; you don't edit those.) The VDR's nginx sends a 7-day `Cache-Control`, which Mimoto ignores; a browser or proxy in front doesn't.
 
 The check's first print (`original`, saved as `original.pdf`) is from your template, with the check's copy of the credential file, and the check puts your template back after its swap. The check asserts the student's name is on the page, so a template of yours must print `fullName`. To print once with a credential file you published yourself, sign in as `st120001` (its password is in `deploy/ait/mock/keycloak-realm.json`, the stand-in realm) the way `src/tools/print_check.py` does: its `context()` and `print_once()` functions are that flow.
 
@@ -220,18 +220,18 @@ The generic template the print check uses, `tests/fixtures/print-check-template.
 
 **The ask, for whoever runs Mimoto and the VDR on a deployment:** set Mimoto's `config.server.file.storage.uri` to the VDR's `/templates/` (with a trailing `/`), so a template replaced on the VDR prints at the next print with no restart (a changed `#macro` body is the one exception, see section 4). No contract change is needed. Three conditions come with it:
 
-1. **Mimoto's own config files are served from the same address.** Mimoto fetches `mimoto-issuers-config.json` and `mimoto-trusted-verifiers.json` from it, and its CBEFF schema `mosip-cbeff.xsd` from `mosip.kernel.xsdstorage-uri`. The VDR's `/templates/` serves them, or something in front of it does. Today VCGA serves the first two.
+1. **Mimoto's own files are served from the same address.** Mimoto fetches `mimoto-issuers-config.json` and `mimoto-trusted-verifiers.json` from it, and its CBEFF schema `mosip-cbeff.xsd` from `mosip.kernel.xsdstorage-uri`. It also fetches `credential-template.html` (`mosip.openid.htmlTemplate` in `deploy/base/mimoto-default.properties`) to print a credential that has no `<issuer>-<credential>-template.html` of its own, such as `ait-student-id`; without it that print fails with `RESIDENT-APP-028` and a `NullPointerException`. The repository's copy is `deploy/base/vdr/templates/credential-template.html`, which the VDR serves at `/base-templates/`, not `/templates/`. The VDR's `/templates/` serves all four, or something in front of it does. Today VCGA serves the first two.
 2. **`charset=utf-8`.** The VDR's `/templates/` block carries `charset utf-8;` in `deploy/base/vdr-nginx.conf`. Without it Mimoto reads the template as ISO-8859-1 and Thai typed into it prints as `à¸ à¸²à¸©à¸²...`.
 3. **Short caches.** Mimoto fetches the template at every print and keeps nothing, but a proxy or CDN between Mimoto and the VDR may honour the VDR's 7-day `Cache-Control` and serve an old template. Mimoto also caches Certify's metadata (60 minutes by default, `cache.credential-issuer.wellknown.expiry-time-in-min`), so a Background address published into Certify may not show until then.
 
 **Where to see it working:**
 
 - Mimoto's settings: `deploy/base/mimoto-bootstrap.properties` (`config.server.file.storage.uri=http://vdr.localhost/templates/`) and `deploy/base/mimoto-default.properties` (`mosip.kernel.xsdstorage-uri`, and the cache line, set to 0 locally).
-- The three files on the VDR: `compose.mimoto.yaml` mounts them into `/templates/`.
+- The four files on the VDR: `compose.mimoto.yaml` mounts them into `/templates/`.
 - `curl -I http://vdr.localhost/templates/AITUniversity-ait-transcript-template.html` answers `Content-Type: text/html; charset=utf-8`; the JSON files and the schema keep their types.
 - The VDR's access log after a print (`docker compose logs vdr`) shows Mimoto's `GET /templates/AITUniversity-ait-transcript-template.html`.
 
-Locally the three mount points are empty files that `mimoto-up.sh` creates first, because Docker can't create a file inside the VDR's read-only `templates` mount. Without the overlay the regular VDR serves them as empty files.
+Locally the four mount points are empty files that `mimoto-up.sh` creates first, because Docker can't create a file inside the VDR's read-only `templates` mount. Without the overlay the regular VDR serves them as empty files.
 
 ## T3: A place for the template and the Background on each VDR
 
@@ -278,8 +278,8 @@ Placing the files isn't enough on its own. The deployment's credential file has 
 | `mimoto-up: refused: Certify must trust the local Keycloak` | The two `AUTH_SERVER_*` lines, or a variable exported in the shell (it wins over `.env`). |
 | `FAIL setup: ... isn't in this ait-vc image` | The image is older than this branch: `./scripts/deploy.sh ait --build`. |
 | `mimoto-up.sh` stops while building `ait-mimoto` | The build pulls `injistack/mimoto:0.21.0` and `eclipse-temurin:21-jdk` and installs `zip` from Debian's mirrors: check the network and Docker's free disk, then run it again. |
-| `FAIL template fetch: the VDR answers 404 for /templates/mimoto-...` | `./scripts/mimoto-up.sh` has never run on this checkout, so the three files the VDR serves for Mimoto aren't there: run it. |
-| `FAIL setup: Mimoto's issuers list answered ...` | Mimoto isn't running (stopped, or the stack was brought down and only `deploy.sh` ran again). The three Mimoto files stay on the VDR as empty files once `mimoto-up.sh` has run, so the VDR still answers 200 and the check gets as far as asking Mimoto: run `./scripts/mimoto-up.sh`. |
+| `FAIL template fetch: the VDR answers 404 for /templates/mimoto-...` | `./scripts/mimoto-up.sh` has never run on this checkout, so the files the VDR serves for Mimoto aren't there: run it. |
+| `FAIL setup: Mimoto's issuers list answered ...` | Mimoto isn't running (stopped, or the stack was brought down and only `deploy.sh` ran again). The four Mimoto files stay on the VDR as empty files once `mimoto-up.sh` has run, so the VDR still answers 200 and the check gets as far as asking Mimoto: run `./scripts/mimoto-up.sh`. |
 | `FAIL signature check ... signature_verification_failed` | Certify's rows hold a DID other than the key it signs with (run `./scripts/mimoto-up.sh`), or w3id.org was slow or unreachable. |
 | `FAIL token exchange ... invalid_request` | The local Keycloak doesn't trust Mimoto's key: run `./scripts/mimoto-up.sh`. |
 | `FAIL PDF content: ... grid holds 0 term headings` and the PDF has `COURSE-LINE` lines | Mimoto is upstream's `injistack/mimoto:0.21.0`, not `ait-mimoto` (T4): run `./scripts/mimoto-up.sh`, which recreates it from the built image. |

@@ -12,6 +12,7 @@ deploy/*/mimoto/
 deploy/*/vdr/templates/mimoto-issuers-config.json
 deploy/*/vdr/templates/mimoto-trusted-verifiers.json
 deploy/*/vdr/templates/mosip-cbeff.xsd
+deploy/*/vdr/templates/credential-template.html
 # An organisation's Background (its paper) is published on its own VDR, never committed: any image under an
 # Installation's VDR templates folder. Brand assets (logos) live in vdr/assets/ and are committed.
 # Linux matches extensions case-sensitively, so each letter takes both cases.

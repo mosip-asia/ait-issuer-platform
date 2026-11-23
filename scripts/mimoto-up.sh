@@ -106,7 +106,7 @@ fi
 
 # 4. The overlay beside the stack. Docker can't create a mount point inside the VDR's read-only templates mount, so
 #    the files Mimoto's VDR mounts land on are created first (empty, git-ignored).
-for f in mimoto-issuers-config.json mimoto-trusted-verifiers.json mosip-cbeff.xsd; do
+for f in mimoto-issuers-config.json mimoto-trusted-verifiers.json mosip-cbeff.xsd credential-template.html; do
   [[ -e deploy/$INSTALLATION/vdr/templates/$f ]] || : > "deploy/$INSTALLATION/vdr/templates/$f"
 done
 # ait-mimoto, built from this checkout every time (the layer cache makes an unchanged build quick).
