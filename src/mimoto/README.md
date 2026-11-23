@@ -22,7 +22,7 @@ In `generatePdfForVerifiableCredential`, after the template's variables are coll
 data.put("credentialSubject", credentialProperties);
 ```
 
-`credentialProperties` is the map the method already has from `extractCredentialClaims`. A template then reads lists and objects whole, for example `#foreach($term in $credentialSubject.courses)`. `$rowProperties` and every other variable are unchanged, so a template written for upstream Mimoto prints the same. Only the Velocity path (v1 data model) changes; the SVG path doesn't use these variables.
+`credentialProperties` is the map the method already has from `extractCredentialClaims`. A template then reads lists and objects whole, for example `#foreach($term in $credentialSubject.courses)`. `$credentialSubject` is the claims as received, so it skips what `rowProperties` does to them (SD-JWT disclosure masking under `mosip.injiweb.mask.disclosures`, and dropping the face): a template that prints from it decides what shows. `$rowProperties` and every other variable are unchanged, so a template written for upstream Mimoto prints the same. Only the Velocity path (v1 data model) changes; the SVG path doesn't use these variables.
 
 A comment beginning `// ait-mimoto:` marks the line. To see the whole change against upstream:
 
