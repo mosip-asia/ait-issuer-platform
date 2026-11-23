@@ -50,6 +50,26 @@ def test_the_step_a_mimoto_error_code_names() -> None:
     assert _pc.failed_step("anything-else", "") == "issuance"
 
 
+def test_a_template_the_vdr_does_not_serve_is_a_template_fetch_failure_not_a_traceback() -> None:
+    """The credential's template is absent from the VDR's templates folder, so the VDR answers 404 for it."""
+    class Reply:
+        status_code = 404
+
+    original = (_pc.context, _pc._get)
+    _pc.context = lambda installation, student: {"template": "missing.html", "background_uri": ""}
+    _pc._get = lambda url, **kw: Reply()
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            try:
+                _pc.run(Path(tmp), Path(tmp), Path(tmp), Path(tmp), None, "templates", "x")
+            except _pc.StepFailed as e:
+                assert e.step == "template fetch", e.step
+            else:
+                raise AssertionError("a template the VDR doesn't serve must be a StepFailed")
+    finally:
+        _pc.context, _pc._get = original
+
+
 def test_a_key_missing_from_dot_env_falls_back_instead_of_ending_print_check_sh() -> None:
     """scripts/print-check.sh runs under `set -euo pipefail`: env_value's grep exits 1 for a missing key, which used to
     end the script silently before `${IMAGE_TAG:-latest}` could apply."""

@@ -350,11 +350,11 @@ def run(installation: Path, templates: Path, test_template: Path, out: Path, stu
     ctx = context(installation, student)
     ctx["thai_note"] = " ".join(thai_note.split())
     target = templates / ctx["template"]
+    check_vdr(ctx["template"])  # first: a template the VDR doesn't serve is a template fetch failure
     if MARKER.encode() in target.read_bytes():
         shown = f"{templates_shown}/{ctx['template']}"
         raise StepFailed("setup", f"{shown} is still the print check's test template, left by an interrupted run: "
                                   f"restore it with git checkout -- {shown}")
-    check_vdr(ctx["template"])
     background = background_file(templates, ctx["background_uri"]) if ctx["background_uri"] else None
     if background is None:
         raise StepFailed("setup", "the published credential file has no display[0].background_image.uri: run "
