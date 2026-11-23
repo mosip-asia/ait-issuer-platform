@@ -111,7 +111,7 @@ for f in mimoto-issuers-config.json mimoto-trusted-verifiers.json mosip-cbeff.xs
 done
 # Built from this checkout when missing, not pulled: with a build: entry, Compose would try the registry first.
 # After changing src/mimoto, rebuild it with: docker compose build mimoto (with this script's COMPOSE_FILE).
-MIMOTO_IMAGE=$(compose config --images mimoto)
+MIMOTO_IMAGE=$(compose config --format json mimoto | python3 -c "import json,sys; print(json.load(sys.stdin)['services']['mimoto']['image'])")
 if ! docker image inspect "$MIMOTO_IMAGE" >/dev/null 2>&1; then
   echo "building $MIMOTO_IMAGE"
   compose build mimoto
