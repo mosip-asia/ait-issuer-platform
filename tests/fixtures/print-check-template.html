@@ -28,6 +28,30 @@
 <p>$claim.key: $shown.value</p>
 #end
 #end
+<!-- The course grid, from the structured courses that ait-mimoto hands over as $credentialSubject (Mimoto 0.21.0 has
+     no such variable and hands every list of objects to $rowProperties as ""). A row is its kind and fields between
+     bars, then a semicolon, so print_check.py can tell an empty grade cell from a shifted row. Without the
+     structured courses the template prints courseList, which arrives whole, one line per course. -->
+<p>COURSE-GRID-START</p>
+#if($credentialSubject && $credentialSubject.courses)
+#foreach($term in $credentialSubject.courses)
+<p>TERM | $term.term | $term.credits | $term.gpa | $term.cumGpa ;</p>
+#foreach($c in $term.courses)
+<p>COURSE | $c.no | $c.title | $c.lab | $c.lec | $c.credits | $c.grade ;</p>
+#end
+#end
+#else
+<p>COURSE-LIST-START</p>
+#set($courseList = "")
+#set($listed = $rowProperties.get("courseList"))
+#if($listed)#foreach($e in $listed.entrySet())#set($courseList = $e.value)#end#end
+#foreach($line in $courseList.split("
+"))
+<p>$line</p>
+#end
+<p>COURSE-LIST-END</p>
+#end
+<p>COURSE-GRID-END</p>
 </div>
 </div>
 </body>
