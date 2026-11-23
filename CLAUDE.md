@@ -60,11 +60,13 @@ python3 src/tools/test_generate_csv.py
 python3 src/tools/test_render_mimoto_issuers_config.py
 python3 src/verifier/test_verifier.py
 python3 tests/test_installations.py
+python3 tests/test_backgrounds_ignored.py
 python3 tests/test_authorization_server.py
 python3 tests/test_inji_web_vc_readiness.py
 .venv/bin/python tests/test_issue_and_verify.py
 .venv/bin/python tests/test_adapter.py
 .venv/bin/python tests/test_courses.py
+python3 tests/test_print_check.py
 .venv/bin/python src/gateway/tests/test_evaluations.py
 bash scripts/check-data-guard.sh
 ```
@@ -81,6 +83,7 @@ bash scripts/check-data-guard.sh
 - `compose.verify.yaml`: Inji Verify UI and verification backend.
 - `compose.trust.yaml`: VDR schema context registry and VCGA issuer catalog.
 - `compose.traefik.yaml`: Ingress router for local/dev domain routing.
+- `compose.mimoto.yaml`: Local only, never CD: the real Mimoto 0.21 (the Wallet's printer) beside the local stack. Start it with `scripts/mimoto-up.sh`; check a print with `scripts/print-check.sh`.
 
 ### Day-0 Deployment Guides:
 - **Roadmap**: [`docs/guides/day-0-deployment.md`](docs/guides/day-0-deployment.md)

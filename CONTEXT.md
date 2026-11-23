@@ -57,7 +57,7 @@ The read-only service that serves an organisation's records to the Data-provider
 _Avoid_: data source, SIS integration (that is what the real adapter wraps), plugin (that is the Data-provider plugin)
 
 **VDR**:
-The public host, owned by Track 3, for the DID document, status lists and JSON-LD contexts that verifiers fetch, and for the templates the Portal fetches. Verifiers never use its templates.
+The public host, owned by Track 3, for the DID document, status lists and JSON-LD contexts that verifiers fetch, and for the templates and Backgrounds that Wallets and the Portal fetch to print a credential. Verifiers never use its templates.
 _Avoid_: public registry, registry host, CDN, trust registry (that is the trusted-issuer list, a different thing)
 
 **Wallet**:
@@ -65,8 +65,12 @@ Any OpenID4VCI-conformant holder application. The Issuer platform promises a val
 _Avoid_: web wallet (as a deliverable), student catalog, walletless mode
 
 **Hard copy**:
-The PDF the Portal renders from the VC Lab template, carrying a credential in its QR code, verifiable online by the Verifier. The Portal obtains and redeems the credential for it and stores nothing.
+The PDF the Portal renders from the VC Lab template, carrying a credential in its QR code, verifiable online by the Verifier. The Portal obtains and redeems the credential for it and stores nothing. It always prints with the current template, so a credential issued before a template change prints in the new layout.
 _Avoid_: walletless PDF, printed credential, paper transcript (when the PDF is meant)
+
+**Background**:
+The picture of an organisation's pre-printed paper (watermark, seal, signature) that a printout lays under the template. The Issuer platform ships none: an organisation that wants one publishes it on its own VDR, which makes it public, and that choice is the organisation's.
+_Avoid_: watermark (only one part of it), letterhead, template (the template is the layout drawn over it)
 
 **Pilot**:
 The first issuance to real people: a small group of students chosen by the registrar's office, given a wallet claim and a hard copy from real records. Pilot credentials carry no compatibility promise and may be revoked.
