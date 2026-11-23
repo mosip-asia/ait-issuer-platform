@@ -373,6 +373,23 @@ def check_grid(text: str, courses: list[dict], student: str = "") -> str:
     return f"{terms} term headings and {rows} course rows, in order"
 
 
+def grid_rows_off_page(pdf: bytes) -> list[str]:
+    """The grid rows the first page draws outside its height: text a PDF reader still extracts, though the paper
+    clips it, so the page text alone can't tell."""
+    page = PdfReader(io.BytesIO(pdf)).pages[0]
+    height = float(page.mediabox[3])
+    off: list[str] = []
+
+    def visit(text, cm, tm, font, size) -> None:
+        shown = text.strip()
+        y = tm[5] * cm[3] + cm[5] if cm[3] else tm[5]
+        if shown.startswith(("TERM |", "COURSE |")) and not 0 <= y <= height:
+            off.append(f"{shown[:60]} (y={y:.0f})")
+
+    page.extract_text(visitor_text=visit)
+    return off
+
+
 def check_charset(template: str) -> None:
     """The VDR's /templates/ declares UTF-8 for an HTML template, which Mimoto otherwise reads as ISO-8859-1."""
     kind = _get(f"{VDR_TEMPLATES}/{template}").headers.get("content-type", "")
@@ -433,6 +450,10 @@ def run(installation: Path, templates: Path, test_template: Path, out: Path, stu
         check_background_font_and_thai("swapped", (out / "swapped.pdf").read_bytes(), text, ctx)
         check_charset(ctx["template"])
         print(f"PASS PDF content (swapped): the course grid holds {check_grid(text, ctx['courses'], ctx['student'])}")
+        off = grid_rows_off_page((out / "swapped.pdf").read_bytes())
+        if off:
+            raise StepFailed("PDF content", f"grid rows are drawn outside the page: {off}")
+        print("PASS PDF content (swapped): every grid row is drawn inside the page")
     finally:
         target.write_bytes(original)
         if kept is None:

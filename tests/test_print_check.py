@@ -146,6 +146,30 @@ def test_the_made_up_students_grid_is_pinned_to_the_committed_data_not_to_the_re
     assert "not 2 and 6" in _grid_failure(page, shorter, "st120001")
 
 
+def _pdf_with_rows(*rows: tuple[int, str]) -> bytes:
+    """A one-page A4 PDF with each (y, text) drawn at x=30, for the grid's position check."""
+    stream = "BT /F1 9 Tf " + " ".join(f"1 0 0 1 30 {y} Tm ({t}) Tj" for y, t in rows) + " ET"
+    objects = ["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+               "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R "
+               "/Resources << /Font << /F1 5 0 R >> >> >>",
+               f"<< /Length {len(stream)} >>\nstream\n{stream}\nendstream",
+               "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"]
+    body, offsets = "%PDF-1.4\n", []
+    for n, obj in enumerate(objects, 1):
+        offsets.append(len(body))
+        body += f"{n} 0 obj\n{obj}\nendobj\n"
+    xref = len(body)
+    body += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n" + "".join(f"{o:010d} 00000 n \n" for o in offsets)
+    return (body + f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF").encode()
+
+
+def test_a_grid_row_drawn_below_the_page_edge_is_named() -> None:
+    on_page = _pdf_with_rows((700, "Name"), (500, "TERM | T1 | 6 | 3.5 | 3.5 ;"), (20, "COURSE | A1 | Algebra ;"))
+    assert _pc.grid_rows_off_page(on_page) == []
+    off = _pdf_with_rows((700, "Name"), (20, "COURSE | A1 | Algebra ;"), (-30, "COURSE | A2 | Biology ;"))
+    assert _pc.grid_rows_off_page(off) == ["COURSE | A2 | Biology ; (y=-30)"]
+
+
 def test_the_template_prints_every_grid_field_quietly_so_a_missing_one_is_empty_not_its_own_name() -> None:
     template = (REPO_ROOT / "tests" / "fixtures" / "print-check-template.html").read_text(encoding="utf-8")
     refs = re.findall(r"\$!?\{?(?:term|c)\.\w+", template)
