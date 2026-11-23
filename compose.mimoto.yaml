@@ -18,6 +18,14 @@ services:
       - ./deploy/base/vcga/trusted-verifiers.json:/usr/share/nginx/html/templates/mimoto-trusted-verifiers.json:ro
       - ./deploy/base/mosip-cbeff.xsd:/usr/share/nginx/html/templates/mosip-cbeff.xsd:ro
 
+  # template-sync writes each credential file's did_url, and `dev` hands it no CERTIFY_DID: it then takes the DID from
+  # the keystore deploy.sh generated, which is not the key Certify signs with, so Mimoto's signature check fails.
+  # mimoto-up.sh writes the live DID into .env; this passes it on. Here, not in compose.certify.yaml, so no
+  # deployment's Compose config changes.
+  template-sync:
+    environment:
+      - CERTIFY_DID=${CERTIFY_DID}
+
   mimoto-db:
     image: postgres:15
     environment:
