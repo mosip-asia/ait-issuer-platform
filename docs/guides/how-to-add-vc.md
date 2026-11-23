@@ -82,8 +82,7 @@ Use **VC Lab Studio** (`src/vc-lab/`) to design, render, and inspect your creden
 
 Open the live VC Lab studio:
 - **Dashboard URL:** [http://lab.localhost](http://lab.localhost)
-- Explore active JSON-LD schemas (`contexts/`) and Inji display configurations (`credentials/`).
-- Render live template previews in the browser with sample student personas and inspect dynamic QR codes.
+- Upload the template, the credential file and a sample Adapter response; VC Lab previews the rendered template (and the Wallet's version) and exports the hard copy as a PDF. It reads nothing from the repo; see [`src/vc-lab/README.md`](../../src/vc-lab/README.md).
 
 ---
 

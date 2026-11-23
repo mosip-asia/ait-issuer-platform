@@ -64,7 +64,7 @@ Under [RFC 6761](https://tools.ietf.org/html/rfc6761), every modern operating sy
 | Service | Clean Local URL (`*.localhost`) | Internal Port | Role & Capabilities |
 |---|---|---|---|
 | **Traefik Dashboard** | [http://traefik.localhost](http://traefik.localhost) (or [http://localhost:8088](http://localhost:8088)) | `8080` | Live edge ingress routing rules & container health |
-| **VC Lab Studio** | [http://lab.localhost](http://lab.localhost) | `4200` | Visual credential design, live Velocity template preview, schema explorer |
+| **VC Lab Studio** | [http://lab.localhost](http://lab.localhost) | `4200` | Preview of an uploaded Velocity template (Lab and Wallet views), hard-copy PDF export |
 | **Student Portal** | [http://portal.localhost/student/login](http://portal.localhost/student/login) | `4100` | Student requests transcript & ID credentials |
 | **Registrar Portal** | [http://portal.localhost/registrar/login](http://portal.localhost/registrar/login) | `4100` | Academic registrar clearance approval & revocation |
 | **Inji Web Wallet** | [http://wallet.localhost](http://wallet.localhost) | `3004` | Holder digital wallet to claim, view, and export credentials |
@@ -120,8 +120,8 @@ Run the post-deployment smoke test anytime:
 ### Inner Loop 1: Visual Credential Design in VC Lab Studio
 When adding or styling a new credential:
 1. Open the **VC Lab Studio** dashboard at [http://lab.localhost](http://lab.localhost).
-2. Explore active JSON-LD schemas (`contexts/`) and Inji display configurations (`credentials/`).
-3. Select templates and student personas to preview live in the browser with dynamic QR codes.
+2. Upload a template, a credential file and a sample Adapter response (see [`src/vc-lab/README.md`](./src/vc-lab/README.md)); nothing is built in.
+3. Preview live in the browser with a mock QR code, switch to the Wallet view, and export the hard copy as a PDF.
 
 ### Inner Loop 2: Fast SPI Plugin Development (`src/issuer/`)
 When modifying the Java SPI Data-Provider Plugin (`src/issuer/`):
