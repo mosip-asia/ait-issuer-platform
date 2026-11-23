@@ -222,10 +222,13 @@ log_info "Processing Docker images..."
 # 1. Inji Certify with pre-baked plugin (watched: src/issuer and Dockerfile.certify)
 build_or_retag_image "ait-certify" "docker/Dockerfile.certify" "." "src/issuer" "docker/Dockerfile.certify"
 
-# 2. Verifier UI (watched: src/verifier)
+# 2. Mimoto with one class changed, the Wallet's printer (watched: src/mimoto and Dockerfile.mimoto)
+build_or_retag_image "ait-mimoto" "docker/Dockerfile.mimoto" "." "src/mimoto" "docker/Dockerfile.mimoto"
+
+# 3. Verifier UI (watched: src/verifier)
 build_or_retag_image "ait-verify-ui" "src/verifier/Dockerfile" "." "src/verifier"
 
-# 3. Unified AIT Verifiable Credential Platform: ait-vc (Gateway, Portal, Tools CLI, VC Lab, Template Sync)
+# 4. Unified AIT Verifiable Credential Platform: ait-vc (Gateway, Portal, Tools CLI, VC Lab, Template Sync)
 build_or_retag_image "ait-vc" "docker/Dockerfile.ait-vc" "." "src" "mock/adapter" "pyproject.toml" "uv.lock" "docker/Dockerfile.ait-vc"
 
 # Compatibility tags for standalone image names
