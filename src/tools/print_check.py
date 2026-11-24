@@ -213,7 +213,7 @@ def context(installation: Path, student: str | None) -> dict:
 
 
 def check_vdr(template: str) -> None:
-    """The VDR's /templates/ serves the template and Mimoto's own files (ask T2)."""
+    """The VDR's /templates/ serves the template and Mimoto's own files."""
     for name in (template, *MIMOTO_FILES):
         status = _get(f"{VDR_TEMPLATES}/{name}").status_code
         if status != 200:

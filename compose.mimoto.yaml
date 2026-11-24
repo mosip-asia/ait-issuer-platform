@@ -7,7 +7,7 @@
 # adds this file to .env's COMPOSE_FILE for its own commands, and print with scripts/print-check.sh.
 #
 # Mimoto reaches Certify, Keycloak and the VDR as a browser does: through Traefik on the host, by their *.localhost
-# names. It reads its template, issuers list and trusted verifiers from the VDR's /templates/ (ask T2), so this file
+# names. It reads its template, issuers list and trusted verifiers from the VDR's /templates/ ("Running it on dev" in docs/guides/print-from-the-wallet.md), so this file
 # also places the Installation's issuers list, the trusted verifiers, the CBEFF schema and the fallback template
 # there, under the names Mimoto asks for. Docker can't create a file inside the VDR's read-only templates mount, so
 # mimoto-up.sh first creates the four empty, git-ignored files these mounts land on.

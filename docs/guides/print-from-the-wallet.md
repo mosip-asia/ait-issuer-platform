@@ -1,6 +1,6 @@
 ---
 title: "Print from the Wallet on the local stack"
-description: "Reproduce the Wallet's PDF from a clean clone: start ait-mimoto beside the local stack, run the print check, swap a template, place a Background, and see what asks T2-T4 ask of infra."
+description: "Reproduce the Wallet's PDF from a clean clone: start ait-mimoto beside the local stack, run the print check, swap a template, place a Background, and see what running it on dev takes."
 tags:
   - guide
   - wallet
@@ -9,7 +9,7 @@ tags:
 ---
 # Print from the Wallet on the local stack
 
-The Wallet's PDF is made by Mimoto, not by Certify. This guide starts `ait-mimoto` (Mimoto 0.21 with one change, below) beside the local stack, prints a made-up student's transcript through it, and checks the PDF, course grid included. It is the reproduction behind three asks to infra (T2, T3, T4, below). Thas owns it; Thas's team keeps it working.
+The Wallet's PDF is made by Mimoto, not by Certify. This guide starts `ait-mimoto` (Mimoto 0.21 with one change, below) beside the local stack, prints a made-up student's transcript through it, and checks the PDF, course grid included. Thas proves it here; Jo runs it on dev from "Running it on dev", below. Thas owns this guide; Thas's team keeps it working.
 
 Everything here is local. The Mimoto overlay (`compose.mimoto.yaml`) is never used by CD or any deployment, and all data is made up.
 
@@ -84,9 +84,9 @@ What it proves:
 
 - the download answers `200 application/pdf` and the student's name is on the page;
 - a template placed on the VDR prints at the next print, with Mimoto left running: the check swaps in a generic test template, prints again, and puts the original back;
-- the test template's course grid holds the 2 term headings and 6 course rows of `st120001`, in order, looped over `$credentialSubject.courses` (T4), and every row is drawn inside the page;
+- the test template's course grid holds the 2 term headings and 6 course rows of `st120001`, in order, looped over `$credentialSubject.courses` (`ait-mimoto`), and every row is drawn inside the page;
 - the Background is drawn at the page's full size, a font loaded through `@font-face` is embedded, and Thai text prints, typed in the template and as a claim value;
-- the VDR sends `Content-Type: text/html; charset=utf-8` for the template (T2).
+- the VDR sends `Content-Type: text/html; charset=utf-8` for the template.
 
 The check also publishes a test copy of the credential files to the local stack for the run, made from the files git holds: it points `display[0].background_image` at the VDR and sets a made-up Thai `notes`. The `courses` mapping is the committed one. When it ends it republishes the files git holds and recreates Certify, so the stack is as committed. Two consequences:
 
@@ -124,7 +124,7 @@ Copy over the file or edit it however you like: the VDR mounts the whole `templa
 
 The check's first print (`original`, saved as `original.pdf`) is from your template, with the check's copy of the credential file, and the check puts your template back after its swap. The check asserts the student's name is on the page, so a template of yours must print `fullName`. To print once with a credential file you published yourself, sign in as `st120001` (its password is in `deploy/ait/mock/keycloak-realm.json`, the stand-in realm) the way `src/tools/print_check.py` does: its `context()` and `print_once()` functions are that flow.
 
-Git tracks this file. `git checkout -- deploy/ait/vdr/templates/AITUniversity-ait-transcript-template.html` puts the committed one back (and discards your own template if it is still there: keep a copy elsewhere), and CD's `git checkout -f` does it at every deploy, so a template placed this way lasts only until then. Real deployments need their own way to place it (T3).
+Git tracks this file. `git checkout -- deploy/ait/vdr/templates/AITUniversity-ait-transcript-template.html` puts the committed one back (and discards your own template if it is still there: keep a copy elsewhere), and CD's `git checkout -f` does it at every deploy, so a template placed this way lasts only until then. Real deployments need their own way to place it.
 
 **A `#macro` is the one thing a swap doesn't replace.** Mimoto's Velocity engine is shared by every print, and it registers a template's `#macro` the first time it sees that name: a later template that defines a macro of the same name prints with the first body until Mimoto restarts. Everything else in the template (markup, `#set`, loops) is read fresh at each print. When you change a macro's body, give it a new name, or recreate Mimoto (`docker compose up -d --force-recreate mimoto`, with the command in section 2). Shown with Mimoto's own Velocity 1.7: the first of two templates that define the same macro wins, in either order. The AIT template's `claimValue` macro hit this: the print check's first print had registered the committed template's version, and the AIT template's corrected macro came out wrong until a fresh Mimoto printed it first.
 
@@ -210,55 +210,29 @@ What Mimoto does to a credential decides how a template is written (Velocity 1.7
 - **Place a table through a `<div>`.** iText honours `position: absolute` with `left` and `top` on a `<div>` but not on a `<table>`, which lands at the page's top left. Put the table in an absolutely placed `<div>` and leave the table static.
 - **Images and fonts use absolute addresses.** Mimoto sets no base URL.
 - **Fonts:** only the 14 standard PDF fonts are built in, so Arial and Arial Narrow fall back. Any other font, Thai included, comes through `@font-face` with an absolute URL, see "Fonts" above for where the file goes and why git ignores it.
-- **Non-ASCII text typed into a template** needs the VDR's `charset=utf-8` (T2), or HTML entities. Claim values are not affected.
+- **Non-ASCII text typed into a template** needs the VDR's `charset=utf-8` ("Running it on dev"), or HTML entities. Claim values are not affected.
 - **Claim values reach the template as they are, unescaped,** in both `$rowProperties` and `$credentialSubject`.
 - **A template must look right without the QR.** Mimoto 0.21 draws `$qrCodeImage` only when the credential's encoded QR data is under 4096 characters, and a long transcript may pass that.
 
 The generic template the print check uses, `tests/fixtures/print-check-template.html`, shows the grid (with its fallback and quiet references), the Background, the font and Thai working. Its loop over the claims uses plain references, so it isn't a model for a missing claim.
 
-## T2: Mimoto reads its files from the VDR
+## Running it on dev
 
-**The ask, for whoever runs Mimoto and the VDR on a deployment:** set Mimoto's `config.server.file.storage.uri` to the VDR's `/templates/` (with a trailing `/`), so a template replaced on the VDR prints at the next print with no restart (a changed `#macro` body is the one exception, see section 4). No contract change is needed. Three conditions come with it:
+Thas proves the Wallet's print here; Jo sets it up on dev and decides how. These are the pieces, each with where to see it working locally. None needs a change to the SIS Adapter contract.
 
-1. **Mimoto's own files are served from the same address.** Mimoto fetches `mimoto-issuers-config.json` and `mimoto-trusted-verifiers.json` from it, and its CBEFF schema `mosip-cbeff.xsd` from `mosip.kernel.xsdstorage-uri`. It also fetches `credential-template.html` (`mosip.openid.htmlTemplate` in `deploy/base/mimoto-default.properties`) to print a credential that has no `<issuer>-<credential>-template.html` of its own, such as `ait-student-id`; without it that print fails with `RESIDENT-APP-028` and a `NullPointerException`. The repository's copy is `deploy/base/vdr/templates/credential-template.html`, which the VDR serves at `/base-templates/`, not `/templates/`. The VDR's `/templates/` serves all four, or something in front of it does. Today VCGA serves the first two.
-2. **`charset=utf-8`.** The VDR's `/templates/` block carries `charset utf-8;` in `deploy/base/vdr-nginx.conf`. Without it Mimoto reads the template as ISO-8859-1 and Thai typed into it prints as `à¸ à¸²à¸©à¸²...`.
-3. **Short caches.** Mimoto fetches the template at every print and keeps nothing, but a proxy or CDN between Mimoto and the VDR may honour the VDR's 7-day `Cache-Control` and serve an old template. Mimoto also caches Certify's metadata (60 minutes by default, `cache.credential-issuer.wellknown.expiry-time-in-min`), so a Background address published into Certify may not show until then.
+### 1. The image
 
-**Where to see it working:**
-
-- Mimoto's settings: `deploy/base/mimoto-bootstrap.properties` (`config.server.file.storage.uri=http://vdr.localhost/templates/`) and `deploy/base/mimoto-default.properties` (`mosip.kernel.xsdstorage-uri`, and the cache line, set to 0 locally).
-- The four files on the VDR: `compose.mimoto.yaml` mounts them into `/templates/`.
-- `curl -I http://vdr.localhost/templates/AITUniversity-ait-transcript-template.html` answers `Content-Type: text/html; charset=utf-8`; the JSON files and the schema keep their types.
-- The VDR's access log after a print (`docker compose logs vdr`) shows Mimoto's `GET /templates/AITUniversity-ait-transcript-template.html`.
-
-Locally the four mount points are empty files that `mimoto-up.sh` creates first, because Docker can't create a file inside the VDR's read-only `templates` mount. Without the overlay the regular VDR serves them as empty files.
-
-## T3: A place for the template and the Background on each VDR
-
-**The ask, for infra:** give each deployment a way to place two files on its VDR by hand. The template comes from VC Lab's download. The Background is a PNG or JPEG of the organisation's paper that the organisation supplies: VC Lab's own Background is a PDF on `dev`, and the Wallet draws it with `<img>`, which can't show a PDF. Neither comes from git, and CD's `git checkout -f` puts back any tracked file replaced in the checkout. No contract change is needed.
-
-Placing the files isn't enough on its own. The deployment's credential file has to point `display[0].background_image.uri` at the Background on its VDR, and its template has to draw `$backgroundImage`; the committed demo files do neither (section 5).
-
-- The template: `<VDR>/templates/AITUniversity-ait-transcript-template.html`. Mimoto fixes this name and looks only at the top of its template address.
-- The Background: `<VDR>/templates/ait-transcript/background.png`. The credential file's `display[0].background_image.uri` points there; `template-sync` rewrites that address for each deployment's VDR (`VDR_BASE_URL`).
-
-**Where to see it working:** sections 4 and 5. The file places are the same on the local VDR: `deploy/ait/vdr/templates/` is the VDR's `/templates/`. The print check places a made-up Background at the second place and finds it drawn on the PDF.
-
-## T4: Run `ait-mimoto` in place of Mimoto
-
-**The ask, for whoever runs Mimoto on a deployment:** run `ghcr.io/mosip-asia/ait-mimoto:<tag>` in place of `injistack/mimoto:0.21.0`. Nothing else changes: the same configuration, the same files, the same ports. `<tag>` is a release tag that `scripts/build.sh` published (it builds and publishes `ait-mimoto` like `ait-certify`).
+Run `ghcr.io/mosip-asia/ait-mimoto` where a plain Mimoto would run `injistack/mimoto:0.21.0`, with the same configuration, files and ports. `:latest` is published from commit `454e95e` and pulls without a login. A release tag also publishes `ait-mimoto:<tag>`, since `scripts/build.sh` builds it beside `ait-certify`.
 
 **Why:** Mimoto 0.21 hands every list of objects to the template as `""`, so a template can't draw the course grid by term. `ait-mimoto` also hands the template the claims as received, as `$credentialSubject`, so a template can loop over `$credentialSubject.courses` (see "Template conventions"). The SIS Adapter sends nothing new: `courses` is already in contract 0.5.0.
 
-**The image alone changes nothing a Wallet prints.** The grid prints only once the template on the VDR uses that convention, placed as T3 describes. The committed demo template (`AITUniversity-ait-transcript-template.html`) has no `$credentialSubject` branch and keeps printing `courseList` on either image.
+**The image alone changes nothing a Wallet prints.** The grid prints only once the template on the VDR uses that convention. The committed demo template (`AITUniversity-ait-transcript-template.html`) has no `$credentialSubject` branch and keeps printing `courseList` on either image.
 
 **Where the change is:** `src/mimoto/` holds the one changed file, one line added to upstream's `CredentialPDFGeneratorService.java`, with its MPL-2.0 notice and the upstream tag and commit it came from (`src/mimoto/README.md`). `docker/Dockerfile.mimoto` puts it into `injistack/mimoto:0.21.0`.
 
-**Until a deployment runs `ait-mimoto`,** a template that follows the convention prints its fallback branch, `courseList` as one line per course, not the grid; the committed demo template does that on every image. That is what a Wallet prints today, so nothing gets worse.
-
 **Where to see it working:**
 
-- The grid: section 3's print check, whose test template follows the convention. `PASS PDF content (swapped): the course grid holds 2 term headings and 6 course rows, in order` is the grid printed from `courses`, compared with the record's structured `courses`; the command under it lists the rows from `swapped.pdf`.
+- The grid: section 3's print check, whose test template follows the convention. `PASS PDF content (swapped): the course grid holds 2 term headings and 6 course rows, in order` is the grid printed from `courses`, compared with the record's structured `courses`.
 - The one-image swap: `compose.mimoto.yaml`'s `mimoto` service differs from a plain Mimoto only by its `image:` (and `build:`, which only the local stack uses).
 - The fallback, on upstream Mimoto: put `injistack/mimoto:0.21.0` back in place of `ait-mimoto` (a Compose file that overrides the image), then print again:
 
@@ -269,7 +243,57 @@ Placing the files isn't enough on its own. The deployment's credential file has 
   ./scripts/print-check.sh
   ```
 
-  The check then ends `FAIL PDF content: st120001's grid holds 0 term headings and 0 course rows, not 2 and 6, ...`, because it expects the grid. `swapped.pdf` shows the fallback: the same `grep` as above, with `^COURSE-LINE ` in place of `^(TERM|COURSE) `, prints one line for each of the 6 courses, and no `TERM` or `COURSE |` rows. Put `ait-mimoto` back with `./scripts/mimoto-up.sh`.
+  The check then ends `FAIL PDF content: st120001's grid holds 0 term headings and 0 course rows, not 2 and 6, ...`, because it expects the grid. In `swapped.pdf` the courses print as 6 `COURSE-LINE` lines and no `TERM` or `COURSE |` rows. Put `ait-mimoto` back with `./scripts/mimoto-up.sh`.
+
+### 2. The files Mimoto reads
+
+The local overlay hands Mimoto these files. On dev each one goes where Mimoto reads it.
+
+| Repository file | Where Mimoto reads it | What dev changes |
+|---|---|---|
+| `deploy/base/mimoto-bootstrap.properties` | `/home/mosip/mimoto-bootstrap.properties` (`SPRING_CLOUD_BOOTSTRAP_LOCATION`) | Nothing: the template address comes from the environment variable in step 3. |
+| `deploy/base/mimoto-default.properties` | `/home/mosip/mimoto-default.properties` (`SPRING_CONFIG_LOCATION`, `SPRING_CONFIG_NAME=mimoto`) | Its local addresses: `keycloak.internal.url` and `keycloak.external.url` (`http://auth.localhost`), `mosip.inji.web.url` (`http://wallet.localhost`), `mosip.security.origins`, and `mosip.api.public.url`. The Certify metadata cache is 0 here; see step 5. |
+| `deploy/base/mimoto_init.sql` | Mimoto's own Postgres, as an init script (database `inji_mimoto`) | Nothing. |
+| `deploy/<installation>/vcga/issuers.json` | `<VDR>/templates/mimoto-issuers-config.json` | Dev's issuer and OAuth addresses. |
+| `deploy/base/vcga/trusted-verifiers.json` | `<VDR>/templates/mimoto-trusted-verifiers.json` | Nothing. |
+| `deploy/base/mosip-cbeff.xsd` | `<VDR>/templates/mosip-cbeff.xsd` (Mimoto stops at startup without it) | Nothing. |
+| `deploy/base/vdr/templates/credential-template.html` | `<VDR>/templates/credential-template.html`, the template for a credential with none of its own, such as `ait-student-id` (without it: `RESIDENT-APP-028`) | Nothing. The VDR already serves it at `/base-templates/`, which Mimoto doesn't read. |
+| The client keystore, `deploy/<installation>/mimoto/oidckeystore.p12` (made by `mimoto-up.sh`, never committed) | `/home/mosip/certs/oidckeystore.p12` | Dev's own key, password in `oidc_p12_password`, trusted by dev's OAuth client for the Wallet. |
+
+The rest of the container's environment is in `compose.mimoto.yaml`, the `mimoto` service. On dev, its passwords (`oidc_p12_password`, Postgres) are dev's own.
+
+**Where to see it working:** `compose.mimoto.yaml` mounts each file. Locally the four VDR files land on empty, git-ignored files that `mimoto-up.sh` creates first, because Docker can't create a file inside the VDR's read-only `templates` mount.
+
+### 3. The template address: one environment variable
+
+```
+CONFIG_SERVER_FILE_STORAGE_URI=<VDR>/templates/
+```
+
+With the trailing `/`. It overrides `config.server.file.storage.uri` in the bootstrap file, and `spring.cloud.config.uri` and `mosip.kernel.xsdstorage-uri` follow it, so Mimoto reads its template and the files in step 2 from the VDR. Mimoto fetches the template at every print and keeps nothing, so a template replaced on the VDR prints at the next print with no restart. The one exception is a changed `#macro` body (section 4).
+
+**Proven on the local stack (2026-11-24):** with the bootstrap file pointing at an address that serves nothing, Mimoto exits at startup (`CbeffUtil init failed: ... nothing-here/mosip-cbeff.xsd`). With the same file and the variable set, every request Mimoto makes goes to `/templates/` and the print check passes.
+
+**Where to see it working:** `docker compose exec mimoto printenv CONFIG_SERVER_FILE_STORAGE_URI` once set, and the VDR's access log after a print (`docker compose logs vdr`), which shows Mimoto's `GET /templates/AITUniversity-ait-transcript-template.html`, `mimoto-issuers-config.json` and `mosip-cbeff.xsd`.
+
+### 4. `charset=utf-8` on the VDR's `/templates/`
+
+The VDR's `/templates/` block carries `charset utf-8;` in `deploy/base/vdr-nginx.conf`. Without it Mimoto reads the template as ISO-8859-1 and Thai typed into it prints as `à¸ à¸²à¸©à¸²...`. Claim values aren't affected.
+
+**Where to see it working:** `curl -I http://vdr.localhost/templates/AITUniversity-ait-transcript-template.html` answers `Content-Type: text/html; charset=utf-8`; the JSON files and the schema keep their types.
+
+### 5. Short caches
+
+A proxy or CDN between Mimoto and the VDR may honour the VDR's 7-day `Cache-Control` and serve an old template. Mimoto also caches Certify's metadata, 60 minutes by default (`cache.credential-issuer.wellknown.expiry-time-in-min`), so a Background address published into Certify may not show until then. The local Mimoto sets it to 0.
+
+### Where Mimoto looks for the template and the Background
+
+How a deployment places these is its own choice. Mimoto looks here:
+
+- The template: `<VDR>/templates/AITUniversity-ait-transcript-template.html`. Mimoto fixes this name, `<issuer id>-<credential configuration id>-template.html`, at the top of its template address.
+- The Background: wherever the credential file's `display[0].background_image.uri` points, as an image (PNG or JPEG). Locally that's `<VDR>/templates/ait-transcript/background.png`, and `template-sync` rewrites the address for each deployment's VDR (`VDR_BASE_URL`). The template has to draw `$backgroundImage`. The committed demo files do neither (section 5).
+
+CD's `git checkout -f` puts back any tracked file replaced in the checkout, so a template copied over the committed one lasts only until the next deploy.
 
 ## When something fails
 
@@ -282,8 +306,8 @@ Placing the files isn't enough on its own. The deployment's credential file has 
 | `FAIL setup: Mimoto's issuers list answered ...` | Mimoto isn't running (stopped, or the stack was brought down and only `deploy.sh` ran again). The four Mimoto files stay on the VDR as empty files once `mimoto-up.sh` has run, so the VDR still answers 200 and the check gets as far as asking Mimoto: run `./scripts/mimoto-up.sh`. |
 | `FAIL signature check ... signature_verification_failed` | Certify's rows hold a DID other than the key it signs with (run `./scripts/mimoto-up.sh`), or w3id.org was slow or unreachable. |
 | `FAIL token exchange ... invalid_request` | The local Keycloak doesn't trust Mimoto's key: run `./scripts/mimoto-up.sh`. |
-| `FAIL PDF content: ... grid holds 0 term headings` and the PDF has `COURSE-LINE` lines | Mimoto is upstream's `injistack/mimoto:0.21.0`, not `ait-mimoto` (T4): run `./scripts/mimoto-up.sh`, which recreates it from the built image. |
-| The PDF shows Thai as garbage | The VDR doesn't send `charset=utf-8` (T2). |
+| `FAIL PDF content: ... grid holds 0 term headings` and the PDF has `COURSE-LINE` lines | Mimoto is upstream's `injistack/mimoto:0.21.0`, not `ait-mimoto`: run `./scripts/mimoto-up.sh`, which recreates it from the built image. |
+| The PDF shows Thai as garbage | The VDR doesn't send `charset=utf-8` ("Running it on dev", item 3). |
 | A grid cell prints `$c.grade` (or another field's name) | The template uses a plain reference: write `$!c.grade`. |
 | A hand-published credential file is gone | A print check ended and put the committed files back: publish it again. |
 | A change to `mimoto-*.properties` has no effect | Mimoto keeps its settings until it is recreated (section 2). |
