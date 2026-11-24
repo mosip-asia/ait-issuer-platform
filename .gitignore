@@ -7,6 +7,33 @@ src/issuer/target/
 target/
 deploy/data/
 deploy/*/private_key/
+# The local Mimoto overlay (compose.mimoto.yaml): its client keystore, and the empty files its VDR mounts land on.
+deploy/*/mimoto/
+deploy/*/vdr/templates/mimoto-issuers-config.json
+deploy/*/vdr/templates/mimoto-trusted-verifiers.json
+deploy/*/vdr/templates/mosip-cbeff.xsd
+deploy/*/vdr/templates/credential-template.html
+# ...but base's is the committed fallback template those mounts copy, not a mount point.
+!deploy/base/vdr/templates/credential-template.html
+# An organisation's Background (its paper) is published on its own VDR, never committed: any image under an
+# Installation's VDR templates folder. Brand assets (logos) live in vdr/assets/ and are committed.
+# Linux matches extensions case-sensitively, so each letter takes both cases.
+deploy/*/vdr/templates/**/*.[pP][nN][gG]
+deploy/*/vdr/templates/**/*.[jJ][pP][gG]
+deploy/*/vdr/templates/**/*.[jJ][pP][eE][gG]
+deploy/*/vdr/templates/**/*.[pP][dD][fF]
+deploy/*/vdr/templates/**/*.[wW][eE][bB][pP]
+deploy/*/vdr/templates/**/*.[gG][iI][fF]
+deploy/*/vdr/templates/**/*.[sS][vV][gG]
+# A font the template loads through @font-face is published on the VDR like a Background and may carry a licence that
+# forbids redistribution: keep fonts in deploy/<installation>/vdr/templates/fonts/, never committed.
+deploy/*/vdr/templates/**/*.[tT][tT][fF]
+deploy/*/vdr/templates/**/*.[tT][tT][cC]
+deploy/*/vdr/templates/**/*.[oO][tT][fF]
+deploy/*/vdr/templates/**/*.[wW][oO][fF][fF]
+deploy/*/vdr/templates/**/*.[wW][oO][fF][fF]2
+# The print check's font, taken from Debian for the run (scripts/print-check.sh).
+deploy/*/vdr/templates/print-check/
 *.p12
 portal/*.db
 src/portal/*.db

@@ -21,7 +21,7 @@ INSERT INTO certify.credential_config (
     NULL,
     NULL,
     'http://vdr.localhost/contexts/student-id/v1.json,https://www.w3.org/ns/credentials/v2',
-    'StudentIdCredential,AitIdCredential,VerifiableCredential',
+    'AitIdCredential,StudentIdCredential,VerifiableCredential',
     'ldp_vc',
     'did:key:z6MkpPLACEHOLDERreplaceMeViaBootstrapDidRefreshScript1',
     'CERTIFY_VC_SIGN_ED25519',

@@ -1,0 +1,19 @@
+# ait-mimoto: injistack/mimoto:0.21.0 with one class replaced (src/mimoto/README.md names the change).
+
+# Stage 1: compile the changed class against the libraries and classes inside Mimoto's own jar, and put it into a
+# copy of that jar. Info-ZIP's zip updates the one entry and leaves the rest byte for byte: Spring Boot needs the
+# nested jars under BOOT-INF/lib/ stored uncompressed, and `jar uf` rewrites the whole archive (it truncated it).
+FROM eclipse-temurin:21-jdk AS builder
+RUN apt-get update && apt-get install -y --no-install-recommends zip unzip && rm -rf /var/lib/apt/lists/*
+WORKDIR /build
+COPY --from=injistack/mimoto:0.21.0 /home/mosip/mimoto.jar mimoto.jar
+RUN unzip -q mimoto.jar 'BOOT-INF/lib/*' 'BOOT-INF/classes/*' -d jar
+COPY src/mimoto/CredentialPDFGeneratorService.java src/
+# Lombok, in BOOT-INF/lib/, runs as an annotation processor from the classpath. -g: Maven's default debug info.
+RUN javac --release 21 -g -cp "jar/BOOT-INF/lib/*:jar/BOOT-INF/classes" -d stage/BOOT-INF/classes \
+      src/CredentialPDFGeneratorService.java \
+ && cd stage && zip -q ../mimoto.jar $(find BOOT-INF -name '*.class')
+
+# Stage 2: upstream Mimoto with the updated jar. Its entrypoint, command and user stay upstream's.
+FROM injistack/mimoto:0.21.0
+COPY --from=builder --chown=1002:1001 /build/mimoto.jar /home/mosip/mimoto.jar

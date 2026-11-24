@@ -50,14 +50,17 @@ jobs:
           for t in \
             src/tools/test_generate_csv.py \
             src/tools/test_render_mimoto_issuers_config.py \
+            src/certify_template_sync/test_sync.py \
             src/verifier/test_verifier.py \
             tests/test_installations.py \
+            tests/test_backgrounds_ignored.py \
             tests/test_authorization_server.py \
             tests/test_inji_web_vc_readiness.py \
             tests/test_issue_and_verify.py \
             src/portal/test_auth.py \
             src/portal/test_requests.py \
             tests/test_courses.py \
+            tests/test_print_check.py \
             tests/test_adapter.py \
             src/gateway/tests/test_credential_types.py \
             src/gateway/tests/test_evaluations.py

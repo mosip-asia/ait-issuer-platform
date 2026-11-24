@@ -173,8 +173,10 @@ def generate_sql_statement(config):
     status = config.get("status", "active")
     vc_template = config.get("vc_template")
     b64_template = build_vc_template_base64(vc_template) if vc_template is not None else None
-    context_str = ",".join(config.get("context", [])) if config.get("context") else None
-    cred_type = config.get("credential_type", "AitTranscriptCredential,VerifiableCredential")
+    # Certify finds the row by the request's contexts and types, each sorted and comma-joined, compared exactly
+    # (CredentialUtils.getTemplateName); written in any other order, the credential can't be issued.
+    context_str = ",".join(sorted(config["context"])) if config.get("context") else None
+    cred_type = ",".join(sorted(config.get("credential_type", "AitTranscriptCredential,VerifiableCredential").split(",")))
     cred_format = config.get("credential_format", "ldp_vc")
     doctype = config.get("doctype")
     sd_jwt_vct = config.get("sd_jwt_vct")
