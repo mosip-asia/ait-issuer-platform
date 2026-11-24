@@ -58,6 +58,7 @@ Run the host test suite without Docker containers:
 ```bash
 python3 src/tools/test_generate_csv.py
 python3 src/tools/test_render_mimoto_issuers_config.py
+python3 src/certify_template_sync/test_sync.py
 python3 src/verifier/test_verifier.py
 python3 tests/test_installations.py
 python3 tests/test_backgrounds_ignored.py

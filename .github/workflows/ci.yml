@@ -50,6 +50,7 @@ jobs:
           for t in \
             src/tools/test_generate_csv.py \
             src/tools/test_render_mimoto_issuers_config.py \
+            src/certify_template_sync/test_sync.py \
             src/verifier/test_verifier.py \
             tests/test_installations.py \
             tests/test_backgrounds_ignored.py \
