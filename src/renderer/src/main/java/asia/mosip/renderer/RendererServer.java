@@ -29,7 +29,10 @@ import java.util.concurrent.Semaphore;
  */
 public final class RendererServer {
 
-    static final int MAX_REQUEST = 32 * 1024 * 1024;  // bytes; VC Lab takes at most 20 MB of files; the Background goes in as base64 (a third more) and the credential file twice. A Background alone at the limit is 27 MB and fits; a set of several near-limit files can pass it (413, which VC Lab shows as a 502)
+    // Bytes. VC Lab takes at most 20 MB of files; the Background goes in as base64 (a third more) and the credential
+    // file twice. A Background alone at the limit is 27 MB and fits; a set of several near-limit files can pass it
+    // (413, which VC Lab shows as a 502).
+    static final int MAX_REQUEST = 32 * 1024 * 1024;
 
     // Spring Boot's ObjectMapper ignores unknown properties, so Mimoto does too.
     private static final ObjectMapper JSON = new ObjectMapper()
