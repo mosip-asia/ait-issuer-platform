@@ -13,7 +13,7 @@ What each file is, and how a value travels from SIS to the page, is in [the temp
 | `sample` | the Adapter's response, exactly as the Adapter sends it | its `credentialSubject`, or the whole file when it has none |
 | `background` (optional) | the organisation's pre-printed paper, as the PNG the Wallet draws (`background.png`) | the whole picture, as the template's `$backgroundImage` |
 
-Choosing a file replaces that slot only; choosing a zip from Download replaces the whole set. Each file is checked on every call: the background must be a PNG, the credential file JSON with a `vc_template` object (holding a `credentialSubject` object), the sample a JSON object, and the template's `#if`/`#foreach`/`#macro` must each have their `#end`. One request may carry at most 20 MB.
+Choosing a file replaces that slot only; loading a Package replaces the whole set. Each file is checked on every call: the background must be a PNG, the credential file JSON with a `vc_template` object (holding a `credentialSubject` object), the sample a JSON object, and the template's `#if`/`#foreach`/`#macro` must each have their `#end`. One request may carry at most 20 MB.
 
 ## From sample to page
 
@@ -25,15 +25,15 @@ VC Lab renders nothing itself. It sends the set to the renderer (`src/renderer`,
 
 ## Dashboard and API
 
-The dashboard (`/`) has a file input per slot (or one for a zip), the list of loaded files, the preview with a choice of the PDF ("what the Wallet prints") or the HTML ("quick view"), and Open PDF, Download, Remove background and Clear.
+The dashboard (`/`) has a file input per slot plus Load Package, the list of loaded files, the preview with a choice of the PDF ("what the Wallet prints") or the HTML ("quick view"), the three fields Export Package asks for (credential configuration id, version, VDR address) and Open PDF, Export Package, Remove background and Clear. Loading a Package fills the three fields from its manifest.
 
 | Call | Does |
 |---|---|
 | `POST /preview` | the set as multipart (`template`, `credential`, `sample`, optional `background`, a PNG); answers the quick view: the HTML the PDF is printed from, with the Background drawn where the template asks for it |
 | `POST /preview.pdf` | the same set; answers what the Wallet prints: the renderer's PDF |
 | `POST /api/background` | a PDF, PNG or JPEG as the `background` field; answers the Background PNG (`image/png`), or 400 with the reason. The dashboard calls it when a file is chosen and keeps only the PNG |
-| `POST /download` | the same set; answers a zip with `template/`, `credential/`, `sample/` and `background/`, each file as sent |
-| `POST /api/bundle` | multipart with one `bundle` (a zip from Download); answers its files as `{slot: {filename, data}}`, `data` in base64, for the dashboard to hold |
+| `POST /api/package/export` | the same set, plus the text fields `config_id`, `version` and `vdr_address`; answers the Package zip ([The Package](#the-package)). 409 names what the set lacks, 400 a missing field or an address that is no URL |
+| `POST /api/package/read` | multipart with one `package` (a zip from Export Package); answers `{set: {slot: {filename, data}}, export: {configId, version, vdrAddress}}`, `data` in base64, for the dashboard to hold. 400 for anything but the exported layout |
 | `GET /health` | liveness |
 
 Rendering needs the template, the credential file and the sample; without them both previews answer 409, naming what is missing. A wrong file answers 400 with the reason. A template Velocity can't evaluate, or a sample or mapping Certify would refuse, answers 422 with the renderer's message (a Velocity error names its line and column). Without `RENDERER_URL` the previews answer 503.
@@ -52,9 +52,27 @@ The quick view draws it too. A template that loads it by its VDR address (`http:
 
 > **A background may be confidential** (an organisation's watermark, seal and signature). It stays in your browser and goes to VC Lab only with each preview, which keeps nothing; another visitor can't get it back. But a deployed VC Lab has no login and is reached over whatever network its address crosses, so send a confidential one only to a VC Lab you trust.
 
-## Issuing with a credential file from VC Lab
+## The Package
 
-Download gives the credential file back as uploaded, the same shape as the files Certify's sync tool reads. Put it in a folder outside git and run the sync tool with that folder mounted; it replaces the stored version by its key:
+Export Package turns the set into the files the VDR and Certify take, for one credential configuration id and version and the VDR address you type (`https://vdr.example.org`; a trailing slash is dropped). It is also your save file: Load Package gives the set back.
+
+```
+vdr/templates/<config id>/<version>/template.html
+vdr/templates/<config id>/<version>/background.png      only when a Background is loaded
+vdr/templates/<config id>/<version>/manifest.json
+certify/credentials/<config id>.json
+sample/<name>.json                                      <name> is the uploaded sample's name; never deployed
+```
+
+- `http://vdr.localhost` and `http://cdn.localhost` in the template and the credential file become the VDR address, by the function template-sync uses (`certify_template_sync.sync.rewrite_local_addresses`).
+- The config id must be the credential file's `credential_config_key_id` (template-sync stores the file under that key); export answers 400 naming both when they differ. Choosing a credential file fills the config id field from its key.
+- A template address of the Background, `http://vdr.localhost/templates/<any folders>/background.png`, is rewritten to `<VDR>/templates/<config id>/<version>/background.png`, where the Package puts the file.
+- With a Background, the credential file's `display[0].background_image.uri` is `<VDR>/templates/<config id>/<version>/background.png`. Without one, no `background.png` is written and the address is left as it was (rewritten like any other).
+- `manifest.json` holds `format` (`vc-lab-package`), `formatVersion`, `credentialConfigId`, `version`, `vdrAddress` and `components`: one `{role, path, deploy}` for each of `template`, `background`, `credential` and `sample`. The sample has `deploy: false`.
+- Load Package accepts exactly this layout and turns the manifest's VDR address back into `http://vdr.localhost` in the template and the credential file. The set previews the same as the one exported; it is not byte-identical (`cdn.localhost` is `vdr.localhost` again, and `background_image.uri` stays set).
+- Placing the files stays by hand. Mimoto reads the template under a fixed name, `<issuer>-<config id>-template.html`, so copy `template.html` to that name until a version pointer exists.
+
+To issue with the credential file, put it in a folder outside git and run the sync tool with that folder mounted; it replaces the stored version by its key:
 
 ```bash
 docker compose run --rm -v <folder>:/app/config/credentials:ro template-sync
@@ -80,7 +98,8 @@ docker compose run --rm vc-lab python src/vc-lab/test_main.py   # everything
 ```
 src/vc-lab/
 ├── main.py       # the web app: dashboard (which holds the set) and stateless API, rendering through the renderer
-├── labset.py     # the set a request carries: its slots, parsing and validation, the zip
+├── labset.py     # the set a request carries: its slots, parsing and validation
+├── package.py    # the Package: export a set, read one back
 ├── background.py # the Background: a PDF, PNG or JPEG made into one PNG
 └── test_main.py  # API tests
 ```

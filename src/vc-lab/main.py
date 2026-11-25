@@ -27,6 +27,7 @@ from starlette.formparsers import MultiPartException, MultiPartParser
 
 import background
 import labset
+import package
 from certify_template_sync.sync import build_vc_template_base64
 from labset import MAX_UPLOAD, LabSet
 
@@ -94,16 +95,28 @@ def _preview_pdf(files: dict[str, tuple[str, bytes]]) -> Response:
     return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": disposition})
 
 
-@app.post("/download")
-async def download(request: Request) -> Response:
-    """The set sent, as a zip (template/, credential/, sample/, background/), each file as uploaded."""
-    files = await _read_files(request, labset.SLOTS)
-    return await run_in_threadpool(_download, files)
+@app.post("/api/package/export")
+async def export_package(request: Request) -> Response:
+    """Export Package: the set (as for a preview) plus config_id, version and vdr_address; answers the Package zip."""
+    files, params = await _read_form(request, labset.SLOTS, PACKAGE_PARAMS)
+    return await run_in_threadpool(_export_package, files, params)
 
 
-def _download(files: dict[str, tuple[str, bytes]]) -> Response:
-    headers = {"Content-Disposition": 'attachment; filename="vc-lab-set.zip"'}
-    return Response(labset.to_zip(_parse_set(files)), media_type="application/zip", headers=headers)
+PACKAGE_PARAMS = ("config_id", "version", "vdr_address")
+
+
+def _export_package(files: dict[str, tuple[str, bytes]], params: dict[str, str]) -> Response:
+    lab = _parse_set(files)
+    if missing := lab.missing():
+        raise HTTPException(status_code=409, detail=f"upload these first: {', '.join(missing)}")
+    try:
+        zipped = package.export(lab, *(params.get(name, "") for name in PACKAGE_PARAMS))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    name = f"{params['config_id'].strip()}-{params['version'].strip()}-package.zip"
+    ascii_name = name.encode("ascii", "replace").decode("ascii").replace("?", "_").replace('"', "")
+    disposition = f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(name)}"
+    return Response(zipped, media_type="application/zip", headers={"Content-Disposition": disposition})
 
 
 @app.post("/api/background")
@@ -121,22 +134,22 @@ def _make_background(files: dict[str, tuple[str, bytes]]) -> Response:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.post("/api/bundle")
-async def bundle(request: Request) -> dict[str, dict[str, str]]:
-    """A zip from /download in, its files out ({slot: {filename, data}}, data in base64), for the dashboard to hold."""
-    files = await _read_files(request, ("bundle",))
-    return await run_in_threadpool(_bundle, files)
+@app.post("/api/package/read")
+async def read_package(request: Request) -> dict[str, Any]:
+    """A Package zip in (as the package field); the set it holds out ({set: {slot: {filename, data}}}, data in
+    base64, for the dashboard to hold) with the export it was made for ({export: {configId, version, vdrAddress}})."""
+    files, _ = await _read_form(request, ("package",))
+    return await run_in_threadpool(_read_package, files)
 
 
-def _bundle(files: dict[str, tuple[str, bytes]]) -> dict[str, dict[str, str]]:
-    if set(files) != {"bundle"}:
-        raise HTTPException(status_code=400, detail="send a bundle on its own, as the bundle field")
+def _read_package(files: dict[str, tuple[str, bytes]]) -> dict[str, Any]:
     try:
-        unpacked = labset.unzip(files["bundle"][1])
+        unpacked, export = package.read(files["package"][1])
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    return {slot: {"filename": name, "data": base64.b64encode(data).decode("ascii")}
-            for slot, (name, data) in unpacked.items()}
+    return {"set": {slot: {"filename": name, "data": base64.b64encode(data).decode("ascii")}
+                    for slot, (name, data) in unpacked.items()},
+            "export": export}
 
 
 def _parse_set(files: dict[str, tuple[str, bytes]]) -> LabSet:
@@ -180,6 +193,13 @@ def _render(lab: LabSet, output: Literal["html", "pdf"]) -> bytes:
 
 async def _read_files(request: Request, fields: tuple[str, ...]) -> dict[str, tuple[str, bytes]]:
     """The request's files as {field: (filename, data)}, read into memory and capped at MAX_UPLOAD."""
+    return (await _read_form(request, fields))[0]
+
+
+async def _read_form(request: Request, fields: tuple[str, ...], params: tuple[str, ...] = ()
+                     ) -> tuple[dict[str, tuple[str, bytes]], dict[str, str]]:
+    """The request's files as {field: (filename, data)} and its text fields named in params, read into memory and
+    capped at MAX_UPLOAD."""
     body = bytearray()
     async for chunk in request.stream():
         body += chunk
@@ -194,16 +214,20 @@ async def _read_files(request: Request, fields: tuple[str, ...]) -> dict[str, tu
     except (MultiPartException, KeyError) as e:
         raise HTTPException(status_code=400, detail=f"expected a multipart file upload: {e}")
     files: dict[str, tuple[str, bytes]] = {}
+    values: dict[str, str] = {}
     for field, value in form.multi_items():
-        if field not in fields or not isinstance(value, UploadFile):
+        if field in params and not isinstance(value, UploadFile):
+            values[field] = value
+        elif field not in fields or not isinstance(value, UploadFile):
             raise HTTPException(status_code=400,
                                 detail=f"unexpected field {field!r}; send files as {', '.join(fields)}")
-        if field in files:
+        elif field in files:
             raise HTTPException(status_code=400, detail=f"more than one {field} file")
-        files[field] = (value.filename or field, await value.read())
+        else:
+            files[field] = (value.filename or field, await value.read())
     if not files:
         raise HTTPException(status_code=400, detail="no file uploaded")
-    return files
+    return files, values
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -236,6 +260,8 @@ _DASHBOARD = """<!DOCTYPE html>
     .file.set { color: #047857; font-weight: 600; }
     .note { font-size: 13px; color: #1e3a8a; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; }
     .note.strong { color: #92400e; background: #fffbeb; border-color: #fde68a; font-weight: 600; }
+    .exportform { display: grid; gap: 6px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+    .exportform input { width: 100%; box-sizing: border-box; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; }
     .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
     button { flex: 1; padding: 8px 10px; border: 0; border-radius: 6px; background: var(--primary); color: #fff; font-weight: 600; cursor: pointer; }
     button.quiet { background: var(--muted); }
@@ -287,14 +313,21 @@ _DASHBOARD = """<!DOCTYPE html>
           whatever network its address crosses, so send a confidential one only to a VC Lab you trust. Reloading the
           page forgets your files.</div>
         <div class="slot">
-          <b>Or a whole set</b> <span class="ext">.zip</span>
-          <div class="hint">A zip from Download. It replaces all four files.</div>
-          <div class="pick"><label>Choose file<input type="file" hidden data-field="bundle" accept=".zip,application/zip"></label></div>
+          <b>Package</b> <span class="ext">.zip</span>
+          <div class="hint">The files as they go onto the VDR and into Certify. Load one to get its set back
+            (it replaces all four files); export one when the set is ready. The sample goes in it, marked as not for
+            deployment.</div>
+          <div class="pick"><label>Load Package<input type="file" hidden data-field="package" accept=".zip,application/zip"></label></div>
+          <div class="exportform">
+            <label>Credential configuration id <input id="configId" placeholder="ait-transcript"></label>
+            <label>Version <input id="version" placeholder="v1"></label>
+            <label>VDR address <input id="vdrAddress" placeholder="https://vdr.example.org"></label>
+          </div>
         </div>
         <div id="error"></div>
         <div class="row">
           <button id="exportPdf">Open PDF</button>
-          <button id="download">Download</button>
+          <button id="exportPackage">Export Package</button>
         </div>
         <div class="row">
           <button class="quiet" id="removeBackground">Remove background</button>
@@ -358,7 +391,7 @@ _DASHBOARD = """<!DOCTYPE html>
       document.getElementById('viewHint').textContent = OUTPUT_HINTS[output()];
       const need = missing();
       document.getElementById('exportPdf').disabled = need.length > 0;
-      document.getElementById('download').disabled = Object.keys(set).length === 0;
+      document.getElementById('exportPackage').disabled = need.length > 0;
       document.getElementById('removeBackground').disabled = !set.background;
       document.getElementById('empty').textContent = need.length ? 'Upload these to see the preview: ' + need.map(s => NAMES[s]).join(', ') + '.' : '';
       const frame = document.getElementById('preview');
@@ -387,13 +420,16 @@ _DASHBOARD = """<!DOCTYPE html>
         const file = input.files[0];
         input.value = '';
         if (!file) return;
-        if (input.dataset.field === 'bundle') {
+        if (input.dataset.field === 'package') {
           try {
-            const res = await fetch('/api/bundle', {method: 'POST', body: (() => { const f = new FormData(); f.append('bundle', file); return f; })()});
+            const res = await fetch('/api/package/read', {method: 'POST', body: (() => { const f = new FormData(); f.append('package', file); return f; })()});
             const data = await res.json();
             if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail));
             set = {};
-            for (const [slot, f] of Object.entries(data)) {
+            document.getElementById('configId').value = data.export.configId;
+            document.getElementById('version').value = data.export.version;
+            document.getElementById('vdrAddress').value = data.export.vdrAddress;
+            for (const [slot, f] of Object.entries(data.set)) {
               const bytes = Uint8Array.from(atob(f.data), c => c.charCodeAt(0));
               set[slot] = new File([bytes], f.filename);
             }
@@ -407,6 +443,12 @@ _DASHBOARD = """<!DOCTYPE html>
           } catch (e) { showError(e.message); return; }
         } else {
           set[input.dataset.field] = file;
+          if (input.dataset.field === 'credential') { // the configuration id is the credential file's key
+            try {
+              const key = JSON.parse(await file.text()).credential_config_key_id;
+              if (typeof key === 'string' && key) document.getElementById('configId').value = key;
+            } catch (e) { /* the server names what is wrong with the file */ }
+          }
         }
         showError('');
         await show();
@@ -420,11 +462,16 @@ _DASHBOARD = """<!DOCTYPE html>
         tab.location = URL.createObjectURL(blob);
       } catch (e) { tab.close(); showError(e.message); }
     };
-    document.getElementById('download').onclick = async () => {
+    document.getElementById('exportPackage').onclick = async () => {
       try {
+        const f = form();
+        for (const [name, id] of [['config_id', 'configId'], ['version', 'version'], ['vdr_address', 'vdrAddress']])
+          f.append(name, document.getElementById(id).value);
+        const res = await fetch('/api/package/export', {method: 'POST', body: f});
+        if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(typeof data.detail === 'string' ? data.detail : res.statusText); }
         const link = document.createElement('a');
-        link.href = URL.createObjectURL(await (await post('/download')).blob());
-        link.download = 'vc-lab-set.zip';
+        link.href = URL.createObjectURL(await res.blob());
+        link.download = document.getElementById('configId').value.trim() + '-' + document.getElementById('version').value.trim() + '-package.zip';
         link.click();
         URL.revokeObjectURL(link.href);
       } catch (e) { showError(e.message); }
