@@ -1,8 +1,8 @@
-"""The uploaded set VC Lab works on: a template, a credential file, a sample and an optional background.
+"""The set of files one request carries: a template, a credential file, a sample and an optional background.
 
-Part of the vc-lab module. A set is immutable; uploading builds a new one. Every file is parsed here, at the
-upload boundary, so a LabSet only ever holds files that render: a wrong file is a ValueError with a plain
-reason, and nothing past this module checks a file again. Nothing here touches the disk.
+Part of the vc-lab module. The dashboard holds the set and sends it with every call; the server keeps none. Every
+file is parsed here, at the request boundary, so a LabSet only ever holds files that render: a wrong file is a
+ValueError with a plain reason, and nothing past this module checks a file again. Nothing here touches the disk.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from typing import Any, Callable, Generic, TypeVar
 
 import hardcopy
 
-MAX_UPLOAD = 8 * 1024 * 1024  # bytes: one request, and the files unpacked from one zip
+MAX_UPLOAD = 20 * 1024 * 1024  # bytes: one request, and the files unpacked from one zip
 REQUIRED = ("template", "credential", "sample")
 
 T = TypeVar("T")
@@ -37,17 +37,14 @@ class LabSet:
     sample: Loaded[dict[str, Any]] | None = None  # the Adapter's response, a JSON object
     background: Loaded[bytes] | None = None  # the upload's page 1 fitted on portrait A4 (hardcopy.make_background)
 
-    def loaded(self) -> dict[str, str | None]:
-        """Each slot's file name, None when empty."""
-        return {slot: (f.filename if (f := getattr(self, slot)) else None) for slot in SLOTS}
-
     def missing(self) -> list[str]:
         """The slots rendering needs that are empty."""
         return [slot for slot in REQUIRED if getattr(self, slot) is None]
 
-    def replace(self, files: dict[str, tuple[str, bytes]]) -> LabSet:
-        """This set with the given slots replaced by the parsed files ({slot: (filename, data)})."""
-        return dataclasses.replace(self, **{slot: parse(slot, name, data) for slot, (name, data) in files.items()})
+    @classmethod
+    def from_files(cls, files: dict[str, tuple[str, bytes]]) -> LabSet:
+        """The set of the parsed files ({slot: (filename, data)})."""
+        return cls(**{slot: parse(slot, name, data) for slot, (name, data) in files.items()})
 
 
 SLOTS = tuple(f.name for f in dataclasses.fields(LabSet))
@@ -131,8 +128,9 @@ def to_zip(lab: LabSet) -> bytes:
     return out.getvalue()
 
 
-def from_zip(data: bytes) -> LabSet:
-    """The set a zip from to_zip holds. ValueError for anything else."""
+def unzip(data: bytes) -> dict[str, tuple[str, bytes]]:
+    """The files a zip from to_zip holds, {slot: (filename, data)}, each checked as a request's file is.
+    ValueError for anything else."""
     try:
         z = zipfile.ZipFile(io.BytesIO(data))
     except zipfile.BadZipFile:
@@ -152,4 +150,5 @@ def from_zip(data: bytes) -> LabSet:
             files[slot] = (name, z.read(m))
     if not files:
         raise ValueError("bundle holds no files")
-    return LabSet().replace(files)
+    LabSet.from_files(files)
+    return files

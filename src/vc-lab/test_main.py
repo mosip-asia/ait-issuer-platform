@@ -10,6 +10,7 @@ system libraries (Pango) to draw their paper; the ait-vc image has them.
 
 from __future__ import annotations
 
+import base64
 import html
 import io
 import json
@@ -105,15 +106,23 @@ def _json(value: object) -> bytes:
     return json.dumps(value).encode("utf-8")
 
 
-def _upload(**files: tuple[str, bytes]):
-    return client.post("/api/set", files={field: (name, data) for field, (name, data) in files.items()})
+def _set(**changes: tuple[str, bytes] | None) -> dict[str, tuple[str, bytes]]:
+    """The made-up set as the dashboard holds it, {slot: (filename, data)}. A change replaces a slot; None drops it."""
+    files: dict[str, tuple[str, bytes] | None] = {
+        "template": ("record.html", TEMPLATE.encode()), "credential": ("record.json", _json(CREDENTIAL)),
+        "sample": ("adapter-response.json", _json(SAMPLE))}
+    files.update(changes)
+    return {slot: file for slot, file in files.items() if file is not None}
 
 
-def _upload_set() -> None:
-    client.delete("/api/set")
-    res = _upload(template=("record.html", TEMPLATE.encode()), credential=("record.json", _json(CREDENTIAL)),
-                  sample=("adapter-response.json", _json(SAMPLE)))
-    assert res.status_code == 200, res.text
+def _post(path: str, files: dict[str, tuple[str, bytes]]):
+    """What the dashboard sends: the whole set, as one multipart form, with every call."""
+    return client.post(path, files=files)
+
+
+def _zip_files(zip_bytes: bytes) -> dict[str, bytes]:
+    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as z:
+        return {name: z.read(name) for name in z.namelist()}
 
 
 def _blank_pdf() -> bytes:
@@ -127,6 +136,14 @@ def _blank_pdf() -> bytes:
 def _empty_zip() -> bytes:
     out = io.BytesIO()
     zipfile.ZipFile(out, "w").close()
+    return out.getvalue()
+
+
+def _zip_of(members: dict[str, bytes]) -> bytes:
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w") as z:
+        for name, data in members.items():
+            z.writestr(name, data)
     return out.getvalue()
 
 
@@ -146,8 +163,8 @@ def _paper_pdf(word: str) -> bytes:
     return out.getvalue()
 
 
-def _pages(path: str) -> list:
-    res = client.get(path)
+def _pages(files: dict[str, tuple[str, bytes]]) -> list:
+    res = _post("/preview.pdf", files)
     assert res.status_code == 200, res.text
     assert res.headers["content-type"] == "application/pdf"
     return PdfReader(io.BytesIO(res.content)).pages
@@ -179,88 +196,140 @@ def test_health_and_dashboard() -> None:
     assert "quick view" in page.text, "the HTML is named as the quick view"
 
 
-def test_starts_empty_and_asks_for_the_missing_files() -> None:
-    client.delete("/api/set")
-    status = client.get("/api/set").json()
-    assert status["loaded"] == {"template": None, "credential": None, "sample": None, "background": None}
-    _upload(template=("record.html", TEMPLATE.encode()))
+def test_the_server_keeps_no_set() -> None:
+    """The set lives in the browser: no endpoint holds, lists or hands back a set."""
+    _post("/download", _set())
+    for method, path in (("get", "/api/set"), ("post", "/api/set"), ("delete", "/api/set"),
+                         ("delete", "/api/set/background"), ("get", "/preview"), ("get", "/preview.pdf"),
+                         ("get", "/download")):
+        res = getattr(client, method)(path)
+        assert res.status_code in (404, 405), (method, path, res.status_code)
+
+
+def test_every_call_asks_for_what_it_was_not_sent() -> None:
+    """Nothing is remembered between calls: a call without the credential file and the sample is asked for them,
+    though the full set was sent a moment ago."""
+    assert _post("/download", _set()).status_code == 200
     for path in ("/preview", "/preview.pdf"):
-        res = client.get(path)
+        res =_post(path, _set(credential=None, sample=None))
         assert res.status_code == 409, (path, res.status_code)
         assert "credential" in res.json()["detail"] and "sample" in res.json()["detail"]
         assert "template" not in res.json()["detail"]
+    assert _post("/download", {}).status_code == 400, "no file sent, no zip"
 
 
-def test_replace_one_slot() -> None:
-    _upload_set()
-    res = _upload(template=("v2.html", b"<p>v2</p>"))
-    assert res.json()["loaded"] == {"template": "v2.html", "credential": "record.json",
-                                    "sample": "adapter-response.json", "background": None}
+def test_two_visitors_each_get_their_own_files() -> None:
+    mine = _set(template=("mine.html", b"<p>mine</p>"), background=("paper.pdf", _blank_pdf()))
+    theirs = _set(template=("theirs.html", b"<p>theirs</p>"))
+    first = _post("/download", mine)
+    second = _post("/download", theirs)
+    again = _post("/download", mine)
+    assert first.status_code == second.status_code == again.status_code == 200
+    assert sorted(_zip_files(second.content)) == ["credential/record.json", "sample/adapter-response.json",
+                                                  "template/theirs.html"], "no file of the other visitor's"
+    assert _zip_files(second.content)["template/theirs.html"] == b"<p>theirs</p>"
+    assert _zip_files(first.content) == _zip_files(again.content)
+    assert "background/paper.pdf" in _zip_files(first.content)
 
 
-def test_remove_background_then_clear() -> None:
-    _upload_set()
-    assert _upload(background=("paper.pdf", _blank_pdf())).json()["loaded"]["background"] == "paper.pdf"
-    loaded = client.delete("/api/set/background").json()["loaded"]
-    assert loaded["background"] is None and loaded["template"] == "record.html" and loaded["sample"]
-    cleared = client.delete("/api/set").json()
-    assert set(cleared["loaded"].values()) == {None}
-    assert cleared["missing"] == ["template", "credential", "sample"]
-    assert client.get("/preview").status_code == 409
-
-
-def test_download_and_upload_back() -> None:
-    _upload_set()
+def test_download_and_read_back() -> None:
     paper = _blank_pdf()
-    assert _upload(background=("../../secret/paper.pdf", paper)).status_code == 200
-    before = client.get("/api/set").json()
-    assert before["loaded"]["background"] == "paper.pdf", "no path parts in a stored name"
-
-    res = client.get("/download")
+    files = _set(background=("../../secret/paper.pdf", paper))
+    res = _post("/download", files)
     assert res.status_code == 200 and res.headers["content-type"] == "application/zip"
-    with zipfile.ZipFile(io.BytesIO(res.content)) as z:
-        assert sorted(z.namelist()) == ["background/paper.pdf", "credential/record.json",
-                                        "sample/adapter-response.json", "template/record.html"]
-        assert z.read("background/paper.pdf") == paper, "each file exactly as uploaded"
-        assert z.read("template/record.html") == TEMPLATE.encode()
-        assert json.loads(z.read("credential/record.json")) == CREDENTIAL
+    assert sorted(_zip_files(res.content)) == ["background/paper.pdf", "credential/record.json",
+                                               "sample/adapter-response.json", "template/record.html"]
+    zipped = _zip_files(res.content)
+    assert zipped["background/paper.pdf"] == paper, "each file exactly as uploaded, with no path parts in its name"
+    assert zipped["template/record.html"] == TEMPLATE.encode()
+    assert json.loads(zipped["credential/record.json"]) == CREDENTIAL
 
-    client.delete("/api/set")
-    assert _upload(bundle=("vc-lab-set.zip", res.content)).status_code == 200
-    assert client.get("/api/set").json() == before
-    def files(zip_bytes: bytes) -> dict[str, bytes]:
-        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as z:
-            return {name: z.read(name) for name in z.namelist()}
-
-    assert files(client.get("/download").content) == files(res.content), "the same files come back"
+    back = client.post("/api/bundle", files={"bundle": ("vc-lab-set.zip", res.content)})
+    assert back.status_code == 200, back.text
+    got = {slot: (f["filename"], base64.b64decode(f["data"])) for slot, f in back.json().items()}
+    assert got == {"template": ("record.html", TEMPLATE.encode()), "credential": ("record.json", _json(CREDENTIAL)),
+                   "sample": ("adapter-response.json", _json(SAMPLE)), "background": ("paper.pdf", paper)}
 
 
 def test_rejects_wrong_files() -> None:
-    _upload_set()
-    before = client.get("/api/set").json()
     no_mapping = {k: v for k, v in CREDENTIAL.items() if k != "vc_template"}
     cases = {
         "background not a PDF": {"background": ("paper.png", b"\x89PNG\r\n\x1a\n not a pdf")},
         "credential without vc_template": {"credential": ("c.json", _json(no_mapping))},
         "credential not JSON": {"credential": ("c.json", b"{oops")},
         "sample not JSON": {"sample": ("s.json", b"{oops")},
+        "sample not an object": {"sample": ("s.json", b"[1]")},
         "template with a stray #end": {"template": ("t.html", b"<p>#if($x)a#end#end</p>")},
         "template missing an #end": {"template": ("t.html", b"<p>#foreach($c in $terms)$c</p>")},
         "credential with display not a list": {"credential": ("c.json", _json({**CREDENTIAL, "display": {"name": "x"}}))},
         "credential with a logo not an object": {
             "credential": ("c.json", _json({**CREDENTIAL, "display": [{"name": "x", "logo": "logo.png"}]}))},
-        "bundle not a zip": {"bundle": ("set.zip", b"not a zip")},
-        "bundle with no files": {"bundle": ("set.zip", _empty_zip())},
-        "too large": {"template": ("big.html", b"x" * (vc_lab.MAX_UPLOAD + 1))},
         "unknown field": {"stylesheet": ("s.css", b"p {}")},
     }
-    for case, files in cases.items():
-        res = _upload(**files)
+    for case, changes in cases.items():
+        for path in ("/preview", "/preview.pdf", "/download"):
+            res = _post(path, _set(**changes))
+            assert res.status_code == 400, (case, path, res.status_code, res.text)
+            assert isinstance(res.json()["detail"], str) and res.json()["detail"], (case, path)
+    ok = _post("/download", _set(template=("t.html", b"## #end in a comment\n#* #foreach *#<p>ok</p>")))
+    assert ok.status_code == 200, "Velocity comments don't count"
+
+    for case, bundle in {"not a zip": b"not a zip", "no files": _empty_zip(),
+                         "a file in no slot": _zip_of({"notes/readme.txt": b"hi"})}.items():
+        res = client.post("/api/bundle", files={"bundle": ("set.zip", bundle)})
         assert res.status_code == 400, (case, res.status_code, res.text)
         assert isinstance(res.json()["detail"], str) and res.json()["detail"], case
-    assert client.get("/api/set").json() == before, "a rejected upload leaves the set as it was"
-    assert _upload(template=("t.html", b"## #end in a comment\n#* #foreach *#<p>ok</p>")).status_code == 200, \
-        "Velocity comments don't count"
+
+
+def test_a_request_over_20_mb_is_refused() -> None:
+    assert vc_lab.MAX_UPLOAD == 20 * 1024 * 1024
+    big = b"<p>big</p>" + b" " * (15 * 1024 * 1024)
+    assert _post("/download", _set(template=("big.html", big))).status_code == 200, "15 MB fits"
+    too_big = b"<p>big</p>" + b" " * (vc_lab.MAX_UPLOAD + 1)
+    for path in ("/preview", "/preview.pdf", "/download"):
+        res = _post(path, _set(template=("big.html", too_big)))
+        assert res.status_code == 400 and "20 MB" in res.json()["detail"], (path, res.status_code)
+    res = client.post("/api/bundle", files={"bundle": ("set.zip", _zip_of({"template/big.html": too_big}))})
+    assert res.status_code == 400, res.status_code
+
+
+def test_one_visitors_slow_render_does_not_block_another() -> None:
+    """A preview waiting on a slow renderer must not freeze the Lab for everyone else: a real server, the renderer
+    call patched to take 2 s, and /health asked half a second into it."""
+    import socket
+    import threading
+    import time
+
+    import httpx
+    import uvicorn
+
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    server = uvicorn.Server(uvicorn.Config(vc_lab.app, host="127.0.0.1", port=port, log_level="warning"))
+    threading.Thread(target=server.run, daemon=True).start()
+    base = f"http://127.0.0.1:{port}"
+    for _ in range(100):
+        if server.started:
+            break
+        time.sleep(0.05)
+    assert server.started
+
+    original_post, original_url = vc_lab.httpx.post, vc_lab.RENDERER_URL
+    vc_lab.RENDERER_URL = "http://renderer.invalid"
+    vc_lab.httpx.post = lambda *a, **k: time.sleep(2) or httpx.Response(200, content=b"<p>slow</p>")
+    try:
+        slow = threading.Thread(target=lambda: httpx.Client().post(base + "/preview", files=_set(), timeout=30))
+        slow.start()
+        time.sleep(0.5)
+        started = time.monotonic()
+        assert httpx.get(base + "/health", timeout=30).status_code == 200
+        waited = time.monotonic() - started
+        slow.join()
+    finally:
+        vc_lab.httpx.post, vc_lab.RENDERER_URL = original_post, original_url
+        server.should_exit = True
+    assert waited < 1, f"/health waited {waited:.1f} s behind another visitor's preview"
 
 
 def test_large_upload_stays_in_memory() -> None:
@@ -269,9 +338,8 @@ def test_large_upload_stays_in_memory() -> None:
     original = tempfile.SpooledTemporaryFile.rollover
     tempfile.SpooledTemporaryFile.rollover = lambda self: spilled.append(True) or original(self)
     try:
-        _upload_set()
         big = b"<p>big</p>" + b" " * (3 * 1024 * 1024)
-        assert _upload(template=("big.html", big)).status_code == 200
+        assert _post("/download", _set(template=("big.html", big))).status_code == 200
     finally:
         tempfile.SpooledTemporaryFile.rollover = original
     assert not spilled, "the upload was written to a temporary file on disk"
@@ -284,11 +352,10 @@ def test_large_upload_stays_in_memory() -> None:
 def test_grid_from_credential_subject_in_the_pdf_and_the_quick_view() -> bool:
     if _skip_without("test_grid_from_credential_subject_in_the_pdf_and_the_quick_view", "renderer"):
         return False
-    _upload_set()
-    page = client.get("/preview")
+    page = _post("/preview", _set())
     assert page.status_code == 200 and page.headers["content-type"].startswith("text/html"), page.text
     quick = html.unescape(page.text)
-    pdf = _pages("/preview.pdf")
+    pdf = _pages(_set())
     assert len(pdf) == 2, "page 1 the record, page 2 the QR"
     printed = pdf[0].extract_text()
     for shown, where in ((quick, "quick view"), (printed, "PDF")):
@@ -302,20 +369,32 @@ def test_grid_from_credential_subject_in_the_pdf_and_the_quick_view() -> bool:
     return True
 
 
+def test_two_visitors_each_preview_their_own_set() -> bool:
+    if _skip_without("test_two_visitors_each_preview_their_own_set", "renderer"):
+        return False
+    mine = _set(sample=("mine.json", _json({**SAMPLE, "credentialSubject": {**SUBJECT, "name": "Ada Mine"}})))
+    theirs = _set(sample=("theirs.json", _json({**SAMPLE, "credentialSubject": {**SUBJECT, "name": "Bo Theirs"}})))
+    for _ in range(2):  # interleaved, twice, so the second call of each would show a remembered set
+        for files, name, other in ((mine, "Ada Mine", "Bo Theirs"), (theirs, "Bo Theirs", "Ada Mine")):
+            quick = html.unescape(_post("/preview", files).text)
+            printed = _pages(files)[0].extract_text()
+            for shown in (quick, printed):
+                assert name in shown and other not in shown, (name, other)
+    return True
+
+
 def test_velocity_and_mapping_errors_answer_422_with_the_engines_message() -> bool:
     if _skip_without("test_velocity_and_mapping_errors_answer_422_with_the_engines_message", "renderer"):
         return False
-    _upload_set()
-    assert _upload(template=("bad.html", b"<p>ok</p>\n<p>#set($x = )</p>")).status_code == 200, "balanced, uploads"
+    bad = _set(template=("bad.html", b"<p>ok</p>\n<p>#set($x = )</p>"))  # balanced, so it passes the checks
     for path in ("/preview", "/preview.pdf"):
-        res = client.get(path)
+        res = _post(path, bad)
         assert res.status_code == 422, (path, res.status_code, res.text)
         assert "line 2" in res.json()["detail"], (path, "Velocity names the line", res.json())
 
-    _upload_set()
-    assert _upload(sample=("null.json", _json({**SUBJECT, "thesisTitle": None}))).status_code == 200
+    null = _set(sample=("null.json", _json({**SUBJECT, "thesisTitle": None})))
     for path in ("/preview", "/preview.pdf"):
-        res = client.get(path)
+        res = _post(path, null)
         assert res.status_code == 422, (path, res.status_code, res.text)
         assert "null for thesisTitle" in res.json()["detail"], (path, "the plugin's refusal", res.json())
     return True
@@ -331,10 +410,8 @@ def test_a_record_certify_refuses_answers_422_with_the_plugins_reason() -> bool:
                             "the Adapter's answer is not the expected JSON"),
     }
     for case, (sample, reason) in cases.items():
-        _upload_set()
-        assert _upload(sample=("refused.json", sample)).status_code == 200, case
         for path in ("/preview", "/preview.pdf"):
-            res = client.get(path)
+            res = _post(path, _set(sample=("refused.json", sample)))
             assert res.status_code == 422, (case, path, res.status_code, res.text)
             assert "adapter_error" in res.json()["detail"] and reason in res.json()["detail"], (case, res.json())
     return True
@@ -343,9 +420,7 @@ def test_a_record_certify_refuses_answers_422_with_the_plugins_reason() -> bool:
 def test_a_template_named_in_any_script_previews() -> bool:
     if _skip_without("test_a_template_named_in_any_script_previews", "renderer"):
         return False
-    _upload_set()
-    assert _upload(template=("ใบรับรอง.html", TEMPLATE.encode())).status_code == 200
-    res = client.get("/preview.pdf")
+    res = _post("/preview.pdf", _set(template=("ใบรับรอง.html", TEMPLATE.encode())))
     assert res.status_code == 200, res.text
     disposition = res.headers["content-disposition"]
     assert "filename*=UTF-8''" + quote("ใบรับรอง.pdf") in disposition, disposition
@@ -356,10 +431,9 @@ def test_a_template_named_in_any_script_previews() -> bool:
 def test_sample_without_credential_subject() -> bool:
     if _skip_without("test_sample_without_credential_subject", "renderer"):
         return False
-    _upload_set()
-    with_envelope = client.get("/preview").text
-    assert _upload(sample=("bare.json", _json(SUBJECT))).status_code == 200
-    assert client.get("/preview").text == with_envelope, "a bare record renders the same"
+    with_envelope = _post("/preview", _set()).text
+    assert _post("/preview", _set(sample=("bare.json", _json(SUBJECT)))).text == with_envelope, \
+        "a bare record renders the same"
     return True
 
 
@@ -429,28 +503,25 @@ def test_reflection_fails_in_the_print_template_and_the_vc_template() -> bool:
 def test_pdf_lays_the_background_under_page_one() -> bool:
     if _skip_without("test_pdf_lays_the_background_under_page_one", "renderer", "weasyprint"):
         return False
-    _upload_set()
-    plain = _pages("/preview.pdf")
+    plain = _pages(_set())
     assert "PAPERMARK" not in plain[0].extract_text()
 
-    assert _upload(background=("paper.pdf", _paper_pdf("PAPERMARK"))).status_code == 200
-    layered = _pages("/preview.pdf")
+    with_paper = _set(background=("paper.pdf", _paper_pdf("PAPERMARK")))
+    layered = _pages(with_paper)
     assert len(layered) == 2
     assert "PAPERMARK" in layered[0].extract_text(), "the background is under page 1"
     assert "Ada Example" in layered[0].extract_text(), "with the record over it"
     assert layered[1].extract_text() == plain[1].extract_text(), "page 2 prints clean"
-    assert "PAPERMARK" not in client.get("/preview").text
+    assert "PAPERMARK" not in _post("/preview", with_paper).text
     return True
 
 
 def test_background_with_its_own_rotation_comes_out_portrait() -> bool:
     if _skip_without("test_background_with_its_own_rotation_comes_out_portrait", "renderer", "weasyprint"):
         return False
-    _upload_set()
     paper = _paper_pdf("UPRIGHT")
     assert PdfReader(io.BytesIO(paper)).pages[0].rotation == 90
-    assert _upload(background=("paper.pdf", paper)).status_code == 200
-    page = _pages("/preview.pdf")[0]
+    page = _pages(_set(background=("paper.pdf", paper)))[0]
     assert float(page.mediabox.height) > float(page.mediabox.width), "portrait A4"
     assert "UPRIGHT" in page.extract_text(orientations=(0,)), "the paper reads upright, as a viewer shows it"
     return True
@@ -468,13 +539,16 @@ def main() -> None:
     before = _snapshot()
     tests: list[Callable[[], object]] = [
         test_health_and_dashboard,
-        test_starts_empty_and_asks_for_the_missing_files,
-        test_replace_one_slot,
-        test_remove_background_then_clear,
-        test_download_and_upload_back,
+        test_the_server_keeps_no_set,
+        test_every_call_asks_for_what_it_was_not_sent,
+        test_two_visitors_each_get_their_own_files,
+        test_download_and_read_back,
         test_rejects_wrong_files,
+        test_a_request_over_20_mb_is_refused,
+        test_one_visitors_slow_render_does_not_block_another,
         test_large_upload_stays_in_memory,
         test_grid_from_credential_subject_in_the_pdf_and_the_quick_view,
+        test_two_visitors_each_preview_their_own_set,
         test_velocity_and_mapping_errors_answer_422_with_the_engines_message,
         test_a_record_certify_refuses_answers_422_with_the_plugins_reason,
         test_a_template_named_in_any_script_previews,
