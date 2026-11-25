@@ -1,6 +1,6 @@
 # Credential templates in VC Lab
 
-How a credential's printed copy is built from four files, and what to change when a box needs new data. VC Lab ([`src/vc-lab/`](../../src/vc-lab/README.md)) previews the result and exports it as a PDF.
+How a credential's printed copy is built from four files, and what to change when a box needs new data. VC Lab ([`src/vc-lab/`](../../src/vc-lab/README.md)) previews the result as the PDF the Wallet prints.
 
 ## How a value reaches the page
 
@@ -10,16 +10,16 @@ SIS response ──(credential file: vc_template)──► claims ──(templat
 ```
 
 1. **Certify** reads the Adapter's (SIS's) response and fills its credential file's `vc_template` with it (Apache Velocity). The right side names a field of the response (`${studentId}`); the left side is the claim name the issued credential carries (`registrationNo`).
-2. **Mimoto**, the Wallet's backend, prints the credential with the template (Apache Velocity again). Each `#claimValue("registrationNo")` is replaced by that claim's value from the issued credential. The key inside the brackets is a **claim name**, the left side of the mapping, never a SIS field name.
-3. **VC Lab** imitates both steps from the uploaded files (`src/vc-lab/template_engine.py`), so a template can be checked without issuing anything.
+2. **`ait-mimoto`**, the Wallet's printer, prints the credential with the template (Apache Velocity again). The template gets each claim as `$rowProperties` (claim name → {display name: text}) and the claims whole as `$credentialSubject`. `#claimValue("registrationNo")` is a macro the template defines over `$rowProperties`; the key inside the brackets is a **claim name**, the left side of the mapping, never a SIS field name.
+3. **VC Lab** runs both steps in its renderer ([`src/renderer/`](../../src/renderer/README.md)), its own copy of Certify's mapping and `ait-mimoto`'s print code, so a template can be checked without issuing anything.
 
 ## The four files
 
 | File | Extension | What it is | What it gives | If missing |
 |---|---|---|---|---|
-| Template | `.html`, A4 | HTML with Velocity: `#claimValue("name")` for a value, `#foreach` for a table, `#if`/`#else` | the page layout | nothing renders |
-| Credential file | `.json` | Certify's credential file (as in `deploy/<installation>/certify/credentials/`); `vc_template.credentialSubject` is the mapping | the claims, plus the title, logo and colours from `display` | nothing renders |
-| Data (the API's `sample`) | `.json` | one record, exactly as the Adapter sends it, with or without a `credentialSubject` envelope | the values | nothing renders; a field it lacks prints empty |
+| Template | `.html`, A4 | HTML with Velocity: `#claimValue("name")` (a macro it defines) for a value, `#foreach` over `$credentialSubject` for a table, `#if`/`#else` | the page layout | nothing renders |
+| Credential file | `.json` | Certify's credential file (as in `deploy/<installation>/certify/credentials/`); `vc_template.credentialSubject` is the mapping | the claims, plus the title and colours from `display` | nothing renders |
+| Data (the API's `sample`) | `.json` | one record, exactly as the Adapter sends it, with or without a `credentialSubject` envelope | the values | nothing renders; a field it lacks prints as the mapping's text (`${field}`), as in Certify |
 | Background | `.pdf`, A4 | the pre-printed paper (watermark, seal, signature, image); page 1, fitted on portrait A4 | the paper under page 1 of the PDF | optional: the PDF is the text alone, for pre-printed paper |
 
 The background may be confidential and VC Lab has no login: upload it only on a VC Lab on your own machine, and never commit it.
@@ -31,16 +31,18 @@ The background may be confidential and VC Lab has no login: upload it only on a 
 3. **The context:** a new claim name needs a term in the installation's JSON-LD context (`deploy/<installation>/vdr/contexts/`), which lists every claim. Keep today's claim names where possible.
 4. **SIS:** if the response has no field for it, the box stays empty until the Adapter team adds one. Ask in their field names.
 
-Check it in VC Lab with data that has the field, in both views.
+Check it in VC Lab with data that has the field.
 
-## Lab and Wallet views
+## The PDF and the quick view
 
-- **Lab** loops over lists, so `#foreach($t in $courses)` draws the course table.
-- **Wallet** prints what Mimoto 0.21 prints: every list claim reaches the template as empty, so loops draw nothing. Give every loop an `#else` with a text fallback (for the transcript, a `courseList` text claim). Without that fallback's source, the Wallet copy has an empty table.
+- **PDF, what the Wallet prints:** iText lays out the evaluated template, as `ait-mimoto` does. This is the reference.
+- **HTML, quick view:** the same evaluated template, laid out by your browser. The layout can differ from iText's, and the browser can load addresses the PDF doesn't (see Known limits).
 
-## Known limits (2026-11-19)
+A course table loops over the claim as a list: `#foreach($t in $credentialSubject.courses)`. Only `ait-mimoto` gives `$credentialSubject`; upstream Mimoto doesn't, so a template meant for both keeps an `#else` with a text fallback.
 
-- **Certify takes only flat fields.** Its data-provider plugin passes the Adapter's top-level fields and lists named in `mosip.certify.adapter.structured-keys` (default `courses`); it refuses nested objects and does not unwrap `credentialSubject`. VC Lab accepts both, so a mapping that reads `${thesis.title}` or SIS's enveloped response works in VC Lab but not yet in Certify.
+## Known limits (2026-11-25)
+
+- **Certify takes only flat fields.** Its data-provider plugin passes the Adapter's top-level fields and lists named in `mosip.certify.adapter.structured-keys` (default `courses`); it refuses nested objects, `null`s, keys Certify reserves (`id`, `validFrom`, ...) and JSON that isn't strict (a duplicate key). The renderer refuses the same, with the reason, so a mapping that reads `${thesis.title}` fails in VC Lab as in Certify.
 - **Numbers print as sent.** A credit sent as `3.0` prints `3.0`.
-- **No Mimoto in the local stack**, so the Wallet view is VC Lab's imitation; no real Wallet PDF is checked.
+- **The PDF loads only the set.** iText draws `data:` URIs and the set's files at their VDR address (`http://vdr.localhost/templates/<any folders>/background.png` is the uploaded Background). An image, font or stylesheet the template loads from any other address fails the preview with 422 naming the address. `$logoUrl` is empty, and `<img src="$logoUrl">` draws nothing without an error: the logo belongs in the background. The quick view is your browser's and may still load addresses iText ignores (an `@import`, a `srcset`), so trust the PDF.
 - **Issuing with a credential file from VC Lab:** run the sync tool with its folder mounted; see [VC Lab's README](../../src/vc-lab/README.md#issuing-with-a-credential-file-from-vc-lab).

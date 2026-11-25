@@ -1,9 +1,9 @@
-"""The hard copy's PDF: rendered template HTML over an optional background page.
+"""The hard copy's background page, laid under the PDF the renderer prints.
 
 Part of the vc-lab module. An organisation may print its transcript on pre-printed paper (a watermark, a seal,
 a signature). Uploaded as a PDF, that paper becomes the background: page 1 of the upload, its own /Rotate and
-crop box respected, fitted once onto a portrait A4 page and never redrawn. render_pdf lays it under page 1 of
-the rendered template. The Admin Portal's hard copy can call render_pdf the same way.
+crop box respected, fitted once onto a portrait A4 page and never redrawn. lay_background lays it under page 1
+of the rendered PDF.
 """
 
 from __future__ import annotations
@@ -44,14 +44,8 @@ def make_background(filename: str, data: bytes) -> bytes:
     return _bytes(writer)
 
 
-def render_pdf(html: str, background: bytes | None = None) -> bytes:
-    """Render template HTML to PDF; a background page (from make_background) goes under page 1 only."""
-    from weasyprint import HTML  # imported here: it needs Pango, which only the container is sure to have
-
-    rendered = HTML(string=html).write_pdf()
-    if background is None:
-        return rendered
-
+def lay_background(rendered: bytes, background: bytes) -> bytes:
+    """The rendered PDF with a background page (from make_background) under page 1 only."""
     writer = PdfWriter()
     for i, page in enumerate(PdfReader(io.BytesIO(rendered)).pages):
         if i == 0:

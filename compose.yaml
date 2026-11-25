@@ -8,6 +8,7 @@
 # 4. Inji Web Wallet UI      (compose.web-wallet.yaml)
 # 5. Trust Registry (VDR/VCGA)(compose.trust.yaml)
 # 6. Traefik Ingress Router  (compose.traefik.yaml)
+# 7. VC Lab and its renderer (below)
 #
 # For local development with stand-in mock dependencies (Keycloak & Mock SIS):
 #   docker compose -f compose.yaml -f compose.mock.yaml up -d
@@ -32,6 +33,7 @@ services:
     container_name: vc-lab
     environment:
       - INSTALLATION=${INSTALLATION}
+      - RENDERER_URL=http://renderer:8080
       - CREDENTIALS_DIR=/app/credentials
       - CONTEXTS_DIR=/app/vdr/contexts
       - ASSETS_DIR=/app/vdr/assets
@@ -47,3 +49,34 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.vclab.rule=${TRAEFIK_VCLAB_RULE}"
       - "traefik.http.services.vclab.loadbalancer.server.port=4200"
+      - "traefik.docker.network=${COMPOSE_PROJECT_NAME}_default"  # Traefik isn't on the renderer's network
+    networks:
+      - default
+      - renderer-network
+    depends_on: [renderer]  # started first, not awaited: VC Lab answers 502 while the renderer is down
+
+  # VC Lab's own copy of ait-mimoto's print code and Certify's mapping (src/renderer, ADR 0002). It runs whatever
+  # template VC Lab is sent, so the container is the boundary: a network marked internal that only VC Lab shares
+  # (no route out, nothing else to reach), no secrets, no volumes, a read-only filesystem.
+  renderer:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.renderer
+    image: ghcr.io/mosip-asia/ait-renderer:${IMAGE_TAG}
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped  # back after a template calls Runtime.exit, or the memory limit kills it
+    mem_limit: 1g
+    pids_limit: 128
+    networks:
+      - renderer-network
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 2s
+      retries: 30
+
+networks:
+  renderer-network:
+    name: ${COMPOSE_PROJECT_NAME}-renderer-net
+    internal: true

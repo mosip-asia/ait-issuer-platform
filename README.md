@@ -64,7 +64,7 @@ Under [RFC 6761](https://tools.ietf.org/html/rfc6761), every modern operating sy
 | Service | Clean Local URL (`*.localhost`) | Internal Port | Role & Capabilities |
 |---|---|---|---|
 | **Traefik Dashboard** | [http://traefik.localhost](http://traefik.localhost) (or [http://localhost:8088](http://localhost:8088)) | `8080` | Live edge ingress routing rules & container health |
-| **VC Lab Studio** | [http://lab.localhost](http://lab.localhost) | `4200` | Preview of an uploaded Velocity template (Lab and Wallet views), hard-copy PDF export |
+| **VC Lab Studio** | [http://lab.localhost](http://lab.localhost) | `4200` | Preview of an uploaded Velocity template as the PDF the Wallet prints, with an HTML quick view (through its renderer, `src/renderer/`) |
 | **Student Portal** | [http://portal.localhost/student/login](http://portal.localhost/student/login) | `4100` | Student requests transcript & ID credentials |
 | **Registrar Portal** | [http://portal.localhost/registrar/login](http://portal.localhost/registrar/login) | `4100` | Academic registrar clearance approval & revocation |
 | **Inji Web Wallet** | [http://wallet.localhost](http://wallet.localhost) | `3004` | Holder digital wallet to claim, view, and export credentials |
@@ -121,7 +121,7 @@ Run the post-deployment smoke test anytime:
 When adding or styling a new credential:
 1. Open the **VC Lab Studio** dashboard at [http://lab.localhost](http://lab.localhost).
 2. Upload a template, a credential file and a sample Adapter response (see [`src/vc-lab/README.md`](./src/vc-lab/README.md)); nothing is built in.
-3. Preview live in the browser with a mock QR code, switch to the Wallet view, and export the hard copy as a PDF.
+3. Preview the PDF the Wallet prints (a placeholder QR code), or the HTML quick view while iterating.
 
 ### Inner Loop 2: Fast SPI Plugin Development (`src/issuer/`)
 When modifying the Java SPI Data-Provider Plugin (`src/issuer/`):
@@ -356,8 +356,7 @@ python3 tests/test_inji_web_vc_readiness.py
 .venv/bin/python src/gateway/tests/test_credential_types.py
 .venv/bin/python src/gateway/tests/test_evaluations.py
 .venv/bin/python src/portal/test_requests.py
-.venv/bin/python src/vc-lab/test_main.py
-.venv/bin/python src/vc-lab/test_template_engine.py
+.venv/bin/python src/vc-lab/test_main.py   # the preview tests skip without RENDERER_URL
 
 # Run Java plugin unit tests:
 cd src/issuer && mvn test
@@ -365,7 +364,7 @@ cd src/issuer && mvn test
 
 | Module | Test Target | What It Verifies |
 |---|---|---|
-| **VC Lab** | `src/vc-lab/test_main.py`, `test_template_engine.py` | FastAPI dashboard, Velocity template engine, PNG QR generator |
+| **VC Lab** | `src/vc-lab/test_main.py` | FastAPI dashboard and API; the preview through the renderer (when `RENDERER_URL` is set) |
 | **Gateway** | `src/gateway/tests/test_credential_types.py` | Credential clearance rules, hold checks, zero balance, conferral predicates |
 | **Gateway** | `src/gateway/tests/test_evaluations.py` | In-process evaluation of `POST /evaluations` across all installation personas |
 | **Issuer Plugin** | `src/issuer/` (`mvn test`) | SPI `fetchData()` contract, HTTP retry/timeouts, strict JSON escaping, trace keys |

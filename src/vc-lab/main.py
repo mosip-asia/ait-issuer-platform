@@ -1,36 +1,38 @@
-"""VC Lab: render a credential template from uploaded files, and export its hard copy as a PDF.
+"""VC Lab: preview a credential template as the PDF the Wallet prints, from uploaded files.
 
 VC Lab knows nothing about any organisation and reads nothing from the repo. The user uploads one set (the
-template, Certify's credential file, the Adapter's sample response and an optional background PDF); VC Lab
-holds it in memory only and forgets it on restart. See README.md.
+template, Certify's credential file, the Adapter's sample response and an optional background PDF); the dashboard
+holds it in the browser and sends it with every call, so the server keeps nothing. The renderer (src/renderer, at RENDERER_URL) maps the sample
+as Certify does and prints it as ait-mimoto does. See README.md.
 
-Usage:
-    python3 src/vc-lab/main.py
+Usage (src/ on PYTHONPATH, as the image has it, for template-sync's vc_template transform):
+    PYTHONPATH=src RENDERER_URL=http://localhost:8080 python3 src/vc-lab/main.py
 """
 
 from __future__ import annotations
 
-import dataclasses
+import base64
 import os
 from pathlib import Path
 from typing import Any, AsyncGenerator, Literal
+from urllib.parse import quote
 
-from fastapi import FastAPI, HTTPException, Query, Request
+import httpx
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
+from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 from starlette.formparsers import MultiPartException, MultiPartParser
 
 import hardcopy
 import labset
-import template_engine
+from certify_template_sync.sync import build_vc_template_base64
 from labset import MAX_UPLOAD, LabSet
 
-app = FastAPI(title="VC Lab", description="Render a credential template from uploaded files", version="0.2.0")
+app = FastAPI(title="VC Lab", description="Render a credential template from uploaded files", version="0.3.0")
 
-# The one set, replaced whole on every change. Memory only, on purpose: see the README's note on backgrounds.
-_lab = LabSet()
-
-View = Literal["lab", "wallet"]
+# The renderer, VC Lab's own copy of ait-mimoto's print code and Certify's mapping (src/renderer). Compose sets it.
+RENDERER_URL = os.environ.get("RENDERER_URL", "").rstrip("/")
 
 
 class _InMemoryParser(MultiPartParser):
@@ -45,80 +47,107 @@ def health() -> dict[str, str]:
     return {"status": "UP", "service": "vc-lab"}
 
 
-@app.post("/api/set")
-async def upload(request: Request) -> dict[str, Any]:
-    """Multipart: any of template, credential, sample, background (each replaces its slot), or one bundle (a zip
-    from /download, which replaces the whole set)."""
-    global _lab
-    files = await _read_files(request)
+# The body is read on the event loop; everything after it (parsing, the renderer call, the PDF and zip work) blocks,
+# so it runs in the threadpool, and one visitor's slow render never holds up another's request.
+
+
+@app.post("/preview", response_class=HTMLResponse)
+async def preview(request: Request) -> HTMLResponse:
+    """The quick view: the HTML the renderer hands iText. Never with the background: the PDF is where it shows."""
+    files = await _read_files(request, labset.SLOTS)
+    return await run_in_threadpool(_preview, files)
+
+
+def _preview(files: dict[str, tuple[str, bytes]]) -> HTMLResponse:
+    return HTMLResponse(_render(_parse_set(files), "html").decode("utf-8"))
+
+
+@app.post("/preview.pdf")
+async def preview_pdf(request: Request) -> Response:
+    """What the Wallet prints: the renderer's PDF, with the background under page 1 when one is sent."""
+    files = await _read_files(request, labset.SLOTS)
+    return await run_in_threadpool(_preview_pdf, files)
+
+
+def _preview_pdf(files: dict[str, tuple[str, bytes]]) -> Response:
+    lab = _parse_set(files)
+    pdf = _render(lab, "pdf")
+    if lab.background:
+        pdf = hardcopy.lay_background(pdf, lab.background.value)
+    # RFC 6266: filename* carries a name in any script (a Thai template name); filename is its ASCII stand-in.
+    name = f"{Path(lab.template.filename).stem}.pdf"
+    ascii_name = name.encode("ascii", "replace").decode("ascii").replace("?", "_")
+    disposition = f"inline; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(name)}"
+    return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": disposition})
+
+
+@app.post("/download")
+async def download(request: Request) -> Response:
+    """The set sent, as a zip (template/, credential/, sample/, background/), each file as uploaded."""
+    files = await _read_files(request, labset.SLOTS)
+    return await run_in_threadpool(_download, files)
+
+
+def _download(files: dict[str, tuple[str, bytes]]) -> Response:
+    headers = {"Content-Disposition": 'attachment; filename="vc-lab-set.zip"'}
+    return Response(labset.to_zip(_parse_set(files)), media_type="application/zip", headers=headers)
+
+
+@app.post("/api/bundle")
+async def bundle(request: Request) -> dict[str, dict[str, str]]:
+    """A zip from /download in, its files out ({slot: {filename, data}}, data in base64), for the dashboard to hold."""
+    files = await _read_files(request, ("bundle",))
+    return await run_in_threadpool(_bundle, files)
+
+
+def _bundle(files: dict[str, tuple[str, bytes]]) -> dict[str, dict[str, str]]:
+    if set(files) != {"bundle"}:
+        raise HTTPException(status_code=400, detail="send a bundle on its own, as the bundle field")
     try:
-        if "bundle" in files:
-            if len(files) > 1:
-                raise ValueError("send a bundle on its own, without other files")
-            new = labset.from_zip(files["bundle"][1])
-        else:
-            new = _lab.replace(files)
+        unpacked = labset.unzip(files["bundle"][1])
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    _lab = new
-    return _status()
+    return {slot: {"filename": name, "data": base64.b64encode(data).decode("ascii")}
+            for slot, (name, data) in unpacked.items()}
 
 
-@app.get("/api/set")
-def get_set() -> dict[str, Any]:
-    return _status()
+def _parse_set(files: dict[str, tuple[str, bytes]]) -> LabSet:
+    """The set a request carries, each file checked. The server keeps nothing of it."""
+    try:
+        return LabSet.from_files(files)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
-
-@app.delete("/api/set")
-def clear_set() -> dict[str, Any]:
-    global _lab
-    _lab = LabSet()
-    return _status()
-
-
-@app.delete("/api/set/background")
-def remove_background() -> dict[str, Any]:
-    global _lab
-    _lab = dataclasses.replace(_lab, background=None)
-    return _status()
-
-
-@app.get("/preview", response_class=HTMLResponse)
-def preview(view: View = Query("lab")) -> HTMLResponse:
-    """The rendered template as HTML. Never with the background: the PDF is where the background shows."""
-    return HTMLResponse(_render(_lab, view))
-
-
-@app.get("/export.pdf")
-def export_pdf(view: View = Query("lab")) -> Response:
-    """The rendered template as a PDF, with the background under page 1 when one is loaded."""
-    lab = _lab  # one set for the whole request, even if an upload replaces it meanwhile
-    html = _render(lab, view)
-    pdf = hardcopy.render_pdf(html, lab.background.value if lab.background else None)
-    name = f"{Path(lab.template.filename).stem}-{view}.pdf"
-    return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{name}"'})
-
-
-@app.get("/download")
-def download() -> Response:
-    """The set as a zip (template/, credential/, sample/, background/), each file as uploaded."""
-    headers = {"Content-Disposition": 'attachment; filename="vc-lab-set.zip"'}
-    return Response(labset.to_zip(_lab), media_type="application/zip", headers=headers)
-
-
-def _status() -> dict[str, Any]:
-    return {"loaded": _lab.loaded(), "missing": _lab.missing()}
-
-
-def _render(lab: LabSet, view: View) -> str:
+def _render(lab: LabSet, output: Literal["html", "pdf"]) -> bytes:
+    """The renderer's one evaluation of the set: the HTML it hands iText, or the PDF iText makes of it.
+    Its 400 (a request it can't read) and 422 (a template or mapping that fails) reach the caller with its message."""
     if missing := lab.missing():
         raise HTTPException(status_code=409, detail=f"upload these first: {', '.join(missing)}")
-    return template_engine.render_credential(
-        lab.template.value, lab.credential.value, lab.sample.value, wallet=view == "wallet"
-    )
+    if not RENDERER_URL:
+        raise HTTPException(status_code=503, detail="VC Lab has no renderer: set RENDERER_URL (Compose sets it)")
+    request = {
+        "template": lab.template.value,
+        # The Adapter's answer as uploaded, so the renderer reads it as the plugin does (strict JSON). An answer with
+        # a credentialSubject object is read as that object.
+        "record": lab.sample.data.decode("utf-8-sig"),
+        # The vc_template through template-sync's own transform: the text Certify stores and evaluates.
+        "vcTemplate": base64.b64decode(build_vc_template_base64(lab.credential.value["vc_template"])).decode("utf-8"),
+        "credentialFile": lab.credential.value,
+        "locale": "en",
+        "output": output,
+    }
+    try:
+        res = httpx.post(f"{RENDERER_URL}/render", json=request, timeout=120)
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"the renderer at {RENDERER_URL} can't be reached: {e}")
+    if res.status_code in (400, 422):
+        raise HTTPException(status_code=res.status_code, detail=res.json()["error"])
+    if res.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"the renderer answered {res.status_code}: {res.text}")
+    return res.content
 
 
-async def _read_files(request: Request) -> dict[str, tuple[str, bytes]]:
+async def _read_files(request: Request, fields: tuple[str, ...]) -> dict[str, tuple[str, bytes]]:
     """The request's files as {field: (filename, data)}, read into memory and capped at MAX_UPLOAD."""
     body = bytearray()
     async for chunk in request.stream():
@@ -135,9 +164,9 @@ async def _read_files(request: Request) -> dict[str, tuple[str, bytes]]:
         raise HTTPException(status_code=400, detail=f"expected a multipart file upload: {e}")
     files: dict[str, tuple[str, bytes]] = {}
     for field, value in form.multi_items():
-        if field not in (*labset.SLOTS, "bundle") or not isinstance(value, UploadFile):
-            fields = ", ".join((*labset.SLOTS, "bundle"))
-            raise HTTPException(status_code=400, detail=f"unexpected field {field!r}; send files as {fields}")
+        if field not in fields or not isinstance(value, UploadFile):
+            raise HTTPException(status_code=400,
+                                detail=f"unexpected field {field!r}; send files as {', '.join(fields)}")
         if field in files:
             raise HTTPException(status_code=400, detail=f"more than one {field} file")
         files[field] = (value.filename or field, await value.read())
@@ -196,8 +225,8 @@ _DASHBOARD = """<!DOCTYPE html>
         <h2>The set</h2>
         <div class="slot">
           <b>Template</b> <span class="ext">.html (A4)</span>
-          <div class="hint">The layout: HTML where the data is placed. Each <code>#claimValue("name")</code> is filled with
-            that claim.</div>
+          <div class="hint">The layout: HTML with Velocity, given what <code>ait-mimoto</code> gives it
+            (<code>$rowProperties</code>, <code>$credentialSubject</code>, <code>$titleName</code>, ...).</div>
           <div class="pick"><label>Choose file<input type="file" hidden data-field="template" accept=".html,.htm,.vm,text/html"></label>
             <span class="file" data-slot="template"></span></div>
         </div>
@@ -217,12 +246,12 @@ _DASHBOARD = """<!DOCTYPE html>
         <div class="slot">
           <b>Background</b> <span class="ext">.pdf (A4)</span>
           <div class="hint">The pre-printed paper (watermark, seal, signature, image); page 1 is used. It shows only in
-            Export PDF.</div>
+            the PDF.</div>
           <div class="pick"><label>Choose file<input type="file" hidden data-field="background" accept=".pdf,application/pdf"></label>
             <span class="file" data-slot="background"></span></div>
         </div>
         <div class="warn">A background may be confidential. VC Lab has no login: upload one only on your own machine.
-          It is kept in memory and forgotten on restart.</div>
+          Your files stay in this page, and go to the server only with each preview. Reloading the page forgets them.</div>
         <div class="slot">
           <b>Or a whole set</b> <span class="ext">.zip</span>
           <div class="hint">A zip from Download. It replaces all four files.</div>
@@ -230,7 +259,7 @@ _DASHBOARD = """<!DOCTYPE html>
         </div>
         <div id="error"></div>
         <div class="row">
-          <button id="exportPdf">Export PDF</button>
+          <button id="exportPdf">Open PDF</button>
           <button id="download">Download</button>
         </div>
         <div class="row">
@@ -243,8 +272,8 @@ _DASHBOARD = """<!DOCTYPE html>
       <div class="viewer-head">
         <h2 style="margin:0">Preview</h2>
         <div class="views">
-          <label><input type="radio" name="view" value="lab" checked> Lab</label>
-          <label><input type="radio" name="view" value="wallet"> Wallet (as Mimoto prints it)</label>
+          <label><input type="radio" name="output" value="/preview.pdf" checked> PDF: what the Wallet prints</label>
+          <label><input type="radio" name="output" value="/preview"> HTML: quick view</label>
         </div>
       </div>
       <div class="note" id="backgroundNote"></div>
@@ -254,62 +283,114 @@ _DASHBOARD = """<!DOCTYPE html>
     </div>
   </main>
   <script>
-    const view = () => document.querySelector('input[name=view]:checked').value;
+    // The set lives here, in this page's memory: {slot: File}. Every call carries all of it; the server keeps none.
+    // A reload loses it, so leaving asks first while any file is loaded.
+    let set = {};
+    let seen = 0;        // the latest preview asked for; an older answer that arrives late is dropped
+    let shownUrl = null; // the blob the preview frame shows
+    const output = () => document.querySelector('input[name=output]:checked').value;
     const showError = (text) => { document.getElementById('error').textContent = text || ''; };
+    const missing = () => ['template', 'credential', 'sample'].filter(slot => !set[slot]);
+    const form = () => { const f = new FormData(); for (const [slot, file] of Object.entries(set)) f.append(slot, file, file.name); return f; };
 
-    const VIEW_HINTS = {
-      lab: 'Lab: lists are drawn.',
-      wallet: 'Wallet: as Mimoto prints it. Lists come through empty, so loops show their #else.',
+    const OUTPUT_HINTS = {
+      '/preview.pdf': 'The PDF the Wallet prints: the sample mapped as Certify maps it, printed as ait-mimoto prints it.',
+      '/preview': 'A quick view: the same HTML the PDF is printed from, laid out by your browser. Trust the PDF.',
     };
     const NAMES = {template: 'template', credential: 'credential file', sample: 'data'};
 
-    async function show(status) {
-      for (const el of document.querySelectorAll('[data-slot]')) {
-        const name = status.loaded[el.dataset.slot];
-        el.textContent = name ? '\\u2713 ' + name : 'not loaded';
-        el.className = 'file ' + (name ? 'set' : 'none');
-      }
-      const background = status.loaded.background;
-      const note = document.getElementById('backgroundNote');
-      note.className = 'note' + (background ? ' strong' : '');
-      note.textContent = background
-        ? 'Background loaded (' + background + '). It shows only in Export PDF, not here.'
-        : 'This preview never shows the background. Export PDF does.';
-      document.getElementById('viewHint').textContent = VIEW_HINTS[view()];
-      const ready = status.missing.length === 0;
-      document.getElementById('exportPdf').disabled = !ready;
-      document.getElementById('removeBackground').disabled = !status.loaded.background;
-      document.getElementById('empty').textContent = ready ? '' : 'Upload these to see the preview: ' + status.missing.map(s => NAMES[s]).join(', ') + '.';
-      const frame = document.getElementById('preview');
-      frame.hidden = !ready;
-      if (ready) frame.src = '/preview?view=' + view() + '&t=' + Date.now();
+    window.addEventListener('beforeunload', (event) => {
+      if (Object.keys(set).length) { event.preventDefault(); event.returnValue = ''; }
+    });
+
+    async function post(url) {
+      const res = await fetch(url, {method: 'POST', body: form()});
+      if (res.ok) return res;
+      const data = await res.json().catch(() => ({}));
+      throw new Error(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail || res.statusText));
     }
 
-    async function call(method, url, body) {
-      const res = await fetch(url, {method, body});
-      const data = await res.json();
-      if (!res.ok) { showError(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)); return; }
-      showError('');
-      await show(data);
+    async function show() {
+      for (const el of document.querySelectorAll('[data-slot]')) {
+        const file = set[el.dataset.slot];
+        el.textContent = file ? '✓ ' + file.name : 'not loaded';
+        el.className = 'file ' + (file ? 'set' : 'none');
+      }
+      const note = document.getElementById('backgroundNote');
+      note.className = 'note' + (set.background ? ' strong' : '');
+      note.textContent = set.background
+        ? 'Background loaded (' + set.background.name + '). It shows only in the PDF, not in the quick view.'
+        : 'The quick view never shows the background. The PDF does.';
+      document.getElementById('viewHint').textContent = OUTPUT_HINTS[output()];
+      const need = missing();
+      document.getElementById('exportPdf').disabled = need.length > 0;
+      document.getElementById('download').disabled = Object.keys(set).length === 0;
+      document.getElementById('removeBackground').disabled = !set.background;
+      document.getElementById('empty').textContent = need.length ? 'Upload these to see the preview: ' + need.map(s => NAMES[s]).join(', ') + '.' : '';
+      const frame = document.getElementById('preview');
+      frame.hidden = need.length > 0;
+      const mine = ++seen; // even when incomplete, so a preview still in flight is dropped when it lands
+      if (need.length) return;
+      try {
+        const blob = await (await post(output())).blob();
+        if (mine !== seen) return;
+        showError('');
+        if (shownUrl) URL.revokeObjectURL(shownUrl);
+        shownUrl = URL.createObjectURL(blob);
+        frame.src = shownUrl;
+      } catch (e) {
+        if (mine !== seen) return;
+        showError(e.message);
+        frame.hidden = true; // never leave the previous set's preview under the error
+        frame.removeAttribute('src');
+        if (shownUrl) URL.revokeObjectURL(shownUrl);
+        shownUrl = null;
+      }
     }
 
     for (const input of document.querySelectorAll('input[type=file]')) {
       input.addEventListener('change', async () => {
-        if (!input.files[0]) return;
-        const form = new FormData();
-        form.append(input.dataset.field, input.files[0]);
-        await call('POST', '/api/set', form);
+        const file = input.files[0];
         input.value = '';
+        if (!file) return;
+        if (input.dataset.field === 'bundle') {
+          try {
+            const res = await fetch('/api/bundle', {method: 'POST', body: (() => { const f = new FormData(); f.append('bundle', file); return f; })()});
+            const data = await res.json();
+            if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail));
+            set = {};
+            for (const [slot, f] of Object.entries(data)) {
+              const bytes = Uint8Array.from(atob(f.data), c => c.charCodeAt(0));
+              set[slot] = new File([bytes], f.filename);
+            }
+          } catch (e) { showError(e.message); return; }
+        } else {
+          set[input.dataset.field] = file;
+        }
+        showError('');
+        await show();
       });
     }
-    for (const radio of document.querySelectorAll('input[name=view]')) {
-      radio.addEventListener('change', () => call('GET', '/api/set'));
-    }
-    document.getElementById('exportPdf').onclick = () => window.open('/export.pdf?view=' + view(), '_blank');
-    document.getElementById('download').onclick = () => { window.location = '/download'; };
-    document.getElementById('removeBackground').onclick = () => call('DELETE', '/api/set/background');
-    document.getElementById('clear').onclick = () => call('DELETE', '/api/set');
-    call('GET', '/api/set');
+    for (const radio of document.querySelectorAll('input[name=output]')) radio.addEventListener('change', show);
+    document.getElementById('exportPdf').onclick = async () => {
+      const tab = window.open('', '_blank'); // opened now, while the click still counts, filled when the PDF is back
+      try {
+        const blob = await (await post('/preview.pdf')).blob();
+        tab.location = URL.createObjectURL(blob);
+      } catch (e) { tab.close(); showError(e.message); }
+    };
+    document.getElementById('download').onclick = async () => {
+      try {
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(await (await post('/download')).blob());
+        link.download = 'vc-lab-set.zip';
+        link.click();
+        URL.revokeObjectURL(link.href);
+      } catch (e) { showError(e.message); }
+    };
+    document.getElementById('removeBackground').onclick = () => { delete set.background; show(); };
+    document.getElementById('clear').onclick = () => { set = {}; showError(''); show(); };
+    show();
   </script>
 </body>
 </html>"""

@@ -1,0 +1,22 @@
+# ==============================================================================
+# The renderer: VC Lab's preview, printed the way Mimoto 0.21 prints (src/renderer/README.md)
+# ==============================================================================
+# Stage 1: build the jar and gather its libraries (no Java or Maven on the host)
+FROM maven:3.9-eclipse-temurin-21 AS builder
+WORKDIR /build
+COPY src/renderer/pom.xml .
+RUN mvn -q -B dependency:go-offline
+COPY src/renderer/src ./src
+RUN mvn -q -B package -DskipTests
+
+# Stage 2: the service, on the same Java as Mimoto 0.21's image (Temurin 21)
+FROM eclipse-temurin:21-jre
+WORKDIR /app
+COPY --from=builder /build/target/renderer.jar /app/renderer.jar
+COPY --from=builder /build/target/lib /app/lib
+USER 1000
+EXPOSE 8080
+# -XX:-UsePerfData: the JVM writes nothing under /tmp, so the container can run with a read-only filesystem.
+# -Xmx640m: a fixed heap that fits compose.yaml's 1 GB mem_limit with room for the JVM's own memory, and that a
+# docker run without a limit can't grow past (src/renderer/README.md, "Limits").
+CMD ["java", "-XX:-UsePerfData", "-Xmx640m", "-Djava.awt.headless=true", "-cp", "/app/renderer.jar:/app/lib/*", "asia.mosip.renderer.RendererServer"]
