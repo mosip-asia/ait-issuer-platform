@@ -72,13 +72,11 @@ sample/<name>.json                                      <name> is the uploaded s
 - Load Package accepts exactly this layout and turns the manifest's VDR address back into `http://vdr.localhost` in the template and the credential file. The set previews the same as the one exported; it is not byte-identical (`cdn.localhost` is `vdr.localhost` again, and `background_image.uri` stays set).
 - Placing the files stays by hand. Mimoto reads the template under a fixed name, `<issuer>-<config id>-template.html`, so copy `template.html` to that name until a version pointer exists.
 
-To issue with the credential file, put it in a folder outside git and run the sync tool with that folder mounted; it replaces the stored version by its key:
+Placing a Package on the local stack, printing it from the Wallet and comparing the print with VC Lab's PDF is section 6 of [Print from the Wallet](../../docs/guides/print-from-the-wallet.md): the credential file goes in through template-sync, and Certify serves it once recreated. Placing one on dev is that guide's "Running it on dev", item 9.
 
-```bash
-docker compose run --rm -v <folder>:/app/config/credentials:ro template-sync
-```
+## Templates the preview refuses
 
-Not checked yet: whether Certify needs a restart to pick up the new version.
+The renderer loads only `data:` URIs and the set's files, so a template that loads anything else by address, a font from the VDR included (`@font-face` with `http://vdr.localhost/templates/fonts/...`), answers 422 naming it, though the Wallet would print it. Use the 14 built-in fonts in a template you preview here. A template that calls a method on Java's reflection or system classes prints the call as written, in the preview and in the Wallet alike (both run Velocity with `SecureUberspector`).
 
 ## Running
 
