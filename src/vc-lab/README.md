@@ -4,7 +4,7 @@ VC Lab previews a credential's HTML template from files you upload as the PDF th
 
 ## The set
 
-What each file is, and how a value travels from SIS to the page, is in [the template guide](../../docs/guides/vc-lab-templates.md). VC Lab works on one set of files at a time, held in memory and forgotten on restart:
+What each file is, and how a value travels from SIS to the page, is in [the template guide](../../docs/guides/vc-lab-templates.md). The set lives in the browser: the dashboard holds the files in page memory and sends all of them with every call. The server keeps nothing between calls, so two visitors never see each other's files, and no endpoint returns a set (a reload forgets it; the dashboard asks before leaving while a set is loaded):
 
 | Slot | File | What VC Lab reads from it |
 |---|---|---|
@@ -13,7 +13,7 @@ What each file is, and how a value travels from SIS to the page, is in [the temp
 | `sample` | the Adapter's response, exactly as the Adapter sends it | its `credentialSubject`, or the whole file when it has none |
 | `background` (optional) | a PDF page, such as the organisation's pre-printed paper | page 1 |
 
-Uploading a file replaces that slot only; uploading a zip from Download replaces the whole set. Each file is checked when it is uploaded: the background must be a PDF, the credential file JSON with a `vc_template` object (holding a `credentialSubject` object), the sample a JSON object, and the template's `#if`/`#foreach`/`#macro` must each have their `#end`. One request may carry at most 8 MB.
+Choosing a file replaces that slot only; choosing a zip from Download replaces the whole set. Each file is checked on every call: the background must be a PDF, the credential file JSON with a `vc_template` object (holding a `credentialSubject` object), the sample a JSON object, and the template's `#if`/`#foreach`/`#macro` must each have their `#end`. One request may carry at most 20 MB.
 
 ## From sample to page
 
@@ -29,13 +29,10 @@ The dashboard (`/`) has a file input per slot (or one for a zip), the list of lo
 
 | Call | Does |
 |---|---|
-| `POST /api/set` | multipart; any of `template`, `credential`, `sample`, `background`, or one `bundle` (a zip from Download); answers what is loaded |
-| `GET /api/set` | which slots are loaded, with their file names, and which required ones are missing |
-| `DELETE /api/set` | clears the set |
-| `DELETE /api/set/background` | removes the background only |
-| `GET /preview` | the quick view: the HTML the PDF is printed from, never with the background |
-| `GET /preview.pdf` | what the Wallet prints: the renderer's PDF, with the background under page 1 when one is loaded |
-| `GET /download` | a zip with `template/`, `credential/`, `sample/` and `background/`, each file as uploaded |
+| `POST /preview` | the set as multipart (`template`, `credential`, `sample`, optional `background`); answers the quick view: the HTML the PDF is printed from, never with the background |
+| `POST /preview.pdf` | the same set; answers what the Wallet prints: the renderer's PDF, with the background under page 1 when one is sent |
+| `POST /download` | the same set; answers a zip with `template/`, `credential/`, `sample/` and `background/`, each file as sent |
+| `POST /api/bundle` | multipart with one `bundle` (a zip from Download); answers its files as `{slot: {filename, data}}`, `data` in base64, for the dashboard to hold |
 | `GET /health` | liveness |
 
 Rendering needs the template, the credential file and the sample; without them both previews answer 409, naming what is missing. A wrong file answers 400 with the reason. A template Velocity can't evaluate, or a sample or mapping Certify would refuse, answers 422 with the renderer's message (a Velocity error names its line and column). Without `RENDERER_URL` the previews answer 503.
@@ -44,7 +41,7 @@ Rendering needs the template, the credential file and the sample; without them b
 
 `make_background(filename, data)` takes page 1 of an uploaded PDF, with its own `/Rotate` and crop box respected, and fits it on a portrait A4 page without redrawing it. `lay_background(pdf, background)` lays that page under page 1 of the renderer's PDF only, so later pages (the verification QR) print clean. This is VC Lab's own step, not the Wallet's: the Wallet draws a background only as the template's `$backgroundImage`.
 
-> **A background may be confidential** (an organisation's watermark, seal and signature). VC Lab keeps it in memory only, but has no login: anyone who can reach a deployed VC Lab can download it. Upload one only on a VC Lab running on your own machine.
+> **A background may be confidential** (an organisation's watermark, seal and signature). It stays in your browser and goes to VC Lab only with each preview, which keeps nothing; another visitor can't get it back. But a deployed VC Lab has no login and is reached over whatever network its address crosses, so send a confidential one only to a VC Lab you trust.
 
 ## Issuing with a credential file from VC Lab
 
@@ -73,8 +70,8 @@ docker compose run --rm vc-lab python src/vc-lab/test_main.py   # everything
 
 ```
 src/vc-lab/
-├── main.py       # the web app: dashboard and API over the one set, rendering through the renderer
-├── labset.py     # the set: its slots, upload parsing and validation, the zip
+├── main.py       # the web app: dashboard (which holds the set) and stateless API, rendering through the renderer
+├── labset.py     # the set a request carries: its slots, parsing and validation, the zip
 ├── hardcopy.py   # the background page, laid under the renderer's PDF
 └── test_main.py  # API tests
 ```
