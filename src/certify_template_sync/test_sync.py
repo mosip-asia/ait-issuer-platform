@@ -66,6 +66,25 @@ def test_the_local_addresses_are_rewritten_to_the_vdr_address_without_its_traili
         '{"a": "https://vdr.example.org/contexts/x.json", "b": "https://vdr.example.org/logo.png", "c": "https://other/x"}')
 
 
+def test_the_rewrite_leaves_an_address_that_already_starts_with_the_vdr_address_alone() -> None:
+    base = "http://vdr.localhost:8088"
+    text = '{"a": "http://vdr.localhost:8088/contexts/x.json", "b": "http://vdr.localhost/y", "c": "http://cdn.localhost/z"}'
+    once = sync.rewrite_local_addresses(text, base)
+    assert once == ('{"a": "http://vdr.localhost:8088/contexts/x.json", "b": "http://vdr.localhost:8088/y", '
+                    '"c": "http://vdr.localhost:8088/z"}'), once
+    assert sync.rewrite_local_addresses(once, base) == once, "a second pass changes nothing"
+
+
+def test_the_committed_credentials_are_rewritten_as_before_for_the_two_addresses_in_use() -> None:
+    files = [p for d in CREDENTIAL_DIRS for p in sorted(d.glob("*.json"))]
+    assert files, "no committed credential files"
+    for base in ("https://vdr.dpi.ait.ac.th", "http://vdr.localhost"):
+        for path in files:
+            text = path.read_text(encoding="utf-8")
+            plain = text.replace("http://vdr.localhost", base).replace("http://cdn.localhost", base)
+            assert sync.rewrite_local_addresses(text, base) == plain, (base, path.name)
+
+
 def test_load_credential_configs_rewrites_through_the_shared_function() -> None:
     import tempfile
     before = {k: os.environ.get(k) for k in ("VDR_BASE_URL", "CDN_BASE_URL")}
