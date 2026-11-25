@@ -13,7 +13,7 @@ POST /render  application/json  ->  200 application/pdf or text/html  |  422 {"e
   "record": "<the Adapter's answer, as text>",
   "vcTemplate": "<the credential file's vc_template, as the text template-sync stores for Certify>",
   "credentialFile": { "display": [...], "display_order": [...], "credential_subject": {...}, ... },
-  "backgroundImage": "data:image/png;base64,..." | null,
+  "backgroundImage": "data:image/png;base64,..." | "" | null,
   "locale": "en",
   "output": "pdf" | "html"
 }
@@ -22,7 +22,7 @@ POST /render  application/json  ->  200 application/pdf or text/html  |  422 {"e
 - `record` and `vcTemplate` give the claims, mapped as Certify maps them. `record` is text so the renderer can read it as the plugin does, strict JSON included. VC Lab makes `vcTemplate` with template-sync's own function (`build_vc_template_base64` in `src/certify_template_sync/sync.py`), so it holds that function's one change (`"courses": ${courses}` unquoted). Template-sync's file-level rewrites (`${CERTIFY_DID}`, `${VDR_BASE_URL}`, `${CDN_BASE_URL}`, `http://vdr.localhost`, `http://cdn.localhost`) are not applied to it.
 - `credentialFile` is Certify's credential file. The renderer reads it the way Certify publishes it and Mimoto reads it: `display`, `display_order` as `order`, and `credential_subject` as `credential_definition.credentialSubject`. For the claims it reads `credential_type`, `context` and `credential_status_purpose`.
 - `output` `html` answers the template as Velocity evaluated it, the HTML iText would print; `pdf` (or none) answers the PDF iText makes of that same HTML. VC Lab's quick view is the first, its PDF the second. Both print the PDF, so the quick view takes as long as the PDF.
-- `backgroundImage`, when not null, replaces `display[0].background_image.uri`. It is a `data:image/png;base64,` URI, and it is also the set's `background.png` (see "What it loads").
+- `backgroundImage`, when not null, replaces `display[0].background_image.uri`; `""` is no Background (`$backgroundImage` is empty and the credential file's address is not used; no file is served at the VDR address). VC Lab sends `""` without one. It is a `data:image/png;base64,` URI, and it is also the set's `background.png` (see "What it loads").
 - A record or `vcTemplate` the renderer can't map answers 422 with the reason: `shape` refuses the record (a `null`, or a list or object other than `courses`), Velocity can't evaluate the text, or org.json can't read what it makes (`json_processing_error`, as in Certify). The renderer does not refuse everything Certify refuses: see "Where it differs from Certify".
 - A template that Velocity or iText can't render answers 422. A Velocity error names its line and column; a template nested too deep to parse says so.
 - A template that loads an address the renderer doesn't serve answers 422 naming the address, for `output` `html` too (see "What it loads").

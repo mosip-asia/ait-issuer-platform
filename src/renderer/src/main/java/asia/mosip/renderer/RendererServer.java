@@ -50,7 +50,7 @@ public final class RendererServer {
     /**
      * POST /render's body. record is the Adapter's answer as text, read as the plugin reads it; vcTemplate is the credential file's vc_template as the
      * text template-sync stores for Certify; credentialFile is Certify's credential file, as VC Lab holds it;
-     * backgroundImage is the Background as a PNG data URI, or null; output is "pdf" (the default) or "html", the
+     * backgroundImage is the Background as a PNG data URI, "" for none, or null for the credential file's own address; output is "pdf" (the default) or "html", the
      * evaluated template that the PDF would be printed from.
      */
     record RenderRequest(String template, String record, String vcTemplate, JsonNode credentialFile,
@@ -123,7 +123,7 @@ public final class RendererServer {
         }
         // The set's files at their VDR address: today the Background, as the PNG its data URI holds.
         String background = request.backgroundImage();
-        SetFiles files = new SetFiles(background == null ? Map.of()
+        SetFiles files = new SetFiles(background == null || background.isEmpty() ? Map.of()
                 : Map.of("background.png", Base64.getDecoder().decode(background.substring(background.indexOf(',') + 1))));
         String merged;
         byte[] pdf;
