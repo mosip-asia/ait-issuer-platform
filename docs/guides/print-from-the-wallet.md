@@ -242,7 +242,10 @@ Put the committed files back:
 git checkout -- deploy/ait/vdr/templates/AITUniversity-ait-transcript-template.html deploy/ait/certify/credentials/ait-transcript.json
 rm -rf deploy/ait/vdr/templates/ait-transcript/v1 /tmp/vc-lab-parity
 compose up -d --force-recreate template-sync certify
+until curl -sf -o /dev/null http://issuer.localhost/.well-known/openid-credential-issuer; do sleep 5; done
 ```
+
+The last line waits until Certify answers again: a print check started before that ends `FAIL setup: couldn't read ait-transcript's display from Certify's metadata`.
 
 ## Template conventions
 
@@ -453,5 +456,6 @@ Mimoto fetches the template from `<VDR>/templates/` at every print and runs it, 
 | `... 400` from VC Lab | A file isn't what its slot takes (the Background must be a PNG), or Export's config id isn't the credential file's `credential_config_key_id`: the answer says which. |
 | `... 422` from VC Lab | The template or the mapping fails in the renderer, or the template loads an address other than a `data:` URI or the set's `background.png` (a font by address is one): the answer names the line or the address. |
 | `... 502` or `503` from VC Lab | The renderer isn't running (`docker compose ps renderer`), or VC Lab has no `RENDERER_URL`. |
+| `FAIL setup: couldn't read ait-transcript's display from Certify's metadata` | Certify is down or still starting, for example just after `compose up -d --force-recreate ... certify`: wait until `http://issuer.localhost/.well-known/openid-credential-issuer` answers, then run the check again. |
 | Section 6's `jq` line prints `null` | Certify serves the old credential file: the Package's file isn't in `deploy/ait/certify/credentials/`, or Certify wasn't recreated after template-sync. |
 | `FAIL parity: the texts differ` | VC Lab's renderer and `ait-mimoto` print differently: the lines after it show where. The renderer is a copy of `ait-mimoto`'s print code that nothing keeps in step (ADR 0002); compare the two after either changes. |
