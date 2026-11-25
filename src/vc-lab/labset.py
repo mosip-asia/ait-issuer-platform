@@ -8,16 +8,14 @@ ValueError with a plain reason, and nothing past this module checks a file again
 from __future__ import annotations
 
 import dataclasses
-import io
 import json
 import re
-import zipfile
 from dataclasses import dataclass
 from typing import Any, Callable, Generic, TypeVar
 
 import background
 
-MAX_UPLOAD = 20 * 1024 * 1024  # bytes: one request, and the files unpacked from one zip
+MAX_UPLOAD = 20 * 1024 * 1024  # bytes: one request, and the files unpacked from one Package
 REQUIRED = ("template", "credential", "sample")
 
 T = TypeVar("T")
@@ -26,7 +24,7 @@ T = TypeVar("T")
 @dataclass(frozen=True)
 class Loaded(Generic[T]):
     filename: str  # as uploaded, made safe (no path parts)
-    data: bytes  # the file exactly as uploaded; Download gives it back
+    data: bytes  # the file exactly as uploaded; Export Package writes it as is
     value: T  # what VC Lab uses: the parsed file
 
 
@@ -116,39 +114,3 @@ def safe_filename(filename: str, fallback: str) -> str:
     name = re.split(r"[\\/]", filename or "")[-1]
     name = re.sub(r"[\x00-\x1f\x7f\"]", "", name).strip().lstrip(".")
     return name or fallback
-
-
-def to_zip(lab: LabSet) -> bytes:
-    """The set as a zip: one folder per loaded slot, holding the file as uploaded under its name."""
-    out = io.BytesIO()
-    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
-        for slot in SLOTS:
-            if (f := getattr(lab, slot)) is not None:
-                z.writestr(f"{slot}/{f.filename}", f.data)
-    return out.getvalue()
-
-
-def unzip(data: bytes) -> dict[str, tuple[str, bytes]]:
-    """The files a zip from to_zip holds, {slot: (filename, data)}, each checked as a request's file is.
-    ValueError for anything else."""
-    try:
-        z = zipfile.ZipFile(io.BytesIO(data))
-    except zipfile.BadZipFile:
-        raise ValueError("bundle is not a zip file") from None
-    with z:
-        members = [m for m in z.infolist() if not m.is_dir()]
-        if sum(m.file_size for m in members) > MAX_UPLOAD:
-            raise ValueError(f"bundle unpacks to more than {MAX_UPLOAD // (1024 * 1024)} MB")
-        files: dict[str, tuple[str, bytes]] = {}
-        for m in members:
-            slot, _, name = m.filename.partition("/")
-            if slot not in SLOTS or not name or "/" in name:
-                expected = f"<slot>/<file> with a slot of {', '.join(SLOTS)}"
-                raise ValueError(f"bundle holds {m.filename!r}; expected {expected}")
-            if slot in files:
-                raise ValueError(f"bundle holds more than one {slot} file")
-            files[slot] = (name, z.read(m))
-    if not files:
-        raise ValueError("bundle holds no files")
-    LabSet.from_files(files)
-    return files

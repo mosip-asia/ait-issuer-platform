@@ -60,6 +60,31 @@ def test_the_order_holds_when_the_vdr_address_sorts_after_the_w3c_context() -> N
             os.environ["VDR_BASE_URL"] = before
 
 
+def test_the_local_addresses_are_rewritten_to_the_vdr_address_without_its_trailing_slash() -> None:
+    text = '{"a": "http://vdr.localhost/contexts/x.json", "b": "http://cdn.localhost/logo.png", "c": "https://other/x"}'
+    assert sync.rewrite_local_addresses(text, "https://vdr.example.org/") == (
+        '{"a": "https://vdr.example.org/contexts/x.json", "b": "https://vdr.example.org/logo.png", "c": "https://other/x"}')
+
+
+def test_load_credential_configs_rewrites_through_the_shared_function() -> None:
+    import tempfile
+    before = {k: os.environ.get(k) for k in ("VDR_BASE_URL", "CDN_BASE_URL")}
+    os.environ["VDR_BASE_URL"] = "https://v.example/"
+    os.environ.pop("CDN_BASE_URL", None)
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "c.json").write_text(
+                '{"u": "http://vdr.localhost/a", "l": "http://cdn.localhost/b", "v": "${VDR_BASE_URL}/c"}')
+            [(_, config)] = sync.load_credential_configs(Path(d))
+        assert config == {"u": "https://v.example/a", "l": "https://v.example/b", "v": "https://v.example/c"}
+    finally:
+        for k, v in before.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):

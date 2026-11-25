@@ -80,6 +80,13 @@ def find_seed_sql_path():
     return repo_root / "deploy" / installation / "certify" / "certify_seed.sql"
 
 
+def rewrite_local_addresses(text, vdr_base):
+    """The local stack's VDR and CDN addresses in `text`, as the VDR address (without its trailing slash).
+    template-sync and VC Lab's Export Package both use it, so a file means the same on either path."""
+    vdr_base = vdr_base.rstrip("/")
+    return text.replace("http://vdr.localhost", vdr_base).replace("http://cdn.localhost", vdr_base)
+
+
 def load_credential_configs(creds_dir):
     configs = []
     if not creds_dir.exists():
@@ -127,8 +134,7 @@ def load_credential_configs(creds_dir):
             content = f.read()
             for var_name, var_val in substitutions.items():
                 content = content.replace(f"${{{var_name}}}", var_val)
-            content = content.replace("http://vdr.localhost", substitutions["VDR_BASE_URL"])
-            content = content.replace("http://cdn.localhost", substitutions["VDR_BASE_URL"])
+            content = rewrite_local_addresses(content, substitutions["VDR_BASE_URL"])
             try:
                 data = json.loads(content)
                 configs.append((p.name, data))
