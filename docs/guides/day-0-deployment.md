@@ -138,7 +138,7 @@ To ensure reproducible deployments and keep build toolchains off production VMs,
 - **`ghcr.io/mosip-asia/ait-certify:${IMAGE_TAG}`**: Inji Certify 0.14 with the Java 21 `IssuerDataProviderPlugin` pre-baked at `/home/inji/additional_jars/issuer-data-provider-plugin.jar`. No host JAR compilation or bind-mounting is required at runtime.
 - **`ghcr.io/mosip-asia/ait-verify-ui:${IMAGE_TAG}`**: Branded Inji Verify web interface.
 - **`ghcr.io/mosip-asia/ait-vc:${IMAGE_TAG}`**: Unified multi-service Python container housing the Approval Gateway (`POST /evaluations`), Admin/Student VC Portal, VC Lab Studio (`:4200`), Developer Tools CLI (`tools`), and Database Template Sync (`certify-template-sync`). (Backward-compatibility tags `ait-vc-lab` and `ait-certify-template-sync` are also maintained).
-- **`ghcr.io/mosip-asia/ait-mimoto:${IMAGE_TAG}`**: Mimoto 0.21 (the Wallet's printer) with one change: templates also get the claims whole, as `$credentialSubject` (`src/mimoto/README.md`). For now only the local overlay (`compose.mimoto.yaml`) runs it.
+- **`ghcr.io/mosip-asia/ait-mimoto:${IMAGE_TAG}`**: Mimoto 0.21 (the Wallet's printer) with two changes: templates also get the claims whole, as `$credentialSubject`, and templates run under Velocity's `SecureUberspector`, so they cannot reach Java internals (`src/mimoto/README.md`). For now only the local overlay (`compose.mimoto.yaml`) runs it.
 
 CI builds and publishes these images via `scripts/build.sh --tag <tag> --push`. If code has not changed between tags, `build.sh` fast-retags existing GHCR images using `docker buildx imagetools create` without re-uploading layers.
 
