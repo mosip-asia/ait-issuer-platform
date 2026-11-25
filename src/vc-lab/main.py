@@ -161,7 +161,9 @@ def _render(lab: LabSet, output: Literal["html", "pdf"]) -> bytes:
         # The vc_template through template-sync's own transform: the text Certify stores and evaluates.
         "vcTemplate": base64.b64decode(build_vc_template_base64(lab.credential.value["vc_template"])).decode("utf-8"),
         "credentialFile": lab.credential.value,
-        "backgroundImage": _data_uri(lab.background.value) if lab.background else None,
+        # $backgroundImage is the Background as a data URI, and empty without one. Never null: the renderer would fall
+        # back to the credential file's background_image address, which it refuses to load.
+        "backgroundImage": _data_uri(lab.background.value) if lab.background else "",
         "locale": "en",
         "output": output,
     }
@@ -280,8 +282,10 @@ _DASHBOARD = """<!DOCTYPE html>
           <div class="pick"><label>Choose file<input type="file" hidden data-field="background" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"></label>
             <span class="file" data-slot="background"></span></div>
         </div>
-        <div class="warn">A background may be confidential. VC Lab has no login: upload one only on your own machine.
-          Your files stay in this page, and go to the server only with each preview. Reloading the page forgets them.</div>
+        <div class="warn">A background may be confidential. Your files stay in this page and go to the server only with
+          each call, which keeps nothing; another visitor can't get them back. VC Lab has no login and is reached over
+          whatever network its address crosses, so send a confidential one only to a VC Lab you trust. Reloading the
+          page forgets your files.</div>
         <div class="slot">
           <b>Or a whole set</b> <span class="ext">.zip</span>
           <div class="hint">A zip from Download. It replaces all four files.</div>

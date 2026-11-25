@@ -13,6 +13,7 @@ import base64
 import html
 import io
 import json
+import struct
 import os
 import sys
 import tempfile
@@ -30,7 +31,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 import pypdfium2  # noqa: E402
 from PIL import Image  # noqa: E402
 from pypdf import PdfReader, PdfWriter  # noqa: E402
-from pypdf.generic import DecodedStreamObject, NameObject  # noqa: E402
+from pypdf.generic import ArrayObject, DecodedStreamObject, DictionaryObject, NameObject, NumberObject, TextStringObject  # noqa: E402
 
 client = TestClient(vc_lab.app)
 
@@ -155,6 +156,56 @@ def _pdf(width: float, height: float, rotate: int = 0, crop: tuple[float, float,
     out = io.BytesIO()
     writer.write(out)
     return out.getvalue()
+
+
+def _signed_pdf(width: float, height: float) -> bytes:
+    """A page whose only mark is a signature field (/Widget, /FT /Sig) with a red appearance in [100 100 200 200]."""
+    writer = PdfWriter()
+    page = writer.add_blank_page(width=width, height=height)
+    form = DecodedStreamObject()
+    form.update({NameObject("/Type"): NameObject("/XObject"), NameObject("/Subtype"): NameObject("/Form"),
+                 NameObject("/BBox"): ArrayObject([NumberObject(0), NumberObject(0), NumberObject(100), NumberObject(100)])})
+    form.set_data(b"1 0 0 rg 0 0 100 100 re f")
+    widget = writer._add_object(DictionaryObject({
+        NameObject("/Type"): NameObject("/Annot"), NameObject("/Subtype"): NameObject("/Widget"),
+        NameObject("/FT"): NameObject("/Sig"), NameObject("/T"): TextStringObject("Signature1"),
+        NameObject("/F"): NumberObject(4),
+        NameObject("/Rect"): ArrayObject([NumberObject(v) for v in (100, 100, 200, 200)]),
+        NameObject("/AP"): DictionaryObject({NameObject("/N"): writer._add_object(form)})}))
+    page[NameObject("/Annots")] = ArrayObject([widget])
+    writer._root_object[NameObject("/AcroForm")] = DictionaryObject({
+        NameObject("/Fields"): ArrayObject([widget]), NameObject("/SigFlags"): NumberObject(1)})
+    out = io.BytesIO()
+    writer.write(out)
+    return out.getvalue()
+
+
+def _cmyk_profile() -> bytes:
+    """A made-up CMYK ICC profile (v2, lut8) that prints every ink as grey: no ink is white, and the more ink the
+    darker. It is nothing like Pillow's naive CMYK to RGB, where full cyan is (0, 255, 255)."""
+    clut = bytearray()
+    for c in (0, 1):
+        for m in (0, 1):
+            for y in (0, 1):
+                for k in (0, 1):
+                    clut += bytes([round(255 * (1 - k) * (1 - 0.5 * (c + m + y) / 3)), 128, 128])
+    ramp = bytes(range(256))
+    identity = struct.pack(">9i", 65536, 0, 0, 0, 65536, 0, 0, 0, 65536)
+    lut = b"mft1" + bytes(4) + bytes([4, 3, 2, 0]) + identity + ramp * 4 + bytes(clut) + ramp * 3
+    text = lambda t: b"text" + bytes(4) + t + b"\0"
+    desc = b"desc" + bytes(4) + struct.pack(">I", 5) + b"test\0" + bytes(4 + 4 + 2 + 1 + 67)
+    xyz = b"XYZ " + bytes(4) + struct.pack(">3i", 63190, 65536, 54061)
+    tags = [(b"desc", desc), (b"cprt", text(b"none")), (b"wtpt", xyz), (b"A2B0", lut)]
+    offset = 128 + 4 + 12 * len(tags)
+    table, body = b"", b""
+    for sig, data in tags:
+        data += bytes(-len(data) % 4)
+        table += sig + struct.pack(">II", offset + len(body), len(data))
+        body += data
+    header = struct.pack(">I4sI4s4s4s", 0, b"none", 0x02100000, b"prtr", b"CMYK", b"Lab ") + bytes(12) + b"acsp" + bytes(28)
+    header += struct.pack(">3i", 63190, 65536, 54061) + bytes(48)
+    profile = header + struct.pack(">I", len(tags)) + table + body
+    return struct.pack(">I", len(profile)) + profile[4:]
 
 
 def _image(data: bytes) -> Image.Image:
@@ -394,6 +445,35 @@ def test_a_pdf_background_keeps_its_rotation_and_crop_box() -> None:
     assert cropped.getpixel((10, 600)) == (255, 255, 255), "the square at the stored corner is cropped out"
 
 
+def test_a_jpeg_background_is_turned_upright_by_its_exif_orientation() -> None:
+    exif = Image.Exif()
+    exif[0x0112] = 6  # stored 80 x 40; a viewer turns it a quarter clockwise, to 40 x 80
+    out = io.BytesIO()
+    image = Image.new("RGB", (80, 40), (255, 255, 255))
+    image.paste((255, 0, 0), (0, 0, 10, 10))  # the stored top-left corner
+    image.save(out, "JPEG", quality=100, exif=exif)
+    png = _image(_background("phone.jpg", out.getvalue()).content).convert("RGB")
+    assert png.size == (40, 80), "as every viewer shows it"
+    r, g, b = png.getpixel((35, 5))
+    assert r > 200 and g < 80 and b < 80, "the stored top-left corner is the top-right after a quarter turn clockwise"
+
+
+def test_a_pdf_background_draws_its_signature_field() -> None:
+    png = _image(_background("signed.pdf", _signed_pdf(300, 400)).content).convert("RGB")
+    assert png.getpixel((312, 520)) == (255, 0, 0), "the field's appearance, drawn where the page has it"
+
+
+def test_a_cmyk_jpeg_background_is_converted_through_its_profile_and_carries_none() -> None:
+    out = io.BytesIO()
+    Image.new("CMYK", (30, 30), (255, 0, 0, 0)).save(out, "JPEG", quality=100, icc_profile=_cmyk_profile())
+    png = _image(_background("print-shop.jpg", out.getvalue()).content)
+    r, g, b = png.convert("RGB").getpixel((15, 15))
+    assert max(r, g, b) - min(r, g, b) < 12, ("the profile prints full cyan as grey; a naive conversion gives cyan", (r, g, b))
+    assert png.mode == "RGB"
+    profile = png.info.get("icc_profile")
+    assert profile is None or profile[16:20] == b"RGB ", "the PNG must not carry the CMYK profile"
+
+
 def test_a_background_that_is_not_a_pdf_png_or_jpeg_answers_400_with_the_reason() -> None:
     no_pages = PdfWriter()
     out = io.BytesIO()
@@ -622,6 +702,25 @@ def test_after_remove_background_the_template_previews_on_plain_paper() -> bool:
     return True
 
 
+def test_the_guides_credential_file_with_a_background_address_previews_on_plain_paper_without_one() -> bool:
+    """docs/guides/print-from-the-wallet.md sets display[0].background_image.uri and draws $backgroundImage when it
+    is set. Without a Background in the set, $backgroundImage is empty, not that address (which the renderer refuses)."""
+    name = "test_the_guides_credential_file_with_a_background_address_previews_on_plain_paper_without_one"
+    if _skip_without_renderer(name):
+        return False
+    display = [{**CREDENTIAL["display"][0], "background_image": {"uri": VDR_BACKGROUND}}]
+    credential = ("record.json", _json({**CREDENTIAL, "display": display}))
+    guide = _with_body('#if($backgroundImage && $backgroundImage != "")<img src="$backgroundImage"/>#end')
+    plain = _set(template=("record.html", guide), credential=credential)
+    for path in ("/preview", "/preview.pdf"):
+        res = _post(path, plain)
+        assert res.status_code == 200, (path, res.text[:200])
+    assert _images(_pages(plain)[0]) == [], "plain paper"
+    with_paper = _set(template=("record.html", guide), credential=credential, background=("background.png", _png(40, 60)))
+    assert [i.size for i in _images(_pages(with_paper)[0])] == [(40, 60)], "the uploaded Background, not the address"
+    return True
+
+
 def test_a_template_that_loads_the_background_by_its_vdr_address_shows_it_in_the_quick_view() -> bool:
     if _skip_without_renderer("test_a_template_that_loads_the_background_by_its_vdr_address_shows_it_in_the_quick_view"):
         return False
@@ -667,6 +766,9 @@ def main() -> None:
         test_a_jpeg_background_becomes_a_png_of_its_own_size,
         test_a_pdf_background_is_drawn_at_its_page_size_and_150_dpi,
         test_a_pdf_background_keeps_its_rotation_and_crop_box,
+        test_a_jpeg_background_is_turned_upright_by_its_exif_orientation,
+        test_a_pdf_background_draws_its_signature_field,
+        test_a_cmyk_jpeg_background_is_converted_through_its_profile_and_carries_none,
         test_a_background_that_is_not_a_pdf_png_or_jpeg_answers_400_with_the_reason,
         test_grid_from_credential_subject_in_the_pdf_and_the_quick_view,
         test_two_visitors_each_preview_their_own_set,
@@ -680,6 +782,7 @@ def main() -> None:
         test_a_template_that_draws_the_background_shows_it_in_the_pdf_and_the_quick_view,
         test_a_pdf_background_prints_upright_under_the_record,
         test_after_remove_background_the_template_previews_on_plain_paper,
+        test_the_guides_credential_file_with_a_background_address_previews_on_plain_paper_without_one,
         test_a_template_that_loads_the_background_by_its_vdr_address_shows_it_in_the_quick_view,
         test_a_template_that_loads_the_background_by_its_vdr_address_previews_with_it_in_the_pdf,
     ]
