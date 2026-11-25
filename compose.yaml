@@ -53,9 +53,7 @@ services:
     networks:
       - default
       - renderer-network
-    depends_on:
-      renderer:
-        condition: service_healthy
+    depends_on: [renderer]  # started first, not awaited: VC Lab answers 502 while the renderer is down
 
   # VC Lab's own copy of ait-mimoto's print code and Certify's mapping (src/renderer, ADR 0002). It runs whatever
   # template VC Lab is sent, so the container is the boundary: a network marked internal that only VC Lab shares
