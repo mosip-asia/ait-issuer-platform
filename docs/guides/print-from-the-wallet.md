@@ -9,13 +9,13 @@ tags:
 ---
 # Print from the Wallet on the local stack
 
-The Wallet's PDF is made by Mimoto, not by Certify. This guide starts `ait-mimoto` (Mimoto 0.21 with one change, below) beside the local stack, prints a made-up student's transcript through it, and checks the PDF, course grid included. Thas proves it here; Jo runs it on dev from "Running it on dev", below. Thas owns this guide; Thas's team keeps it working.
+The Wallet's PDF is made by Mimoto, not by Certify. This guide starts `ait-mimoto` (Mimoto 0.21 with two changes, below) beside the local stack, prints a made-up student's transcript through it, and checks the PDF, course grid included. Thas proves it here; Jo runs it on dev from "Running it on dev", below. Thas owns this guide; Thas's team keeps it working.
 
 Everything here is local. The Mimoto overlay (`compose.mimoto.yaml`) is never used by CD or any deployment, and all data is made up.
 
 ## What `ait-mimoto` is
 
-Upstream Mimoto turns every claim into one string before the template sees it, and every list of objects becomes `""`. So a template can't loop over `courses`. `ait-mimoto` is upstream `injistack/mimoto:0.21.0` with one line added (`src/mimoto/`): the template also gets the claims as Mimoto received them, as `$credentialSubject`. `$rowProperties` and every other variable are unchanged, so a template written for upstream Mimoto prints the same.
+Upstream Mimoto turns every claim into one string before the template sees it, and every list of objects becomes `""`. So a template can't loop over `courses`. `ait-mimoto` is upstream `injistack/mimoto:0.21.0` with two changes (`src/mimoto/`). First, the template also gets the claims as Mimoto received them, as `$credentialSubject`. `$rowProperties` and every other variable are unchanged, so a template written for upstream Mimoto prints the same. Second, the print step runs Velocity with `SecureUberspector`, so a template that reaches for Java internals (for example `$x.getClass().forName("java.lang.Runtime")`) prints its reference unevaluated instead of running it. VC Lab previews with the same setting (ADR 0002).
 
 That lets a template loop over `courses`; it doesn't change what any template prints by itself. The grid prints only once the template on the VDR uses the convention in "Template conventions". The committed demo template (`deploy/ait/vdr/templates/AITUniversity-ait-transcript-template.html`) has no `$credentialSubject` branch: it prints `courseList` on either image. The print check swaps in a test template that does, and puts the committed one back.
 
@@ -228,7 +228,7 @@ Run `ghcr.io/mosip-asia/ait-mimoto` where a plain Mimoto would run `injistack/mi
 
 **The image alone changes nothing a Wallet prints.** The grid prints only once the template on the VDR uses that convention. The committed demo template (`AITUniversity-ait-transcript-template.html`) has no `$credentialSubject` branch and keeps printing `courseList` on either image.
 
-**Where the change is:** `src/mimoto/` holds the one changed file, one line added to upstream's `CredentialPDFGeneratorService.java`, with its MPL-2.0 notice and the upstream tag and commit it came from (`src/mimoto/README.md`). `docker/Dockerfile.mimoto` puts it into `injistack/mimoto:0.21.0`.
+**Where the change is:** `src/mimoto/` holds the one changed file, two lines added to upstream's `CredentialPDFGeneratorService.java`, with its MPL-2.0 notice and the upstream tag and commit it came from (`src/mimoto/README.md`). `docker/Dockerfile.mimoto` puts it into `injistack/mimoto:0.21.0`.
 
 **Where to see it working:**
 
