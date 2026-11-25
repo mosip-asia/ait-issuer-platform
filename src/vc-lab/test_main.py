@@ -673,6 +673,83 @@ def test_a_background_that_is_not_a_pdf_png_or_jpeg_answers_400_with_the_reason(
     assert client.post("/api/background", files={}).status_code == 400
 
 
+def test_export_with_a_vdr_address_under_the_local_one_writes_it_once_in_the_template_and_the_credential() -> None:
+    vdr = "http://vdr.localhost:8088"
+    template = LOCAL_TEMPLATE.replace("</body>", '<img src="http://vdr.localhost/templates/old/v0/background.png"/></body>')
+    files = _set(template=("record.html", template.encode()), credential=("record.json", _json(LOCAL_CREDENTIAL)),
+                 background=("background.png", _png()))
+    res = _export(files, vdr_address=vdr)
+    assert res.status_code == 200, res.text
+    zipped = _zip_files(res.content)
+    template = zipped[f"{PACKAGE_DIR}/template.html"].decode()
+    credential = zipped["certify/credentials/example-record.json"].decode()
+    assert f"{vdr}:8088" not in template + credential, "the VDR address written twice"
+    address = f"{vdr}/templates/example-record/v1/background.png"
+    assert f'src="{address}"' in template and json.loads(credential)["display"][0]["background_image"]["uri"] == address
+    assert f"{vdr}/logo.png" in template and f"{vdr}/fonts/f.css" in template
+    assert json.loads(credential)["display"][0]["logo"] == {"url": f"{vdr}/logo.png"}
+
+
+def test_the_quick_view_draws_a_background_at_any_address_under_the_vdr_templates_folder() -> None:
+    png = _png()
+    template = TEMPLATE.replace("</body>", '<img src="http://vdr.localhost/templates/background.png"/>'
+                                '<img src="http://vdr.localhost/templates/a/b/background.png"/>'
+                                '<img src="http://vdr.localhost/templates/a/other.png"/></body>')
+
+    class Renderer:  # stands in for the renderer: it hands back the template as the HTML
+        status_code = 200
+
+        def __init__(self, request: dict) -> None:
+            self.content = request["template"].encode()
+
+    real_post, real_url = vc_lab.httpx.post, vc_lab.RENDERER_URL
+    vc_lab.httpx.post = lambda url, json, timeout: Renderer(json)
+    vc_lab.RENDERER_URL = "http://renderer.test"
+    try:
+        res = _post("/preview", _set(template=("record.html", template.encode()), background=("background.png", png)))
+    finally:
+        vc_lab.httpx.post, vc_lab.RENDERER_URL = real_post, real_url
+    assert res.status_code == 200, res.text
+    uri = "data:image/png;base64," + base64.b64encode(png).decode()
+    assert res.text.count(uri) == 2, "both background.png addresses become the picture"
+    assert "http://vdr.localhost/templates/a/other.png" in res.text, "another file is left alone"
+
+
+def test_velocity_1_7_block_directives_balance() -> None:
+    balanced = {
+        "#define": b"#define($x)hi#end $x",
+        "#@macro": b"#@m()x#end",
+        "unparsed content": b"#[[ #end ]]#",
+        "braced end": b"#if(true)a#{end}",
+        "escaped": b"<p>\\#end</p>",
+        "braced opener": b"#{if}(true)a#end",
+        "braced foreach": b"#{foreach}($a in $b)$a#{end}",
+    }
+    for case, source in balanced.items():
+        res = _post("/preview", _set(template=("t.html", source)))
+        assert res.status_code != 400, (case, res.text)
+    unbalanced = {
+        "define without end": b"#define($x)hi",
+        "stray end": b"#end",
+        "braced end, stray": b"#if(true)a#{end}#{end}",
+        "block macro without end": b"#@m()x",
+        "escaped end does not close": b"#if(true)a\\#end",
+        "unparsed end does not close": b"#if(true)#[[ #end ]]#",
+    }
+    for case, source in unbalanced.items():
+        res = _post("/preview", _set(template=("t.html", source)))
+        assert res.status_code == 400, (case, res.status_code)
+
+
+def test_a_pdf_background_with_bytes_before_the_header_is_still_a_pdf() -> None:
+    for case, lead in (("a newline", b"\n"), ("a UTF-8 BOM", b"\xef\xbb\xbf"), ("junk", b"junk\r\n" * 3)):
+        res = _background("paper.pdf", lead + _pdf(200, 300))
+        assert res.status_code == 200, (case, res.text)
+        assert _image(res.content).size == (417, 625), case
+    far = _background("paper.pdf", bytes(1024) + _pdf(200, 300))
+    assert far.status_code == 400, "the header must be in the first 1024 bytes"
+
+
 # ---------------------------------------------------------------------------------------------------------------
 # Tests through the renderer
 
@@ -974,6 +1051,10 @@ def main() -> None:
         test_a_pdf_background_draws_its_signature_field,
         test_a_cmyk_jpeg_background_is_converted_through_its_profile_and_carries_none,
         test_a_background_that_is_not_a_pdf_png_or_jpeg_answers_400_with_the_reason,
+        test_export_with_a_vdr_address_under_the_local_one_writes_it_once_in_the_template_and_the_credential,
+        test_the_quick_view_draws_a_background_at_any_address_under_the_vdr_templates_folder,
+        test_velocity_1_7_block_directives_balance,
+        test_a_pdf_background_with_bytes_before_the_header_is_still_a_pdf,
         test_grid_from_credential_subject_in_the_pdf_and_the_quick_view,
         test_two_visitors_each_preview_their_own_set,
         test_velocity_and_mapping_errors_answer_422_with_the_engines_message,

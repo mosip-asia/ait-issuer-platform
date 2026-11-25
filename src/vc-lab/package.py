@@ -35,7 +35,9 @@ LOCAL_VDR = "http://vdr.localhost"
 FORMAT = "vc-lab-package"
 ROLES = ("template", "background", "credential", "sample")
 _MANIFEST_PATH = re.compile(r"vdr/templates/[^/]+/[^/]+/manifest\.json")
-_VDR_BACKGROUND = re.compile(r"http://vdr\.localhost/templates/(?:[^\s\"'()<>]*/)?background\.png")
+# Where a template loads the Background from: any address under http://vdr.localhost/templates/ whose last path segment
+# is background.png, as the renderer's SetFiles serves it. The quick view uses the same definition.
+VDR_BACKGROUND = re.compile(r"http://vdr\.localhost/templates/(?:[^\s\"'()<>]*/)?background\.png")
 
 
 def export(lab: LabSet, config_id: str, version: str, vdr_address: str) -> bytes:
@@ -70,7 +72,7 @@ def export(lab: LabSet, config_id: str, version: str, vdr_address: str) -> bytes
         first["background_image"] = {**(old if isinstance(old, dict) else {}), "uri": background_address}
     # The renderer serves a Background at http://vdr.localhost/templates/<any folders>/background.png; placed on the
     # VDR it is at the version's folder, so a template that loads it must ask for that address.
-    template = _VDR_BACKGROUND.sub(lambda _: background_address, lab.template.value)
+    template = VDR_BACKGROUND.sub(lambda _: background_address, lab.template.value)
     contents = {
         "template": rewrite_local_addresses(template, vdr).encode("utf-8"),
         "background": lab.background.data if lab.background else None,

@@ -62,17 +62,25 @@ def _template(name: str, data: bytes) -> str:
     except UnicodeDecodeError:
         raise ValueError(f"template {name!r} is not UTF-8 text") from None
     depth = 0
-    for tag in _BLOCK_TAG.finditer(_COMMENT.sub("", source)):
-        depth += -1 if tag.group(0) == "#end" else 1
+    for tag in _VELOCITY.finditer(source):
+        word = tag.group("word") or tag.group("braced")
+        if tag.group("escape") is None or len(tag.group("escape")) % 2:  # a comment or unparsed text, or an escaped #
+            continue
+        depth += -1 if word == "end" else 1
         if depth < 0:
-            raise ValueError(f"template {name!r} has an #end without an #if, #foreach or #macro")
+            raise ValueError(f"template {name!r} has an #end without an #if, #foreach, #macro, #define or #@macro")
     if depth:
-        raise ValueError(f"template {name!r} has {depth} #if, #foreach or #macro without an #end")
+        raise ValueError(f"template {name!r} has {depth} #if, #foreach, #macro, #define or #@macro without an #end")
     return source
 
 
-_BLOCK_TAG = re.compile(r"#(?:if|foreach|macro)\b|#end\b")
-_COMMENT = re.compile(r"##[^\n]*|#\*.*?\*#", re.DOTALL)  # Velocity's line and block comments
+# One pass over the source, so what a comment or #[[unparsed]]# holds is never read as a directive. Velocity 1.7's block
+# directives (each closed by #end) in their plain and #{braced} forms, with #@name for a block macro call; a directive
+# behind an odd number of backslashes is escaped.
+_VELOCITY = re.compile(
+    r"##[^\n]*|#\*.*?\*#|#\[\[.*?\]\]#"  # a line comment, a block comment, unparsed text
+    r"|(?P<escape>\\*)#(?:(?P<word>if|foreach|macro|define|end)\b|\{(?P<braced>if|foreach|macro|define|end|@\w+)\}|@\w+)",
+    re.DOTALL)
 
 
 def _json_object(slot: str, name: str, data: bytes) -> dict[str, Any]:
