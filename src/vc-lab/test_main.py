@@ -509,15 +509,73 @@ def test_sample_without_credential_subject() -> bool:
     return True
 
 
-def _draws(image_tag: str) -> bytes:
-    """The made-up template with `image_tag` laid across the first page, under the record."""
-    return TEMPLATE.replace('<div class="page">', image_tag + '\n<div class="page">', 1).encode()
+def _with_body(body: str) -> bytes:
+    """TEMPLATE with `body` at the top of page 1."""
+    return TEMPLATE.replace('<div class="page">', f'<div class="page">\n{body}', 1).encode()
 
 
-DRAWS_BACKGROUND = _draws('<img src="$!backgroundImage" style="position: absolute; left: -20mm; top: -20mm; width: 210mm; height: 297mm"/>')
+def test_a_template_reaching_for_an_address_answers_422_naming_it() -> bool:
+    if _skip_without_renderer("test_a_template_reaching_for_an_address_answers_422_naming_it"):
+        return False
+    cases = {
+        "a font": ('<style>@font-face { font-family: "Far"; src: url("https://fonts.example/far.ttf"); }'
+                   ' p { font-family: "Far"; }</style>', "https://fonts.example/far.ttf"),
+        "an image on another host": ('<img src="http://cdn.example/logo.png">', "http://cdn.example/logo.png"),
+        "a file": ('<img src="file:///etc/hostname">', "/etc/hostname"),
+        "a VDR file the set doesn't have": ('<img src="http://vdr.localhost/templates/x/1/logo.png">',
+                                            "http://vdr.localhost/templates/x/1/logo.png"),
+        "the Background's address with no Background loaded": (
+            '<img src="http://vdr.localhost/templates/x/1/background.png">',
+            "http://vdr.localhost/templates/x/1/background.png"),
+    }
+    for case, (body, address) in cases.items():
+        for path in ("/preview", "/preview.pdf"):
+            res = _post(path, _set(template=("reach.html", _with_body(body))))
+            assert res.status_code == 422, (case, path, res.status_code, res.text[:200])
+            assert address in res.json()["detail"], (case, path, res.json())
+    return True
+
+
+def test_a_template_that_draws_logo_url_previews_without_a_logo() -> bool:
+    if _skip_without_renderer("test_a_template_that_draws_logo_url_previews_without_a_logo"):
+        return False
+    # As the committed demo template draws it. $logoUrl is "", which Velocity 1.7 counts as true.
+    logo = '#if ($logoUrl)\n<img src="$logoUrl" alt="the logo" style="height:56px; width: auto;" />\n#end'
+    files = _set(template=("logo.html", _with_body(logo)))
+    page = _post("/preview", files)
+    assert page.status_code == 200, page.text
+    assert '<img src=""' in page.text, "the template draws an empty logo"
+    pages = _pages(files)
+    assert "Ada Example" in pages[0].extract_text()
+    return True
+
+
+def test_reflection_fails_in_the_print_template_and_the_vc_template() -> bool:
+    if _skip_without_renderer("test_reflection_fails_in_the_print_template_and_the_vc_template"):
+        return False
+    reach = ".getClass().forName('java.lang.Runtime')"
+    mapping = {**CREDENTIAL["vc_template"], "credentialSubject": {
+        **CREDENTIAL["vc_template"]["credentialSubject"], "thesisTitle": "MAPPED $name" + reach}}
+    files = _set(template=("reflect.html", _with_body(f"<p>PRINTED $titleName{reach}</p>")),
+                 credential=("reflect.json", _json({**CREDENTIAL, "vc_template": mapping})))
+    page = _post("/preview", files)
+    assert page.status_code == 200, page.text
+    printed = _pages(files)[0].extract_text()
+    for shown, where in ((html.unescape(page.text), "quick view"), (printed, "PDF")):
+        for engine in ("PRINTED", "MAPPED"):  # the print template's, the vc_template's
+            assert engine in shown, (where, engine, "evaluated")
+            assert f"{engine} class java.lang.Runtime" not in shown, (where, engine, "reached java.lang.Runtime")
+    return True
+
+
+
+
+# Over the whole page, whatever the @page margin (20 mm here); a zero-height box, so it takes no room in the flow.
+_PAPER = "width: 210mm; height: 297mm; margin: -20mm 0 0 -20mm"
+DRAWS_BACKGROUND = _with_body(f'<div style="height: 0"><img src="$!backgroundImage" style="{_PAPER}"/></div>')
 # The address the Wallet fetches the Background from once an organisation has put it on its VDR.
 VDR_BACKGROUND = "http://vdr.localhost/templates/example-record/v1/background.png"
-LOADS_BACKGROUND = _draws(f'<img src="{VDR_BACKGROUND}" style="position: absolute; left: -20mm; top: -20mm; width: 210mm; height: 297mm"/>')
+LOADS_BACKGROUND = _with_body(f'<div style="height: 0"><img src="{VDR_BACKGROUND}" style="{_PAPER}"/></div>')
 
 
 def _images(page) -> list[Image.Image]:
@@ -576,7 +634,7 @@ def test_a_template_that_loads_the_background_by_its_vdr_address_shows_it_in_the
 
 
 def test_a_template_that_loads_the_background_by_its_vdr_address_previews_with_it_in_the_pdf() -> bool:
-    """Waits for ticket 04: the renderer serves background.png at its VDR address."""
+    """Ticket 04 serves background.png at its VDR address; VC Lab sends it the uploaded Background."""
     if _skip_without_renderer("test_a_template_that_loads_the_background_by_its_vdr_address_previews_with_it_in_the_pdf"):
         return False
     files = _set(template=("record.html", LOADS_BACKGROUND), background=("background.png", _png(40, 60)))
@@ -616,6 +674,9 @@ def main() -> None:
         test_a_record_certify_refuses_answers_422_with_the_plugins_reason,
         test_a_template_named_in_any_script_previews,
         test_sample_without_credential_subject,
+        test_a_template_reaching_for_an_address_answers_422_naming_it,
+        test_a_template_that_draws_logo_url_previews_without_a_logo,
+        test_reflection_fails_in_the_print_template_and_the_vc_template,
         test_a_template_that_draws_the_background_shows_it_in_the_pdf_and_the_quick_view,
         test_a_pdf_background_prints_upright_under_the_record,
         test_after_remove_background_the_template_previews_on_plain_paper,

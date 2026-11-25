@@ -4,12 +4,14 @@
  *
  * Copied from mosip/mimoto v0.21.0, src/main/java/io/mosip/mimoto/service/CredentialPDFGeneratorService.java: the
  * HTML path of generatePdfForVerifiableCredential (getPdfResourceFromVcProperties, extractFace, formatValue,
- * renderVCInCredentialTemplate, constructQRCode) and Utilities.encodeToString, with ait-mimoto's one change
- * (src/mimoto/CredentialPDFGeneratorService.java: templates also get $credentialSubject). Changed: no Spring; the
- * template, the claims and the issuer's metadata are passed in instead of fetched; the QR holds placeholder text, as
- * no credential is signed; logoUrl is empty, as no issuers list is read; a new Velocity engine renders each print;
- * renderVCInCredentialTemplate is split into the Velocity step (generateHtml) and the iText step (toPdf). Left out:
- * the SVG path, SD-JWT disclosures (an ldp_vc credential has none) and the data-share and OVP QR codes.
+ * renderVCInCredentialTemplate, constructQRCode) and Utilities.encodeToString, with ait-mimoto's two changes
+ * (src/mimoto/CredentialPDFGeneratorService.java: templates also get $credentialSubject, and Velocity runs with
+ * SecureUberspector). Changed: no Spring; the template, the claims and the issuer's metadata are passed in instead of
+ * fetched; the QR holds placeholder text, as no credential is signed; logoUrl is empty, as no issuers list is read; a
+ * new Velocity engine renders each print; renderVCInCredentialTemplate is split into the Velocity step
+ * (generateHtml) and the iText step (toPdf); iText loads addresses through the caller's resource retriever, not
+ * the network. Left out: the SVG path, SD-JWT disclosures (an ldp_vc credential has none) and the data-share and OVP
+ * QR codes.
  */
 package asia.mosip.renderer.mimoto;
 
@@ -25,8 +27,10 @@ import com.itextpdf.html2pdf.ConverterProperties;
 import com.itextpdf.html2pdf.HtmlConverter;
 import com.itextpdf.html2pdf.resolver.font.DefaultFontProvider;
 import com.itextpdf.kernel.pdf.PdfWriter;
+import com.itextpdf.styledxmlparser.resolver.resource.IResourceRetriever;
 import org.apache.velocity.VelocityContext;
 import org.apache.velocity.app.VelocityEngine;
+import org.apache.velocity.util.introspection.SecureUberspector;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -175,6 +179,9 @@ public class CredentialPDFGeneratorService {
         Properties props = new Properties();
         props.setProperty("resource.loader", "class");
         props.setProperty("class.resource.loader.class", "org.apache.velocity.runtime.resource.loader.ClasspathResourceLoader");
+        // ait-mimoto's second change: a template can't call methods on Java's reflection and system classes. A
+        // second layer only, as Velocity 1.7's list has a known bypass (CVE-2020-13936); the container is the boundary.
+        props.setProperty("runtime.introspector.uberspect", SecureUberspector.class.getName());
         // Changed: a new engine per print, with the properties Mimoto passes to the Velocity singleton. A macro a
         // template defines stays in the singleton for good, so each preview would otherwise depend on the ones
         // before it; this gives every preview Mimoto's first print after a restart.
@@ -186,14 +193,18 @@ public class CredentialPDFGeneratorService {
         return writer.toString();
     }
 
-    /** The PDF iText makes of the evaluated HTML, as Mimoto converts it. */
-    public byte[] toPdf(String mergedHtml) {
+    /**
+     * The PDF iText makes of the evaluated HTML, as Mimoto converts it. Changed: iText loads every address through
+     * {@code resources}, where Mimoto's iText fetches it.
+     */
+    public byte[] toPdf(String mergedHtml, IResourceRetriever resources) {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 
         PdfWriter pdfwriter = new PdfWriter(outputStream);
         DefaultFontProvider defaultFont = new DefaultFontProvider(true, false, false);
         ConverterProperties converterProperties = new ConverterProperties();
         converterProperties.setFontProvider(defaultFont);
+        converterProperties.setResourceRetriever(resources);
         HtmlConverter.convertToPdf(mergedHtml, pdfwriter, converterProperties);
         return outputStream.toByteArray();
     }

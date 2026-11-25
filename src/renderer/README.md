@@ -1,6 +1,6 @@
 # Renderer
 
-The renderer prints a credential the way the Wallet's printer, `ait-mimoto`, prints it, so VC Lab's preview is the Wallet's printout. It is VC Lab's own copy of that print code (ADR 0002): nothing keeps the two in step, so re-check parity by hand after changing either. It first maps the data to claims the way **Certify 0.14** does (see "How it maps the claims"), then runs **Mimoto 0.21.0**'s HTML print path (`injistack/mimoto:0.21.0`, source `mosip/mimoto` tag `v0.21.0`) with `ait-mimoto`'s one change (templates also get `$credentialSubject`, `src/mimoto/README.md`), on the same library versions. It's a small Java service with no Spring. It writes nothing to disk (Compose runs it with a read-only filesystem). It keeps nothing between calls, as long as a template doesn't use reflection to reach past Velocity (see Limits).
+The renderer prints a credential the way the Wallet's printer, `ait-mimoto`, prints it, so VC Lab's preview is the Wallet's printout. It is VC Lab's own copy of that print code (ADR 0002): nothing keeps the two in step, so re-check parity by hand after changing either. It first maps the data to claims the way **Certify 0.14** does (see "How it maps the claims"), then runs **Mimoto 0.21.0**'s HTML print path (`injistack/mimoto:0.21.0`, source `mosip/mimoto` tag `v0.21.0`) with `ait-mimoto`'s changes (templates also get `$credentialSubject`, and Velocity runs with `SecureUberspector`, `src/mimoto/README.md`), on the same library versions. It's a small Java service with no Spring. It writes nothing to disk (Compose runs it with a read-only filesystem). It keeps nothing between calls, as long as a template doesn't use reflection to reach past Velocity (see Limits).
 
 Only VC Lab calls it, at the address in VC Lab's `RENDERER_URL`. In `compose.yaml` it sits on a network marked internal that only VC Lab shares.
 
@@ -21,12 +21,22 @@ POST /render  application/json  ->  200 application/pdf or text/html  |  422 {"e
 
 - `record` and `vcTemplate` give the claims, mapped as Certify maps them. `record` is text so the renderer can read it as the plugin does, strict JSON included. VC Lab makes `vcTemplate` with template-sync's own function (`build_vc_template_base64` in `src/certify_template_sync/sync.py`), so it holds that function's one change (`"courses": ${courses}` unquoted). Template-sync's file-level rewrites (`${CERTIFY_DID}`, `${VDR_BASE_URL}`, `${CDN_BASE_URL}`, `http://vdr.localhost`, `http://cdn.localhost`) are not applied to it.
 - `credentialFile` is Certify's credential file. The renderer reads it the way Certify publishes it and Mimoto reads it: `display`, `display_order` as `order`, and `credential_subject` as `credential_definition.credentialSubject`. For the claims it reads `credential_type`, `context` and `credential_status_purpose`.
-- `output` `html` answers the template as Velocity evaluated it, the HTML iText would print; `pdf` (or none) answers the PDF iText makes of that same HTML. VC Lab's quick view is the first, its PDF the second.
-- `backgroundImage`, when not null, replaces `display[0].background_image.uri`.
+- `output` `html` answers the template as Velocity evaluated it, the HTML iText would print; `pdf` (or none) answers the PDF iText makes of that same HTML. VC Lab's quick view is the first, its PDF the second. Both print the PDF, so the quick view takes as long as the PDF.
+- `backgroundImage`, when not null, replaces `display[0].background_image.uri`. It is a `data:image/png;base64,` URI, and it is also the set's `background.png` (see "What it loads").
 - A record or `vcTemplate` the renderer can't map answers 422 with the reason: `shape` refuses the record (a `null`, or a list or object other than `courses`), Velocity can't evaluate the text, or org.json can't read what it makes (`json_processing_error`, as in Certify). The renderer does not refuse everything Certify refuses: see "Where it differs from Certify".
 - A template that Velocity or iText can't render answers 422. A Velocity error names its line and column; a template nested too deep to parse says so.
+- A template that loads an address the renderer doesn't serve answers 422 naming the address, for `output` `html` too (see "What it loads").
 - A body that isn't the request above, or a credential file it can't read, answers 400.
 - Running out of memory answers 503. `GET /health` answers 200.
+
+## What it loads
+
+iText loads every address a template names (an image, a `@font-face`, a stylesheet) through `SetFiles.java`, which serves only:
+
+- `data:` URIs, which iText decodes itself;
+- the set's files, at their VDR address: an address under `http://vdr.localhost/templates/` whose file name is a file in the set, whatever the folders between. Today the set's one file is `background.png`, the request's `backgroundImage`, so a template that draws `http://vdr.localhost/templates/<config id>/<version>/background.png` previews with the Background before it is on the VDR.
+
+Any other address, on any host or `file:`, and `background.png` when no Background is sent, fails the call with 422 naming it. iText alone would log the address and print without it, while the Wallet's `ait-mimoto` fetches it, so the preview would quietly differ from the print. `output` `html` is printed too, and an address iText asks for and can't get fails it the same way. That doesn't make the quick view the print: a browser lays it out and fetches what iText ignores and never asks `SetFiles` for (a stylesheet's `@import`, `<script src>`, `<iframe src>`, `srcset`, `<body background>`, a `@font-face` in a format iText doesn't read). So the quick view can show a web font the PDF doesn't; the PDF is the reference. Sandboxing the quick view is out of the spec's scope. An empty address (`<img src="">`, which the demo template draws with `$logoUrl` empty) loads nothing and is not refused: the Wallet loads nothing there either.
 
 ## How it maps the claims
 
@@ -46,7 +56,7 @@ POST /render  application/json  ->  200 application/pdf or text/html  |  422 {"e
    | `_dateTool`, `_esc` | velocity-tools `DateTool` and `EscapeTool` | the same tools, from velocity-tools 2.0 (Certify has 3.1) |
 
    Not added: `credentialId` (both Installations set `mosip.certify.data-provider-plugin.id-field-prefix-uri`, so Certify adds it; the renderer does not) and `renderingTemplateId` (`rendering-template-id` is empty here).
-3. A new Velocity engine with Certify's two settings (`input.encoding` and `output.encoding` UTF-8) evaluates `vcTemplate` with those variables, and org.json reads the result. Its `credentialSubject` is the claims, handed to Mimoto's print as Mimoto would read them from the signed credential (Jackson, in org.json's order).
+3. A new Velocity engine with Certify's two settings (`input.encoding` and `output.encoding` UTF-8), plus `SecureUberspector` (see Limits), evaluates `vcTemplate` with those variables, and org.json reads the result. Its `credentialSubject` is the claims, handed to Mimoto's print as Mimoto would read them from the signed credential (Jackson, in org.json's order).
 
 So a `${field}` the record lacks stays the text `${field}`, `$!{field}` gives nothing, `$name-$id` reads a variable `$name-` (a Velocity name may hold `-`), and `${name.toUpperCase()}` calls Java, all as in Certify.
 
@@ -59,6 +69,7 @@ The preview can print a record or mapping that Certify signs differently or refu
 - An answer with a `credentialSubject` object is read as that object (VC Lab takes the Adapter's response with or without that envelope); the plugin refuses the envelope.
 - Certify's `toJsonMap` and its extra variables (`rootContext`, `envConfigs`, `claim_169_values`, `credentialId`) are not reproduced: a mapping that uses them, or `$type` in quotes, previews differently from what Certify signs.
 - Template-sync's file-level rewrites (`${CERTIFY_DID}`, `${VDR_BASE_URL}`, `${CDN_BASE_URL}`, `http://vdr.localhost`, `http://cdn.localhost`) are not applied to the preview's mapping, so they show literally inside a claim.
+- The mapping runs with `SecureUberspector`, Certify's without: a `vc_template` that calls a method on Java's reflection or system classes shows the call as written in the preview, while Certify evaluates it.
 
 ## What it repeats from Mimoto 0.21
 
@@ -71,8 +82,8 @@ The copied code is in `src/main/java/asia/mosip/renderer/mimoto/`. Each file nam
   - a list of text is joined with `", "`;
   - a list of objects becomes the `value` of the entry in the locale, else `""`.
 - **Template variables:** `credentialSubject` (the claims whole, as `ait-mimoto` adds them), `rowProperties` (claim → {display name: text}), `backgroundImage`, `logoUrl`, `textColor`, `backgroundColor`, `titleName`, `qrCodeImage`, `face`, `isMaskedOn`, `isSdJwtWithDisclosures`, `disclosures`, `credentialValidity`.
-- **Velocity 1.7** with the properties Mimoto sets, otherwise its default settings, so a template can call Java string methods (`$text.split("\n")`).
-- **iText html2pdf 5.0.3** with `DefaultFontProvider(true, false, false)`: the 14 standard PDF fonts only. In the Wallet, any other font comes in through `@font-face` with an absolute address, and images need absolute addresses too (no base URL is set). The renderer reaches no address (see Limits), so only data URIs draw in the preview.
+- **Velocity 1.7** with the properties Mimoto sets plus `SecureUberspector`, as `ait-mimoto` runs it, otherwise its default settings, so a template can call Java string methods (`$text.split("\n")`) but not methods on reflection and system classes (see Limits).
+- **iText html2pdf 5.0.3** with `DefaultFontProvider(true, false, false)`: the 14 standard PDF fonts only. In the Wallet, any other font comes in through `@font-face` with an absolute address, and images need absolute addresses too (no base URL is set). The renderer loads only data URIs and the set's files, and refuses any other address (see "What it loads").
 
 Where it differs from Mimoto, because VC Lab has no signed credential and no issuers list:
 
@@ -84,13 +95,13 @@ Where it differs from Mimoto, because VC Lab has no signed credential and no iss
 
 ## Limits
 
-A template runs inside the renderer, and Velocity 1.7's default settings let it reach Java reflection, while VC Lab has no login. Such a template can read the renderer's environment, call out over its network, change state that later calls see, or stop the JVM. So the renderer is contained:
+A template runs inside the renderer, while VC Lab has no login. Both Velocity engines (the `vc_template` mapping and the print template) run with `SecureUberspector`, which refuses method calls on `java.lang.reflect` and on classes such as `Class`, `ClassLoader`, `Runtime`, `System` and `Thread`: the call is left in the output as written. That is a second layer only. Velocity 1.7's list has a known bypass (CVE-2020-13936), and through it a template can read the renderer's environment, call out over its network, change state that later calls see, or stop the JVM. So the renderer is contained:
 
 - `docker/Dockerfile.renderer` runs it as uid 1000, with a fixed 640 MB heap (`-Xmx640m`).
-- `compose.yaml` gives it a read-only filesystem, no capabilities, `no-new-privileges`, 1 GB of memory, at most 128 tasks (threads count against this, not only processes) and `restart: unless-stopped`. Its only network is marked internal and shared with VC Lab alone: it has no route out, and nothing but VC Lab can reach it. So an image or font a template names by address doesn't load.
+- `compose.yaml` gives it a read-only filesystem, no capabilities, `no-new-privileges`, 1 GB of memory, at most 128 tasks (threads count against this, not only processes) and `restart: unless-stopped`. Its only network is marked internal and shared with VC Lab alone: it has no route out, and nothing but VC Lab can reach it. iText doesn't try the network either: it loads only what `SetFiles.java` serves (see "What it loads").
 - The server reads, prints and answers at most four requests at once; the others wait their turn.
 
-Measured on 2026-11-22 inside the container at those limits: the AIT transcript template with an 8 MB A4 Background (2480 × 3508 PNG). Three in a row, then 4, 10 and 24 at once, all printed (`200`, the slowest 4.1 s in the wave of 24). The container's memory peaked at 775 MB of 1024 MB and its tasks at 42 of 128. A template calling `Runtime.exit` stopped the JVM; Docker restarted it, and the next prints passed. Before the queue and the fixed heap (a 1 GB limit, heap at 75% of it), 10 at once gave five 503s and 24 at once dropped four connections.
+Measured on 2026-11-22 inside the container at those limits: the AIT transcript template with an 8 MB A4 Background (2480 × 3508 PNG). Three in a row, then 4, 10 and 24 at once, all printed (`200`, the slowest 4.1 s in the wave of 24). The container's memory peaked at 775 MB of 1024 MB and its tasks at 42 of 128. A template calling `Runtime.exit` (the renderer then ran without `SecureUberspector`, as the bypass would let it) stopped the JVM; Docker restarted it, and the next prints passed. Before the queue and the fixed heap (a 1 GB limit, heap at 75% of it), 10 at once gave five 503s and 24 at once dropped four connections.
 
 ## Libraries
 

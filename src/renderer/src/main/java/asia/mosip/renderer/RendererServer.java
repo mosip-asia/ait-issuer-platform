@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
@@ -45,8 +46,9 @@ public final class RendererServer {
 
     /**
      * POST /render's body. record is the Adapter's answer as text, read as the plugin reads it; vcTemplate is the credential file's vc_template as the
-     * text template-sync stores for Certify; credentialFile is Certify's credential file, as VC Lab holds it; output
-     * is "pdf" (the default) or "html", the evaluated template that the PDF would be printed from.
+     * text template-sync stores for Certify; credentialFile is Certify's credential file, as VC Lab holds it;
+     * backgroundImage is the Background as a PNG data URI, or null; output is "pdf" (the default) or "html", the
+     * evaluated template that the PDF would be printed from.
      */
     record RenderRequest(String template, String record, String vcTemplate, JsonNode credentialFile,
                          String backgroundImage, String locale, String output) {}
@@ -116,11 +118,17 @@ public final class RendererServer {
             error(exchange, 422, e.getMessage());
             return;
         }
-        byte[] printed;
+        // The set's files at their VDR address: today the Background, as the PNG its data URI holds.
+        String background = request.backgroundImage();
+        SetFiles files = new SetFiles(background == null ? Map.of()
+                : Map.of("background.png", Base64.getDecoder().decode(background.substring(background.indexOf(',') + 1))));
+        String merged;
+        byte[] pdf;
         try {
-            String merged = PRINTER.generateHtml(request.template(), credentialSubject, metadata,
-                    request.backgroundImage(), request.locale() != null ? request.locale() : "en");
-            printed = html ? merged.getBytes(StandardCharsets.UTF_8) : PRINTER.toPdf(merged);
+            merged = PRINTER.generateHtml(request.template(), credentialSubject, metadata,
+                    background, request.locale() != null ? request.locale() : "en");
+            // Printed for the quick view too, which must not show what the print can't load.
+            pdf = PRINTER.toPdf(merged, files);
         } catch (Exception e) {
             // The input parsed, so what failed is printing it, as Mimoto would fail: the message is the answer.
             // Velocity's names the template's line and column; iText's names what it couldn't lay out.
@@ -132,7 +140,14 @@ public final class RendererServer {
             error(exchange, 422, "the template nests its blocks too deep to print");
             return;
         }
-        send(exchange, 200, html ? "text/html; charset=utf-8" : "application/pdf", printed);
+        if (!files.refused().isEmpty()) {
+            error(exchange, 422, "the template loads " + String.join(", ", files.refused()) + ": the preview loads"
+                    + " only data: URIs and the set's files at " + SetFiles.VDR_TEMPLATES + "<any folders>/<file name>"
+                    + " (background.png, when a Background is loaded)");
+            return;
+        }
+        send(exchange, 200, html ? "text/html; charset=utf-8" : "application/pdf",
+                html ? merged.getBytes(StandardCharsets.UTF_8) : pdf);
     }
 
     /**

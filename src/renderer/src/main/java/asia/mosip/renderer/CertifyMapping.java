@@ -11,6 +11,7 @@ import org.apache.velocity.VelocityContext;
 import org.apache.velocity.app.VelocityEngine;
 import org.apache.velocity.exception.VelocityException;
 import org.apache.velocity.tools.generic.DateTool;
+import org.apache.velocity.util.introspection.SecureUberspector;
 import org.apache.velocity.tools.generic.EscapeTool;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -92,6 +93,9 @@ final class CertifyMapping {
         VelocityEngine engine = new VelocityEngine();  // VelocityTemplatingEngineImpl.initialize
         engine.setProperty("input.encoding", "UTF-8");
         engine.setProperty("output.encoding", "UTF-8");
+        // Not Certify's: a vc_template can't call methods on Java's reflection and system classes. A second layer
+        // only, as Velocity 1.7's list has a known bypass (CVE-2020-13936); the container is the boundary.
+        engine.setProperty("runtime.introspector.uberspect", SecureUberspector.class.getName());
         engine.init();
         StringWriter out = new StringWriter();
         try {
