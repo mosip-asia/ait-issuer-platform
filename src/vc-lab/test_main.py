@@ -3,8 +3,9 @@
 Run:
     python3 src/vc-lab/test_main.py
 
-The PDF tests need WeasyPrint's system libraries (Pango): they run in the ait-vc image and skip on a host
-without them.
+The preview tests need the renderer (src/renderer) at RENDERER_URL and skip without it. Inside Compose, VC Lab has
+it: `docker compose run --rm vc-lab python src/vc-lab/test_main.py`. The Background tests also need WeasyPrint's
+system libraries (Pango) to draw their paper; the ait-vc image has them.
 """
 
 from __future__ import annotations
@@ -12,15 +13,17 @@ from __future__ import annotations
 import html
 import io
 import json
+import os
 import sys
 import tempfile
 import zipfile
 from pathlib import Path
 from typing import Callable
+from urllib.parse import quote
 
 VC_LAB_DIR = Path(__file__).resolve().parent
 REPO_ROOT = VC_LAB_DIR.parent.parent
-sys.path.insert(0, str(VC_LAB_DIR))
+sys.path[:0] = [str(VC_LAB_DIR), str(VC_LAB_DIR.parent)]  # VC Lab, and src/ for template-sync
 
 import main as vc_lab  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -31,6 +34,8 @@ client = TestClient(vc_lab.app)
 # ---------------------------------------------------------------------------------------------------------------
 # The made-up set
 
+# Reads one claim from $rowProperties, as the Wallet's templates do, and draws the course grid from
+# $credentialSubject, which only ait-mimoto gives.
 TEMPLATE = """<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><title>$titleName</title>
 <style>@page { size: A4 portrait; margin: 20mm; } .page + .page { page-break-before: always; }</style></head>
@@ -46,10 +51,10 @@ TEMPLATE = """<!DOCTYPE html>
   <p>Holder: #claimValue("holderName")</p>
   <p>Thesis: #claimValue("thesisTitle")</p>
   <table>
-#if($terms)
-#foreach($t in $terms)
+#if($credentialSubject.courses)
+#foreach($t in $credentialSubject.courses)
     <tr><th colspan="3">$t.label</th></tr>
-#foreach($c in $t.courses)
+#foreach($c in $t.items)
     <tr><td>$c.code</td><td>$c.title</td><td>$c.grade</td></tr>
 #end
 #end
@@ -67,8 +72,8 @@ TEMPLATE = """<!DOCTYPE html>
 
 CREDENTIAL = {
     "credential_config_key_id": "example-record",
-    "display": [{"name": "Example Record", "logo": {"url": "https://example.org/logo.png"},
-                 "background_color": "#ffffff", "text_color": "#123456"}],
+    "credential_type": "ExampleRecord,VerifiableCredential",
+    "display": [{"name": "Example Record", "locale": "en", "background_color": "#ffffff", "text_color": "#123456"}],
     "vc_template": {
         "@context": ["https://www.w3.org/ns/credentials/v2"],
         "issuer": "${_issuer}",
@@ -76,20 +81,20 @@ CREDENTIAL = {
         "credentialSubject": {
             "id": "${_holderId}",
             "holderName": "${name}",
-            "thesisTitle": "${thesis.title}",
-            "terms": "${records}",
+            "thesisTitle": "${thesisTitle}",
+            "courses": "${courses}",  # template-sync unquotes it, so Certify signs a list
         },
     },
 }
 
-TRICKY_TITLE = "Costs in $titleName & #if($terms)loops#end"
+TRICKY_TITLE = "Costs in $titleName & #if($x)loops#end"
 SUBJECT = {
     "name": "Ada Example",
-    "thesis": {"title": "On Small Fixtures", "grade": "P"},
-    "records": [
-        {"label": "Term One", "courses": [{"code": "XY101", "title": "Fixture Design", "grade": "A"},
-                                          {"code": "XY102", "title": TRICKY_TITLE, "grade": "B+"}]},
-        {"label": "Term Two", "courses": [{"code": "XY201", "title": "Seams", "grade": "A"}]},
+    "thesisTitle": "On Small Fixtures",
+    "courses": [
+        {"label": "Term One", "items": [{"code": "XY101", "title": "Fixture Design", "grade": "A"},
+                                        {"code": "XY102", "title": TRICKY_TITLE, "grade": "B+"}]},
+        {"label": "Term Two", "items": [{"code": "XY201", "title": "Seams", "grade": "A"}]},
     ],
 }
 SAMPLE = {"@context": ["https://www.w3.org/ns/credentials/v2"], "type": ["VerifiableCredential"],
@@ -148,14 +153,30 @@ def _pages(path: str) -> list:
     return PdfReader(io.BytesIO(res.content)).pages
 
 
+def _skip_without(test: str, *needs: str) -> bool:
+    """True, after printing SKIP, when this host lacks what the test needs: the renderer, or WeasyPrint."""
+    if "renderer" in needs and not os.environ.get("RENDERER_URL"):
+        print(f"SKIP {test} (no RENDERER_URL)")
+        return True
+    if "weasyprint" in needs:
+        try:
+            import weasyprint  # noqa: F401
+        except Exception as e:  # Pango missing on this host; the ait-vc image has it
+            print(f"SKIP {test} ({type(e).__name__})")
+            return True
+    return False
+
+
 # ---------------------------------------------------------------------------------------------------------------
-# Tests
+# Tests that need no renderer
 
 
 def test_health_and_dashboard() -> None:
     assert client.get("/health").json() == {"status": "UP", "service": "vc-lab"}
     page = client.get("/")
     assert page.status_code == 200 and "VC Lab" in page.text
+    assert "what the Wallet prints" in page.text, "the PDF is named as the reference"
+    assert "quick view" in page.text, "the HTML is named as the quick view"
 
 
 def test_starts_empty_and_asks_for_the_missing_files() -> None:
@@ -163,47 +184,18 @@ def test_starts_empty_and_asks_for_the_missing_files() -> None:
     status = client.get("/api/set").json()
     assert status["loaded"] == {"template": None, "credential": None, "sample": None, "background": None}
     _upload(template=("record.html", TEMPLATE.encode()))
-    for path in ("/preview", "/preview?view=wallet", "/export.pdf"):
+    for path in ("/preview", "/preview.pdf"):
         res = client.get(path)
         assert res.status_code == 409, (path, res.status_code)
         assert "credential" in res.json()["detail"] and "sample" in res.json()["detail"]
         assert "template" not in res.json()["detail"]
 
 
-def test_preview_shows_mapped_values() -> None:
-    _upload_set()
-    page = client.get("/preview").text
-    assert "Ada Example" in page, "a mapped field"
-    assert "On Small Fixtures" in page, "a nested field (${thesis.title})"
-    assert "Term One" in page and "XY101" in page and "XY201" in page, "a looped list, with its nested list"
-    assert "Courses are not listed" not in page
-    assert "Example Record" in page and "#123456" in page, "the title and colours come from the display entry"
-    assert "data:image/png;base64,iVBOR" in page, "a mock QR"
-    assert TRICKY_TITLE in html.unescape(page), "loop data with $ and # prints as written"
-    assert "#claimValue" not in page and "#foreach" not in page and "#end" not in page
-
-
-def test_wallet_view_drops_the_list() -> None:
-    _upload_set()
-    page = client.get("/preview?view=wallet").text
-    assert "Ada Example" in page and "On Small Fixtures" in page
-    assert "XY101" not in page and "Term One" not in page
-    assert "Courses are not listed in this copy." in page, "the template's fallback"
-
-
-def test_sample_without_credential_subject() -> None:
-    _upload_set()
-    with_envelope = client.get("/preview").text
-    assert _upload(sample=("bare.json", _json(SUBJECT))).status_code == 200
-    assert client.get("/preview").text == with_envelope, "a bare record renders the same"
-
-
 def test_replace_one_slot() -> None:
     _upload_set()
-    res = _upload(template=("v2.html", b"<p>v2 for #claimValue('holderName')</p>"))
+    res = _upload(template=("v2.html", b"<p>v2</p>"))
     assert res.json()["loaded"] == {"template": "v2.html", "credential": "record.json",
                                     "sample": "adapter-response.json", "background": None}
-    assert client.get("/preview").text == "<p>v2 for Ada Example</p>"
 
 
 def test_remove_background_then_clear() -> None:
@@ -221,8 +213,8 @@ def test_download_and_upload_back() -> None:
     _upload_set()
     paper = _blank_pdf()
     assert _upload(background=("../../secret/paper.pdf", paper)).status_code == 200
-    before_status, before_page = client.get("/api/set").json(), client.get("/preview").text
-    assert before_status["loaded"]["background"] == "paper.pdf", "no path parts in a stored name"
+    before = client.get("/api/set").json()
+    assert before["loaded"]["background"] == "paper.pdf", "no path parts in a stored name"
 
     res = client.get("/download")
     assert res.status_code == 200 and res.headers["content-type"] == "application/zip"
@@ -230,12 +222,17 @@ def test_download_and_upload_back() -> None:
         assert sorted(z.namelist()) == ["background/paper.pdf", "credential/record.json",
                                         "sample/adapter-response.json", "template/record.html"]
         assert z.read("background/paper.pdf") == paper, "each file exactly as uploaded"
+        assert z.read("template/record.html") == TEMPLATE.encode()
         assert json.loads(z.read("credential/record.json")) == CREDENTIAL
 
     client.delete("/api/set")
     assert _upload(bundle=("vc-lab-set.zip", res.content)).status_code == 200
-    assert client.get("/api/set").json() == before_status
-    assert client.get("/preview").text == before_page
+    assert client.get("/api/set").json() == before
+    def files(zip_bytes: bytes) -> dict[str, bytes]:
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as z:
+            return {name: z.read(name) for name in z.namelist()}
+
+    assert files(client.get("/download").content) == files(res.content), "the same files come back"
 
 
 def test_rejects_wrong_files() -> None:
@@ -262,6 +259,8 @@ def test_rejects_wrong_files() -> None:
         assert res.status_code == 400, (case, res.status_code, res.text)
         assert isinstance(res.json()["detail"], str) and res.json()["detail"], case
     assert client.get("/api/set").json() == before, "a rejected upload leaves the set as it was"
+    assert _upload(template=("t.html", b"## #end in a comment\n#* #foreach *#<p>ok</p>")).status_code == 200, \
+        "Velocity comments don't count"
 
 
 def test_large_upload_stays_in_memory() -> None:
@@ -271,31 +270,108 @@ def test_large_upload_stays_in_memory() -> None:
     tempfile.SpooledTemporaryFile.rollover = lambda self: spilled.append(True) or original(self)
     try:
         _upload_set()
-        big = b"<p>#claimValue('holderName')</p>" + b" " * (3 * 1024 * 1024)
+        big = b"<p>big</p>" + b" " * (3 * 1024 * 1024)
         assert _upload(template=("big.html", big)).status_code == 200
     finally:
         tempfile.SpooledTemporaryFile.rollover = original
     assert not spilled, "the upload was written to a temporary file on disk"
-    assert "Ada Example" in client.get("/preview").text
 
 
-def test_export_pdf_lays_the_background_under_page_one() -> bool:
-    try:
-        import weasyprint  # noqa: F401
-    except Exception as e:  # Pango missing on this host; the ait-vc image has it
-        print(f"SKIP test_export_pdf_lays_the_background_under_page_one ({type(e).__name__})")
+# ---------------------------------------------------------------------------------------------------------------
+# Tests through the renderer
+
+
+def test_grid_from_credential_subject_in_the_pdf_and_the_quick_view() -> bool:
+    if _skip_without("test_grid_from_credential_subject_in_the_pdf_and_the_quick_view", "renderer"):
         return False
     _upload_set()
-    plain = _pages("/export.pdf")
-    assert len(plain) == 2, "page 1 the record, page 2 the QR"
-    assert "Ada Example" in plain[0].extract_text() and "XY101" in plain[0].extract_text()
+    page = client.get("/preview")
+    assert page.status_code == 200 and page.headers["content-type"].startswith("text/html"), page.text
+    quick = html.unescape(page.text)
+    pdf = _pages("/preview.pdf")
+    assert len(pdf) == 2, "page 1 the record, page 2 the QR"
+    printed = pdf[0].extract_text()
+    for shown, where in ((quick, "quick view"), (printed, "PDF")):
+        assert "Ada Example" in shown and "On Small Fixtures" in shown, (where, "claims through $rowProperties")
+        assert "Term One" in shown and "XY101" in shown and "XY201" in shown, (where, "the grid from $credentialSubject")
+        assert "Courses are not listed" not in shown, where
+        assert "Example Record" in shown, (where, "$titleName from the credential file's display")
+    assert TRICKY_TITLE in quick, "data with $ and # prints as written"
+    assert "#123456" in quick and "data:image/png;base64,iVBOR" in quick, "the text colour and the QR code"
+    assert "#claimValue" not in quick and "#foreach" not in quick
+    return True
+
+
+def test_velocity_and_mapping_errors_answer_422_with_the_engines_message() -> bool:
+    if _skip_without("test_velocity_and_mapping_errors_answer_422_with_the_engines_message", "renderer"):
+        return False
+    _upload_set()
+    assert _upload(template=("bad.html", b"<p>ok</p>\n<p>#set($x = )</p>")).status_code == 200, "balanced, uploads"
+    for path in ("/preview", "/preview.pdf"):
+        res = client.get(path)
+        assert res.status_code == 422, (path, res.status_code, res.text)
+        assert "line 2" in res.json()["detail"], (path, "Velocity names the line", res.json())
+
+    _upload_set()
+    assert _upload(sample=("null.json", _json({**SUBJECT, "thesisTitle": None}))).status_code == 200
+    for path in ("/preview", "/preview.pdf"):
+        res = client.get(path)
+        assert res.status_code == 422, (path, res.status_code, res.text)
+        assert "null for thesisTitle" in res.json()["detail"], (path, "the plugin's refusal", res.json())
+    return True
+
+
+def test_a_record_certify_refuses_answers_422_with_the_plugins_reason() -> bool:
+    if _skip_without("test_a_record_certify_refuses_answers_422_with_the_plugins_reason", "renderer"):
+        return False
+    cases = {
+        "a reserved key": (_json({**SAMPLE, "credentialSubject": {**SUBJECT, "id": "st0001"}}),
+                           "the Adapter's record carries the forbidden key id"),
+        "a duplicate key": (b'{"name": "Ada Example", "name": "Ada Again", "thesisTitle": "T", "courses": []}',
+                            "the Adapter's answer is not the expected JSON"),
+    }
+    for case, (sample, reason) in cases.items():
+        _upload_set()
+        assert _upload(sample=("refused.json", sample)).status_code == 200, case
+        for path in ("/preview", "/preview.pdf"):
+            res = client.get(path)
+            assert res.status_code == 422, (case, path, res.status_code, res.text)
+            assert "adapter_error" in res.json()["detail"] and reason in res.json()["detail"], (case, res.json())
+    return True
+
+
+def test_a_template_named_in_any_script_previews() -> bool:
+    if _skip_without("test_a_template_named_in_any_script_previews", "renderer"):
+        return False
+    _upload_set()
+    assert _upload(template=("ใบรับรอง.html", TEMPLATE.encode())).status_code == 200
+    res = client.get("/preview.pdf")
+    assert res.status_code == 200, res.text
+    disposition = res.headers["content-disposition"]
+    assert "filename*=UTF-8''" + quote("ใบรับรอง.pdf") in disposition, disposition
+    assert "Ada Example" in PdfReader(io.BytesIO(res.content)).pages[0].extract_text()
+    return True
+
+
+def test_sample_without_credential_subject() -> bool:
+    if _skip_without("test_sample_without_credential_subject", "renderer"):
+        return False
+    _upload_set()
+    with_envelope = client.get("/preview").text
+    assert _upload(sample=("bare.json", _json(SUBJECT))).status_code == 200
+    assert client.get("/preview").text == with_envelope, "a bare record renders the same"
+    return True
+
+
+def test_pdf_lays_the_background_under_page_one() -> bool:
+    if _skip_without("test_pdf_lays_the_background_under_page_one", "renderer", "weasyprint"):
+        return False
+    _upload_set()
+    plain = _pages("/preview.pdf")
     assert "PAPERMARK" not in plain[0].extract_text()
 
-    wallet = _pages("/export.pdf?view=wallet")
-    assert len(wallet) == 2 and "XY101" not in wallet[0].extract_text()
-
     assert _upload(background=("paper.pdf", _paper_pdf("PAPERMARK"))).status_code == 200
-    layered = _pages("/export.pdf")
+    layered = _pages("/preview.pdf")
     assert len(layered) == 2
     assert "PAPERMARK" in layered[0].extract_text(), "the background is under page 1"
     assert "Ada Example" in layered[0].extract_text(), "with the record over it"
@@ -305,16 +381,13 @@ def test_export_pdf_lays_the_background_under_page_one() -> bool:
 
 
 def test_background_with_its_own_rotation_comes_out_portrait() -> bool:
-    try:
-        import weasyprint  # noqa: F401
-    except Exception as e:
-        print(f"SKIP test_background_with_its_own_rotation_comes_out_portrait ({type(e).__name__})")
+    if _skip_without("test_background_with_its_own_rotation_comes_out_portrait", "renderer", "weasyprint"):
         return False
     _upload_set()
     paper = _paper_pdf("UPRIGHT")
     assert PdfReader(io.BytesIO(paper)).pages[0].rotation == 90
     assert _upload(background=("paper.pdf", paper)).status_code == 200
-    page = _pages("/export.pdf")[0]
+    page = _pages("/preview.pdf")[0]
     assert float(page.mediabox.height) > float(page.mediabox.width), "portrait A4"
     assert "UPRIGHT" in page.extract_text(orientations=(0,)), "the paper reads upright, as a viewer shows it"
     return True
@@ -333,15 +406,17 @@ def main() -> None:
     tests: list[Callable[[], object]] = [
         test_health_and_dashboard,
         test_starts_empty_and_asks_for_the_missing_files,
-        test_preview_shows_mapped_values,
-        test_wallet_view_drops_the_list,
-        test_sample_without_credential_subject,
         test_replace_one_slot,
         test_remove_background_then_clear,
         test_download_and_upload_back,
         test_rejects_wrong_files,
         test_large_upload_stays_in_memory,
-        test_export_pdf_lays_the_background_under_page_one,
+        test_grid_from_credential_subject_in_the_pdf_and_the_quick_view,
+        test_velocity_and_mapping_errors_answer_422_with_the_engines_message,
+        test_a_record_certify_refuses_answers_422_with_the_plugins_reason,
+        test_a_template_named_in_any_script_previews,
+        test_sample_without_credential_subject,
+        test_pdf_lays_the_background_under_page_one,
         test_background_with_its_own_rotation_comes_out_portrait,
     ]
     passed = skipped = 0

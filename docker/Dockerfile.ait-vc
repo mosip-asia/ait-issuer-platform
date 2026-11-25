@@ -12,7 +12,7 @@
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
 # Install system runtime requirements (OpenSSL for PKCS12 / Ed25519, curl for healthchecks,
-# Pango and the Liberation fonts for VC Lab's hard-copy PDF through WeasyPrint)
+# Pango and the Liberation fonts for WeasyPrint, which VC Lab's tests draw their background paper with)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssl \
     curl \

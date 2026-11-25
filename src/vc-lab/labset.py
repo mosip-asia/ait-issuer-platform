@@ -16,7 +16,6 @@ from dataclasses import dataclass
 from typing import Any, Callable, Generic, TypeVar
 
 import hardcopy
-import template_engine
 
 MAX_UPLOAD = 8 * 1024 * 1024  # bytes: one request, and the files unpacked from one zip
 REQUIRED = ("template", "credential", "sample")
@@ -67,8 +66,18 @@ def _template(name: str, data: bytes) -> str:
         source = data.decode("utf-8")
     except UnicodeDecodeError:
         raise ValueError(f"template {name!r} is not UTF-8 text") from None
-    template_engine.check_template(source)
+    depth = 0
+    for tag in _BLOCK_TAG.finditer(_COMMENT.sub("", source)):
+        depth += -1 if tag.group(0) == "#end" else 1
+        if depth < 0:
+            raise ValueError(f"template {name!r} has an #end without an #if, #foreach or #macro")
+    if depth:
+        raise ValueError(f"template {name!r} has {depth} #if, #foreach or #macro without an #end")
     return source
+
+
+_BLOCK_TAG = re.compile(r"#(?:if|foreach|macro)\b|#end\b")
+_COMMENT = re.compile(r"##[^\n]*|#\*.*?\*#", re.DOTALL)  # Velocity's line and block comments
 
 
 def _json_object(slot: str, name: str, data: bytes) -> dict[str, Any]:
