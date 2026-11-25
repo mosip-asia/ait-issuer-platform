@@ -228,8 +228,11 @@ def test_download_and_upload_back() -> None:
     client.delete("/api/set")
     assert _upload(bundle=("vc-lab-set.zip", res.content)).status_code == 200
     assert client.get("/api/set").json() == before
-    again = client.get("/download")
-    assert again.content == res.content, "the same files come back"
+    def files(zip_bytes: bytes) -> dict[str, bytes]:
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as z:
+            return {name: z.read(name) for name in z.namelist()}
+
+    assert files(client.get("/download").content) == files(res.content), "the same files come back"
 
 
 def test_rejects_wrong_files() -> None:
