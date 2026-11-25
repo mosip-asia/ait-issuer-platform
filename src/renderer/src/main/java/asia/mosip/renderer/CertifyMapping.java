@@ -1,6 +1,5 @@
 package asia.mosip.renderer;
 
-import asia.mosip.issuer.plugin.TemplateRecord;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.io.StringWriter;
 import java.util.ArrayList;
@@ -20,8 +19,8 @@ import org.json.JSONObject;
  * The claims Certify 0.14 signs for a record, computed by Certify's steps on Certify's library versions (Velocity 1.7,
  * org.json 20241224). The steps are read from the bytecode of ghcr.io/mosip-asia/ait-certify's certify-service.jar:
  * {@code CertifyIssuanceServiceImpl.getVerifiableCredential} (ldp_vc) and
- * {@code VelocityTemplatingEngineImpl.format}. The record goes first through this platform's Data-provider plugin
- * ({@link TemplateRecord}, the plugin's own code). README.md, "How it maps the claims", lists the variables.
+ * {@code VelocityTemplatingEngineImpl.format}. The record goes first through this platform's Data-provider plugin's
+ * step ({@link TemplateRecord}, the renderer's copy of it). README.md, "How it maps the claims", lists the variables.
  */
 final class CertifyMapping {
 

@@ -23,7 +23,7 @@ import java.util.concurrent.Semaphore;
 
 /**
  * The renderer: one call, POST /render, that maps a record to claims the way Certify 0.14 does and prints them the
- * way Mimoto 0.21's HTML path does (README.md). JSON in, PDF out. Nothing is written to disk. Nothing is kept
+ * way ait-mimoto's HTML path does (README.md). JSON in, the PDF or the HTML it is printed from out. Nothing is written to disk. Nothing is kept
  * between calls, unless a template uses reflection to reach past Velocity (README.md, "Limits").
  */
 public final class RendererServer {
@@ -45,10 +45,11 @@ public final class RendererServer {
 
     /**
      * POST /render's body. record is the Adapter's record; vcTemplate is the credential file's vc_template as the
-     * text template-sync stores for Certify; credentialFile is Certify's credential file, as VC Lab holds it.
+     * text template-sync stores for Certify; credentialFile is Certify's credential file, as VC Lab holds it; output
+     * is "pdf" (the default) or "html", the evaluated template that the PDF would be printed from.
      */
     record RenderRequest(String template, JsonNode record, String vcTemplate, JsonNode credentialFile,
-                         String backgroundImage, String locale) {}
+                         String backgroundImage, String locale, String output) {}
 
     public static void main(String[] args) throws IOException {
         int port = Integer.parseInt(System.getenv().getOrDefault("PORT", "8080"));
@@ -98,6 +99,7 @@ public final class RendererServer {
             error(exchange, 400, "template, record (an object), vcTemplate and credentialFile are required");
             return;
         }
+        boolean html = "html".equals(request.output());
         CredentialsSupportedResponse metadata;
         try {
             metadata = issuerMetadata(request.credentialFile());
@@ -114,10 +116,11 @@ public final class RendererServer {
             error(exchange, 422, e.getMessage());
             return;
         }
-        byte[] pdf;
+        byte[] printed;
         try {
-            pdf = PRINTER.generatePdf(request.template(), credentialSubject, metadata,
+            String merged = PRINTER.generateHtml(request.template(), credentialSubject, metadata,
                     request.backgroundImage(), request.locale() != null ? request.locale() : "en");
+            printed = html ? merged.getBytes(StandardCharsets.UTF_8) : PRINTER.toPdf(merged);
         } catch (Exception e) {
             // The input parsed, so what failed is printing it, as Mimoto would fail: the message is the answer.
             // Velocity's names the template's line and column; iText's names what it couldn't lay out.
@@ -129,7 +132,7 @@ public final class RendererServer {
             error(exchange, 422, "the template nests its blocks too deep to print");
             return;
         }
-        send(exchange, 200, "application/pdf", pdf);
+        send(exchange, 200, html ? "text/html; charset=utf-8" : "application/pdf", printed);
     }
 
     /**

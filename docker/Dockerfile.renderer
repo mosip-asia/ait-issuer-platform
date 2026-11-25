@@ -7,8 +7,6 @@ WORKDIR /build
 COPY src/renderer/pom.xml .
 RUN mvn -q -B dependency:go-offline
 COPY src/renderer/src ./src
-# The Data-provider plugin's record step, the one source of it: the renderer maps the claims as Certify does.
-COPY src/issuer/src/main/java/asia/mosip/issuer/plugin/TemplateRecord.java ./src/main/java/asia/mosip/issuer/plugin/
 RUN mvn -q -B package -DskipTests
 
 # Stage 2: the service, on the same Java as Mimoto 0.21's image (Temurin 21)

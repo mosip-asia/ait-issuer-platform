@@ -4,11 +4,12 @@
  *
  * Copied from mosip/mimoto v0.21.0, src/main/java/io/mosip/mimoto/service/CredentialPDFGeneratorService.java: the
  * HTML path of generatePdfForVerifiableCredential (getPdfResourceFromVcProperties, extractFace, formatValue,
- * renderVCInCredentialTemplate, constructQRCode) and Utilities.encodeToString. Changed: no Spring; the template, the
- * claims and the issuer's metadata are passed in instead of fetched; the QR holds placeholder text, as no credential
- * is signed; logoUrl comes from the credential file's display entry, as no issuers list is read; a new Velocity
- * engine renders each print. Left out: the SVG
- * path, SD-JWT disclosures (an ldp_vc credential has none) and the data-share and OVP QR codes.
+ * renderVCInCredentialTemplate, constructQRCode) and Utilities.encodeToString, with ait-mimoto's one change
+ * (src/mimoto/CredentialPDFGeneratorService.java: templates also get $credentialSubject). Changed: no Spring; the
+ * template, the claims and the issuer's metadata are passed in instead of fetched; the QR holds placeholder text, as
+ * no credential is signed; logoUrl is empty, as no issuers list is read; a new Velocity engine renders each print;
+ * renderVCInCredentialTemplate is split into the Velocity step (generateHtml) and the iText step (toPdf). Left out:
+ * the SVG path, SD-JWT disclosures (an ldp_vc credential has none) and the data-share and OVP QR codes.
  */
 package asia.mosip.renderer.mimoto;
 
@@ -30,7 +31,6 @@ import org.apache.velocity.app.VelocityEngine;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.io.StringWriter;
 import java.util.*;
 
@@ -55,20 +55,22 @@ public class CredentialPDFGeneratorService {
     private static final String PLACEHOLDER_QR_DATA = "VC Lab preview: the Wallet's QR code holds the credential";
 
     /**
-     * The PDF Mimoto prints for an ldp_vc credential with these claims, issued under this metadata. A non-null
-     * backgroundImage replaces display[0].background_image.uri.
+     * The HTML ait-mimoto hands iText for an ldp_vc credential with these claims, issued under this metadata: the
+     * template evaluated by Velocity. A non-null backgroundImage replaces display[0].background_image.uri.
      */
-    public byte[] generatePdf(String credentialTemplate, Map<String, Object> credentialProperties,
-                              CredentialsSupportedResponse credentialsSupportedResponse, String backgroundImage,
-                              String locale) throws IOException, WriterException {
+    public String generateHtml(String credentialTemplate, Map<String, Object> credentialProperties,
+                               CredentialsSupportedResponse credentialsSupportedResponse, String backgroundImage,
+                               String locale) throws WriterException {
         LinkedHashMap<String, Map<CredentialIssuerDisplayResponse, Object>> displayProperties =
                 processor.loadDisplayPropertiesFromWellknown(credentialProperties, credentialsSupportedResponse, locale);
         Map<String, Object> data = getPdfResourceFromVcProperties(displayProperties, credentialsSupportedResponse,
                 credentialProperties);
+        // ait-mimoto: the only change to upstream v0.21.0. Templates also get the claims as received, unflattened.
+        data.put("credentialSubject", credentialProperties);
         if (backgroundImage != null) {
             data.put("backgroundImage", backgroundImage);
         }
-        return renderVCInCredentialTemplate(data, credentialTemplate);
+        return evaluate(data, credentialTemplate);
     }
 
     private Map<String, Object> getPdfResourceFromVcProperties(
@@ -90,7 +92,6 @@ public class CredentialPDFGeneratorService {
                 : null;
         String textColor = firstDisplay != null ? firstDisplay.getTextColor() : null;
         String credentialSupportedType = firstDisplay != null ? firstDisplay.getName() : null;
-        String logoUrl = firstDisplay != null && firstDisplay.getLogo() != null ? firstDisplay.getLogo().getUrl() : null;
 
         SelectedFace selectedFace = extractFace(credentialSubject);
         String face = selectedFace.face();
@@ -116,7 +117,7 @@ public class CredentialPDFGeneratorService {
         data.put("isSdJwtWithDisclosures", false);
         data.put("qrCodeImage", qrCodeImage);
         data.put("credentialValidity", credentialValidity);
-        data.put("logoUrl", logoUrl != null ? logoUrl : "");
+        data.put("logoUrl", "");  // no issuers list is read: the logo belongs in the Background
         data.put("rowProperties", rowProperties);
         data.put("disclosures", disclosuresProps);
         data.put("textColor", textColor);
@@ -169,7 +170,8 @@ public class CredentialPDFGeneratorService {
         return val != null ? val.toString() : "";
     }
 
-    private byte[] renderVCInCredentialTemplate(Map<String, Object> data, String credentialTemplate) {
+    // renderVCInCredentialTemplate, split in two so the HTML iText receives can be handed out as it is.
+    private String evaluate(Map<String, Object> data, String credentialTemplate) {
         Properties props = new Properties();
         props.setProperty("resource.loader", "class");
         props.setProperty("class.resource.loader.class", "org.apache.velocity.runtime.resource.loader.ClasspathResourceLoader");
@@ -181,8 +183,11 @@ public class CredentialPDFGeneratorService {
 
         StringWriter writer = new StringWriter();
         velocity.evaluate(velocityContext, writer, "Credential Template", credentialTemplate);
+        return writer.toString();
+    }
 
-        String mergedHtml = writer.toString();
+    /** The PDF iText makes of the evaluated HTML, as Mimoto converts it. */
+    public byte[] toPdf(String mergedHtml) {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 
         PdfWriter pdfwriter = new PdfWriter(outputStream);
