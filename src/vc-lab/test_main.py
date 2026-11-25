@@ -437,6 +437,65 @@ def test_sample_without_credential_subject() -> bool:
     return True
 
 
+def _with_body(body: str) -> bytes:
+    """TEMPLATE with `body` at the top of page 1."""
+    return TEMPLATE.replace('<div class="page">', f'<div class="page">\n{body}', 1).encode()
+
+
+def test_a_template_reaching_for_an_address_answers_422_naming_it() -> bool:
+    if _skip_without("test_a_template_reaching_for_an_address_answers_422_naming_it", "renderer"):
+        return False
+    cases = {
+        "a font": ('<style>@font-face { font-family: "Far"; src: url("https://fonts.example/far.ttf"); }'
+                   ' p { font-family: "Far"; }</style>', "https://fonts.example/far.ttf"),
+        "an image on another host": ('<img src="http://cdn.example/logo.png">', "http://cdn.example/logo.png"),
+        "a file": ('<img src="file:///etc/hostname">', "/etc/hostname"),
+        "a VDR file the set doesn't have": ('<img src="http://vdr.localhost/templates/x/1/logo.png">',
+                                            "http://vdr.localhost/templates/x/1/logo.png"),
+        "the Background's address with no Background loaded": (
+            '<img src="http://vdr.localhost/templates/x/1/background.png">',
+            "http://vdr.localhost/templates/x/1/background.png"),
+    }
+    for case, (body, address) in cases.items():
+        for path in ("/preview", "/preview.pdf"):
+            res = _post(path, _set(template=("reach.html", _with_body(body))))
+            assert res.status_code == 422, (case, path, res.status_code, res.text[:200])
+            assert address in res.json()["detail"], (case, path, res.json())
+    return True
+
+
+def test_a_template_that_draws_logo_url_previews_without_a_logo() -> bool:
+    if _skip_without("test_a_template_that_draws_logo_url_previews_without_a_logo", "renderer"):
+        return False
+    # As the committed demo template draws it. $logoUrl is "", which Velocity 1.7 counts as true.
+    logo = '#if ($logoUrl)\n<img src="$logoUrl" alt="the logo" style="height:56px; width: auto;" />\n#end'
+    files = _set(template=("logo.html", _with_body(logo)))
+    page = _post("/preview", files)
+    assert page.status_code == 200, page.text
+    assert '<img src=""' in page.text, "the template draws an empty logo"
+    pages = _pages(files)
+    assert "Ada Example" in pages[0].extract_text()
+    return True
+
+
+def test_reflection_fails_in_the_print_template_and_the_vc_template() -> bool:
+    if _skip_without("test_reflection_fails_in_the_print_template_and_the_vc_template", "renderer"):
+        return False
+    reach = ".getClass().forName('java.lang.Runtime')"
+    mapping = {**CREDENTIAL["vc_template"], "credentialSubject": {
+        **CREDENTIAL["vc_template"]["credentialSubject"], "thesisTitle": "MAPPED $name" + reach}}
+    files = _set(template=("reflect.html", _with_body(f"<p>PRINTED $titleName{reach}</p>")),
+                 credential=("reflect.json", _json({**CREDENTIAL, "vc_template": mapping})))
+    page = _post("/preview", files)
+    assert page.status_code == 200, page.text
+    printed = _pages(files)[0].extract_text()
+    for shown, where in ((html.unescape(page.text), "quick view"), (printed, "PDF")):
+        for engine in ("PRINTED", "MAPPED"):  # the print template's, the vc_template's
+            assert engine in shown, (where, engine, "evaluated")
+            assert f"{engine} class java.lang.Runtime" not in shown, (where, engine, "reached java.lang.Runtime")
+    return True
+
+
 def test_pdf_lays_the_background_under_page_one() -> bool:
     if _skip_without("test_pdf_lays_the_background_under_page_one", "renderer", "weasyprint"):
         return False
@@ -490,6 +549,9 @@ def main() -> None:
         test_a_record_certify_refuses_answers_422_with_the_plugins_reason,
         test_a_template_named_in_any_script_previews,
         test_sample_without_credential_subject,
+        test_a_template_reaching_for_an_address_answers_422_naming_it,
+        test_a_template_that_draws_logo_url_previews_without_a_logo,
+        test_reflection_fails_in_the_print_template_and_the_vc_template,
         test_pdf_lays_the_background_under_page_one,
         test_background_with_its_own_rotation_comes_out_portrait,
     ]
