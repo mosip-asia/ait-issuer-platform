@@ -293,6 +293,45 @@ def test_a_request_over_20_mb_is_refused() -> None:
     assert res.status_code == 400, res.status_code
 
 
+def test_one_visitors_slow_render_does_not_block_another() -> None:
+    """A preview waiting on a slow renderer must not freeze the Lab for everyone else: a real server, the renderer
+    call patched to take 2 s, and /health asked half a second into it."""
+    import socket
+    import threading
+    import time
+
+    import httpx
+    import uvicorn
+
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    server = uvicorn.Server(uvicorn.Config(vc_lab.app, host="127.0.0.1", port=port, log_level="warning"))
+    threading.Thread(target=server.run, daemon=True).start()
+    base = f"http://127.0.0.1:{port}"
+    for _ in range(100):
+        if server.started:
+            break
+        time.sleep(0.05)
+    assert server.started
+
+    original_post, original_url = vc_lab.httpx.post, vc_lab.RENDERER_URL
+    vc_lab.RENDERER_URL = "http://renderer.invalid"
+    vc_lab.httpx.post = lambda *a, **k: time.sleep(2) or httpx.Response(200, content=b"<p>slow</p>")
+    try:
+        slow = threading.Thread(target=lambda: httpx.Client().post(base + "/preview", files=_set(), timeout=30))
+        slow.start()
+        time.sleep(0.5)
+        started = time.monotonic()
+        assert httpx.get(base + "/health", timeout=30).status_code == 200
+        waited = time.monotonic() - started
+        slow.join()
+    finally:
+        vc_lab.httpx.post, vc_lab.RENDERER_URL = original_post, original_url
+        server.should_exit = True
+    assert waited < 1, f"/health waited {waited:.1f} s behind another visitor's preview"
+
+
 def test_large_upload_stays_in_memory() -> None:
     """A file over Starlette's 1 MB spool limit (the AIT watermark is about 1 MB) never goes to a temp file."""
     spilled = []
@@ -443,6 +482,7 @@ def main() -> None:
         test_download_and_read_back,
         test_rejects_wrong_files,
         test_a_request_over_20_mb_is_refused,
+        test_one_visitors_slow_render_does_not_block_another,
         test_large_upload_stays_in_memory,
         test_grid_from_credential_subject_in_the_pdf_and_the_quick_view,
         test_two_visitors_each_preview_their_own_set,

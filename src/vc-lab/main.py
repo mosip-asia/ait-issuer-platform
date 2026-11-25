@@ -20,6 +20,7 @@ from urllib.parse import quote
 import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
+from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 from starlette.formparsers import MultiPartException, MultiPartParser
 
@@ -46,17 +47,30 @@ def health() -> dict[str, str]:
     return {"status": "UP", "service": "vc-lab"}
 
 
+# The body is read on the event loop; everything after it (parsing, the renderer call, the PDF and zip work) blocks,
+# so it runs in the threadpool, and one visitor's slow render never holds up another's request.
+
+
 @app.post("/preview", response_class=HTMLResponse)
 async def preview(request: Request) -> HTMLResponse:
     """The quick view: the HTML the renderer hands iText. Never with the background: the PDF is where it shows."""
-    lab = await _read_set(request)
-    return HTMLResponse(_render(lab, "html").decode("utf-8"))
+    files = await _read_files(request, labset.SLOTS)
+    return await run_in_threadpool(_preview, files)
+
+
+def _preview(files: dict[str, tuple[str, bytes]]) -> HTMLResponse:
+    return HTMLResponse(_render(_parse_set(files), "html").decode("utf-8"))
 
 
 @app.post("/preview.pdf")
 async def preview_pdf(request: Request) -> Response:
     """What the Wallet prints: the renderer's PDF, with the background under page 1 when one is sent."""
-    lab = await _read_set(request)
+    files = await _read_files(request, labset.SLOTS)
+    return await run_in_threadpool(_preview_pdf, files)
+
+
+def _preview_pdf(files: dict[str, tuple[str, bytes]]) -> Response:
+    lab = _parse_set(files)
     pdf = _render(lab, "pdf")
     if lab.background:
         pdf = hardcopy.lay_background(pdf, lab.background.value)
@@ -70,15 +84,23 @@ async def preview_pdf(request: Request) -> Response:
 @app.post("/download")
 async def download(request: Request) -> Response:
     """The set sent, as a zip (template/, credential/, sample/, background/), each file as uploaded."""
-    lab = await _read_set(request)
+    files = await _read_files(request, labset.SLOTS)
+    return await run_in_threadpool(_download, files)
+
+
+def _download(files: dict[str, tuple[str, bytes]]) -> Response:
     headers = {"Content-Disposition": 'attachment; filename="vc-lab-set.zip"'}
-    return Response(labset.to_zip(lab), media_type="application/zip", headers=headers)
+    return Response(labset.to_zip(_parse_set(files)), media_type="application/zip", headers=headers)
 
 
 @app.post("/api/bundle")
 async def bundle(request: Request) -> dict[str, dict[str, str]]:
     """A zip from /download in, its files out ({slot: {filename, data}}, data in base64), for the dashboard to hold."""
     files = await _read_files(request, ("bundle",))
+    return await run_in_threadpool(_bundle, files)
+
+
+def _bundle(files: dict[str, tuple[str, bytes]]) -> dict[str, dict[str, str]]:
     if set(files) != {"bundle"}:
         raise HTTPException(status_code=400, detail="send a bundle on its own, as the bundle field")
     try:
@@ -89,14 +111,12 @@ async def bundle(request: Request) -> dict[str, dict[str, str]]:
             for slot, (name, data) in unpacked.items()}
 
 
-async def _read_set(request: Request) -> LabSet:
-    """The set this request carries, each file checked. The server keeps nothing of it."""
-    files = await _read_files(request, labset.SLOTS)
+def _parse_set(files: dict[str, tuple[str, bytes]]) -> LabSet:
+    """The set a request carries, each file checked. The server keeps nothing of it."""
     try:
         return LabSet.from_files(files)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-
 
 def _render(lab: LabSet, output: Literal["html", "pdf"]) -> bytes:
     """The renderer's one evaluation of the set: the HTML it hands iText, or the PDF iText makes of it.
@@ -309,8 +329,8 @@ _DASHBOARD = """<!DOCTYPE html>
       document.getElementById('empty').textContent = need.length ? 'Upload these to see the preview: ' + need.map(s => NAMES[s]).join(', ') + '.' : '';
       const frame = document.getElementById('preview');
       frame.hidden = need.length > 0;
+      const mine = ++seen; // even when incomplete, so a preview still in flight is dropped when it lands
       if (need.length) return;
-      const mine = ++seen;
       try {
         const blob = await (await post(output())).blob();
         if (mine !== seen) return;
@@ -319,7 +339,12 @@ _DASHBOARD = """<!DOCTYPE html>
         shownUrl = URL.createObjectURL(blob);
         frame.src = shownUrl;
       } catch (e) {
-        if (mine === seen) showError(e.message);
+        if (mine !== seen) return;
+        showError(e.message);
+        frame.hidden = true; // never leave the previous set's preview under the error
+        frame.removeAttribute('src');
+        if (shownUrl) URL.revokeObjectURL(shownUrl);
+        shownUrl = null;
       }
     }
 
