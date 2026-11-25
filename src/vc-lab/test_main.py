@@ -4,8 +4,7 @@ Run:
     python3 src/vc-lab/test_main.py
 
 The preview tests need the renderer (src/renderer) at RENDERER_URL and skip without it. Inside Compose, VC Lab has
-it: `docker compose run --rm vc-lab python src/vc-lab/test_main.py`. The Background tests also need WeasyPrint's
-system libraries (Pango) to draw their paper; the ait-vc image has them.
+it: `docker compose run --rm vc-lab python src/vc-lab/test_main.py`. The Background conversion tests need none.
 """
 
 from __future__ import annotations
@@ -28,7 +27,9 @@ sys.path[:0] = [str(VC_LAB_DIR), str(VC_LAB_DIR.parent)]  # VC Lab, and src/ for
 
 import main as vc_lab  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
-from pypdf import PdfReader, PdfWriter, Transformation  # noqa: E402
+from PIL import Image  # noqa: E402
+from pypdf import PdfReader, PdfWriter  # noqa: E402
+from pypdf.generic import DecodedStreamObject, NameObject  # noqa: E402
 
 client = TestClient(vc_lab.app)
 
@@ -125,12 +126,40 @@ def _zip_files(zip_bytes: bytes) -> dict[str, bytes]:
         return {name: z.read(name) for name in z.namelist()}
 
 
-def _blank_pdf() -> bytes:
+def _png(width: int = 40, height: int = 60, color: tuple[int, int, int] = (200, 30, 30)) -> bytes:
+    out = io.BytesIO()
+    Image.new("RGB", (width, height), color).save(out, "PNG")
+    return out.getvalue()
+
+
+def _jpeg(width: int = 40, height: int = 60) -> bytes:
+    out = io.BytesIO()
+    Image.new("RGB", (width, height), (30, 30, 200)).save(out, "JPEG")
+    return out.getvalue()
+
+
+def _pdf(width: float, height: float, rotate: int = 0, crop: tuple[float, float, float, float] | None = None,
+         pages: int = 1) -> bytes:
+    """Pages of `width` x `height` points, each with a red 50 x 50 square at the bottom-left of the stored page."""
     writer = PdfWriter()
-    writer.add_blank_page(width=200, height=300)
+    for _ in range(pages):
+        page = writer.add_blank_page(width=width, height=height)
+        stream = DecodedStreamObject()
+        stream.set_data(b"1 0 0 rg 0 0 50 50 re f")
+        page[NameObject("/Contents")] = writer._add_object(stream)
+        if rotate:
+            page.rotate(rotate)
+        if crop:
+            page.cropbox.lower_left, page.cropbox.upper_right = crop[:2], crop[2:]
     out = io.BytesIO()
     writer.write(out)
     return out.getvalue()
+
+
+def _image(data: bytes) -> Image.Image:
+    image = Image.open(io.BytesIO(data))
+    image.load()
+    return image
 
 
 def _empty_zip() -> bytes:
@@ -147,22 +176,6 @@ def _zip_of(members: dict[str, bytes]) -> bytes:
     return out.getvalue()
 
 
-def _paper_pdf(word: str) -> bytes:
-    """Portrait paper carrying `word`, stored the way the real watermark PDF is: a landscape page, its content
-    turned a quarter, and /Rotate 90 so a viewer shows it upright."""
-    from weasyprint import HTML
-
-    portrait = PdfReader(io.BytesIO(HTML(string=f"<p style='font-size:30pt'>{word}</p>").write_pdf())).pages[0]
-    w, h = float(portrait.mediabox.width), float(portrait.mediabox.height)
-    writer = PdfWriter()
-    stored = writer.add_blank_page(width=h, height=w)
-    stored.merge_transformed_page(portrait, Transformation().rotate(90).translate(h, 0))
-    stored.rotate(90)
-    out = io.BytesIO()
-    writer.write(out)
-    return out.getvalue()
-
-
 def _pages(files: dict[str, tuple[str, bytes]]) -> list:
     res = _post("/preview.pdf", files)
     assert res.status_code == 200, res.text
@@ -170,17 +183,11 @@ def _pages(files: dict[str, tuple[str, bytes]]) -> list:
     return PdfReader(io.BytesIO(res.content)).pages
 
 
-def _skip_without(test: str, *needs: str) -> bool:
-    """True, after printing SKIP, when this host lacks what the test needs: the renderer, or WeasyPrint."""
-    if "renderer" in needs and not os.environ.get("RENDERER_URL"):
+def _skip_without_renderer(test: str) -> bool:
+    """True, after printing SKIP, when this host has no renderer to call."""
+    if not os.environ.get("RENDERER_URL"):
         print(f"SKIP {test} (no RENDERER_URL)")
         return True
-    if "weasyprint" in needs:
-        try:
-            import weasyprint  # noqa: F401
-        except Exception as e:  # Pango missing on this host; the ait-vc image has it
-            print(f"SKIP {test} ({type(e).__name__})")
-            return True
     return False
 
 
@@ -219,7 +226,7 @@ def test_every_call_asks_for_what_it_was_not_sent() -> None:
 
 
 def test_two_visitors_each_get_their_own_files() -> None:
-    mine = _set(template=("mine.html", b"<p>mine</p>"), background=("paper.pdf", _blank_pdf()))
+    mine = _set(template=("mine.html", b"<p>mine</p>"), background=("background.png", _png()))
     theirs = _set(template=("theirs.html", b"<p>theirs</p>"))
     first = _post("/download", mine)
     second = _post("/download", theirs)
@@ -229,18 +236,18 @@ def test_two_visitors_each_get_their_own_files() -> None:
                                                   "template/theirs.html"], "no file of the other visitor's"
     assert _zip_files(second.content)["template/theirs.html"] == b"<p>theirs</p>"
     assert _zip_files(first.content) == _zip_files(again.content)
-    assert "background/paper.pdf" in _zip_files(first.content)
+    assert "background/background.png" in _zip_files(first.content)
 
 
 def test_download_and_read_back() -> None:
-    paper = _blank_pdf()
-    files = _set(background=("../../secret/paper.pdf", paper))
+    paper = _png()
+    files = _set(background=("../../secret/background.png", paper))
     res = _post("/download", files)
     assert res.status_code == 200 and res.headers["content-type"] == "application/zip"
-    assert sorted(_zip_files(res.content)) == ["background/paper.pdf", "credential/record.json",
+    assert sorted(_zip_files(res.content)) == ["background/background.png", "credential/record.json",
                                                "sample/adapter-response.json", "template/record.html"]
     zipped = _zip_files(res.content)
-    assert zipped["background/paper.pdf"] == paper, "each file exactly as uploaded, with no path parts in its name"
+    assert zipped["background/background.png"] == paper, "each file exactly as uploaded, with no path parts in its name"
     assert zipped["template/record.html"] == TEMPLATE.encode()
     assert json.loads(zipped["credential/record.json"]) == CREDENTIAL
 
@@ -248,13 +255,14 @@ def test_download_and_read_back() -> None:
     assert back.status_code == 200, back.text
     got = {slot: (f["filename"], base64.b64decode(f["data"])) for slot, f in back.json().items()}
     assert got == {"template": ("record.html", TEMPLATE.encode()), "credential": ("record.json", _json(CREDENTIAL)),
-                   "sample": ("adapter-response.json", _json(SAMPLE)), "background": ("paper.pdf", paper)}
+                   "sample": ("adapter-response.json", _json(SAMPLE)), "background": ("background.png", paper)}
 
 
 def test_rejects_wrong_files() -> None:
     no_mapping = {k: v for k, v in CREDENTIAL.items() if k != "vc_template"}
     cases = {
-        "background not a PDF": {"background": ("paper.png", b"\x89PNG\r\n\x1a\n not a pdf")},
+        "background not a PNG": {"background": ("background.png", b"\x89PNG\r\n\x1a\n not a png")},
+        "background a PDF, which the set does not keep": {"background": ("paper.pdf", _pdf(200, 300))},
         "credential without vc_template": {"credential": ("c.json", _json(no_mapping))},
         "credential not JSON": {"credential": ("c.json", b"{oops")},
         "sample not JSON": {"sample": ("s.json", b"{oops")},
@@ -345,12 +353,75 @@ def test_large_upload_stays_in_memory() -> None:
     assert not spilled, "the upload was written to a temporary file on disk"
 
 
+def _background(filename: str, data: bytes):
+    return client.post("/api/background", files={"background": (filename, data)})
+
+
+def test_a_png_background_is_kept_as_is() -> None:
+    png = _png(37, 91)
+    res = _background("logo-and-seal.png", png)
+    assert res.status_code == 200 and res.headers["content-type"] == "image/png", res.text
+    assert res.content == png
+
+
+def test_a_jpeg_background_becomes_a_png_of_its_own_size() -> None:
+    res = _background("scan.jpg", _jpeg(50, 70))
+    assert res.status_code == 200 and res.headers["content-type"] == "image/png", res.text
+    image = _image(res.content)
+    assert image.format == "PNG" and image.size == (50, 70)
+
+
+def test_a_pdf_background_is_drawn_at_its_page_size_and_150_dpi() -> None:
+    res = _background("paper.pdf", _pdf(612, 792, pages=2))
+    assert res.status_code == 200 and res.headers["content-type"] == "image/png", res.text
+    image = _image(res.content)
+    assert image.format == "PNG" and max(abs(image.width - 1275), abs(image.height - 1650)) <= 1, \
+        ("612 x 792 points at 150 dpi, page 1 only", image.size)
+    image = image.convert("RGB")
+    assert image.getpixel((10, 1635)) == (255, 0, 0), "the red square sits at the page's bottom-left"
+    assert image.getpixel((1200, 50)) == (255, 255, 255), "paper is white where nothing is drawn"
+
+
+def test_a_pdf_background_keeps_its_rotation_and_crop_box() -> None:
+    turned = _image(_background("paper.pdf", _pdf(300, 200, rotate=90)).content).convert("RGB")
+    assert turned.size == (417, 625), "a viewer shows a /Rotate 90 page upright: 200 x 300 points"
+    assert turned.getpixel((10, 10)) == (255, 0, 0), "the stored bottom-left is the top-left after turning clockwise"
+    assert turned.getpixel((10, 600)) == (255, 255, 255)
+
+    cropped = _image(_background("paper.pdf", _pdf(400, 400, crop=(100, 100, 300, 400))).content).convert("RGB")
+    assert cropped.size == (417, 625), "the crop box, 200 x 300 points, is the page"
+    assert cropped.getpixel((10, 600)) == (255, 255, 255), "the square at the stored corner is cropped out"
+
+
+def test_a_background_that_is_not_a_pdf_png_or_jpeg_answers_400_with_the_reason() -> None:
+    no_pages = PdfWriter()
+    out = io.BytesIO()
+    no_pages.write(out)
+    cases = {
+        "a text file": ("notes.txt", b"hello"),
+        "a GIF": ("anim.gif", b"GIF89a" + bytes(8)),
+        "a truncated PNG": ("cut.png", _png()[:40]),
+        "a truncated JPEG": ("cut.jpg", _jpeg()[:40]),
+        "a damaged PDF": ("bad.pdf", b"%PDF-1.4 not really"),
+        "a PDF with no pages": ("empty.pdf", out.getvalue()),
+    }
+    for case, (name, data) in cases.items():
+        res = _background(name, data)
+        assert res.status_code == 400, (case, res.status_code)
+        detail = res.json()["detail"]
+        assert isinstance(detail, str) and name in detail, (case, "the reason names the file", detail)
+    assert "no pages" in _background("empty.pdf", out.getvalue()).json()["detail"]
+    assert "PDF, PNG or JPEG" in _background("notes.txt", b"hello").json()["detail"]
+    assert client.post("/api/background", files={"template": ("t.html", b"<p>")}).status_code == 400
+    assert client.post("/api/background", files={}).status_code == 400
+
+
 # ---------------------------------------------------------------------------------------------------------------
 # Tests through the renderer
 
 
 def test_grid_from_credential_subject_in_the_pdf_and_the_quick_view() -> bool:
-    if _skip_without("test_grid_from_credential_subject_in_the_pdf_and_the_quick_view", "renderer"):
+    if _skip_without_renderer("test_grid_from_credential_subject_in_the_pdf_and_the_quick_view"):
         return False
     page = _post("/preview", _set())
     assert page.status_code == 200 and page.headers["content-type"].startswith("text/html"), page.text
@@ -370,7 +441,7 @@ def test_grid_from_credential_subject_in_the_pdf_and_the_quick_view() -> bool:
 
 
 def test_two_visitors_each_preview_their_own_set() -> bool:
-    if _skip_without("test_two_visitors_each_preview_their_own_set", "renderer"):
+    if _skip_without_renderer("test_two_visitors_each_preview_their_own_set"):
         return False
     mine = _set(sample=("mine.json", _json({**SAMPLE, "credentialSubject": {**SUBJECT, "name": "Ada Mine"}})))
     theirs = _set(sample=("theirs.json", _json({**SAMPLE, "credentialSubject": {**SUBJECT, "name": "Bo Theirs"}})))
@@ -384,7 +455,7 @@ def test_two_visitors_each_preview_their_own_set() -> bool:
 
 
 def test_velocity_and_mapping_errors_answer_422_with_the_engines_message() -> bool:
-    if _skip_without("test_velocity_and_mapping_errors_answer_422_with_the_engines_message", "renderer"):
+    if _skip_without_renderer("test_velocity_and_mapping_errors_answer_422_with_the_engines_message"):
         return False
     bad = _set(template=("bad.html", b"<p>ok</p>\n<p>#set($x = )</p>"))  # balanced, so it passes the checks
     for path in ("/preview", "/preview.pdf"):
@@ -401,7 +472,7 @@ def test_velocity_and_mapping_errors_answer_422_with_the_engines_message() -> bo
 
 
 def test_a_record_certify_refuses_answers_422_with_the_plugins_reason() -> bool:
-    if _skip_without("test_a_record_certify_refuses_answers_422_with_the_plugins_reason", "renderer"):
+    if _skip_without_renderer("test_a_record_certify_refuses_answers_422_with_the_plugins_reason"):
         return False
     cases = {
         "a reserved key": (_json({**SAMPLE, "credentialSubject": {**SUBJECT, "id": "st0001"}}),
@@ -418,7 +489,7 @@ def test_a_record_certify_refuses_answers_422_with_the_plugins_reason() -> bool:
 
 
 def test_a_template_named_in_any_script_previews() -> bool:
-    if _skip_without("test_a_template_named_in_any_script_previews", "renderer"):
+    if _skip_without_renderer("test_a_template_named_in_any_script_previews"):
         return False
     res = _post("/preview.pdf", _set(template=("ใบรับรอง.html", TEMPLATE.encode())))
     assert res.status_code == 200, res.text
@@ -429,7 +500,7 @@ def test_a_template_named_in_any_script_previews() -> bool:
 
 
 def test_sample_without_credential_subject() -> bool:
-    if _skip_without("test_sample_without_credential_subject", "renderer"):
+    if _skip_without_renderer("test_sample_without_credential_subject"):
         return False
     with_envelope = _post("/preview", _set()).text
     assert _post("/preview", _set(sample=("bare.json", _json(SUBJECT)))).text == with_envelope, \
@@ -437,30 +508,66 @@ def test_sample_without_credential_subject() -> bool:
     return True
 
 
-def test_pdf_lays_the_background_under_page_one() -> bool:
-    if _skip_without("test_pdf_lays_the_background_under_page_one", "renderer", "weasyprint"):
-        return False
-    plain = _pages(_set())
-    assert "PAPERMARK" not in plain[0].extract_text()
+def _draws(image_tag: str) -> bytes:
+    """The made-up template with `image_tag` laid across the first page, under the record."""
+    return TEMPLATE.replace('<div class="page">', image_tag + '\n<div class="page">', 1).encode()
 
-    with_paper = _set(background=("paper.pdf", _paper_pdf("PAPERMARK")))
-    layered = _pages(with_paper)
-    assert len(layered) == 2
-    assert "PAPERMARK" in layered[0].extract_text(), "the background is under page 1"
-    assert "Ada Example" in layered[0].extract_text(), "with the record over it"
-    assert layered[1].extract_text() == plain[1].extract_text(), "page 2 prints clean"
-    assert "PAPERMARK" not in _post("/preview", with_paper).text
+
+DRAWS_BACKGROUND = _draws('<img src="$!backgroundImage" style="position: absolute; width: 210mm; height: 297mm"/>')
+# The address the Wallet fetches the Background from once an organisation has put it on its VDR.
+VDR_BACKGROUND = "http://vdr.localhost/templates/example-record/v1/background.png"
+LOADS_BACKGROUND = _draws(f'<img src="{VDR_BACKGROUND}" style="position: absolute; width: 210mm; height: 297mm"/>')
+
+
+def _images(page) -> list[Image.Image]:
+    return [i.image for i in page.images]
+
+
+def test_a_template_that_draws_the_background_shows_it_in_the_pdf_and_the_quick_view() -> bool:
+    if _skip_without_renderer("test_a_template_that_draws_the_background_shows_it_in_the_pdf_and_the_quick_view"):
+        return False
+    png = _png(40, 60, (200, 30, 30))
+    files = _set(template=("record.html", DRAWS_BACKGROUND), background=("background.png", png))
+    pages = _pages(files)
+    assert [i.size for i in _images(pages[0])] == [(40, 60)], "page 1 carries the Background picture"
+    assert _images(pages[0])[0].convert("RGB").getpixel((5, 5)) == (200, 30, 30)
+    assert "Ada Example" in pages[0].extract_text(), "with the record over it"
+    assert len(_images(pages[1])) == 1, "page 2 carries only the QR code"
+
+    quick = _post("/preview", files).text
+    assert "data:image/png;base64," + base64.b64encode(png).decode() in quick, "the quick view draws it too"
     return True
 
 
-def test_background_with_its_own_rotation_comes_out_portrait() -> bool:
-    if _skip_without("test_background_with_its_own_rotation_comes_out_portrait", "renderer", "weasyprint"):
+def test_after_remove_background_the_template_previews_on_plain_paper() -> bool:
+    if _skip_without_renderer("test_after_remove_background_the_template_previews_on_plain_paper"):
         return False
-    paper = _paper_pdf("UPRIGHT")
-    assert PdfReader(io.BytesIO(paper)).pages[0].rotation == 90
-    page = _pages(_set(background=("paper.pdf", paper)))[0]
-    assert float(page.mediabox.height) > float(page.mediabox.width), "portrait A4"
-    assert "UPRIGHT" in page.extract_text(orientations=(0,)), "the paper reads upright, as a viewer shows it"
+    plain = _set(template=("record.html", DRAWS_BACKGROUND))  # the dashboard sends no background slot
+    page = _pages(plain)[0]
+    assert _images(page) == [], "nothing under the record"
+    assert "Ada Example" in page.extract_text()
+    assert _post("/preview", plain).text.count("data:image/png;base64,") == 1, "the QR code only, in the quick view too"
+    return True
+
+
+def test_a_template_that_loads_the_background_by_its_vdr_address_shows_it_in_the_quick_view() -> bool:
+    if _skip_without_renderer("test_a_template_that_loads_the_background_by_its_vdr_address_shows_it_in_the_quick_view"):
+        return False
+    png = _png(40, 60)
+    quick = _post("/preview", _set(template=("record.html", LOADS_BACKGROUND), background=("background.png", png)))
+    assert quick.status_code == 200, quick.text
+    assert "http://vdr.localhost" not in quick.text, "a browser can't reach that address"
+    assert "data:image/png;base64," + base64.b64encode(png).decode() in quick.text
+    return True
+
+
+def test_a_template_that_loads_the_background_by_its_vdr_address_previews_with_it_in_the_pdf() -> bool:
+    """Waits for ticket 04: the renderer serves background.png at its VDR address."""
+    if _skip_without_renderer("test_a_template_that_loads_the_background_by_its_vdr_address_previews_with_it_in_the_pdf"):
+        return False
+    files = _set(template=("record.html", LOADS_BACKGROUND), background=("background.png", _png(40, 60)))
+    pages = _pages(files)
+    assert [i.size for i in _images(pages[0])] == [(40, 60)], "the uploaded Background, from the VDR address"
     return True
 
 
@@ -484,14 +591,21 @@ def main() -> None:
         test_a_request_over_20_mb_is_refused,
         test_one_visitors_slow_render_does_not_block_another,
         test_large_upload_stays_in_memory,
+        test_a_png_background_is_kept_as_is,
+        test_a_jpeg_background_becomes_a_png_of_its_own_size,
+        test_a_pdf_background_is_drawn_at_its_page_size_and_150_dpi,
+        test_a_pdf_background_keeps_its_rotation_and_crop_box,
+        test_a_background_that_is_not_a_pdf_png_or_jpeg_answers_400_with_the_reason,
         test_grid_from_credential_subject_in_the_pdf_and_the_quick_view,
         test_two_visitors_each_preview_their_own_set,
         test_velocity_and_mapping_errors_answer_422_with_the_engines_message,
         test_a_record_certify_refuses_answers_422_with_the_plugins_reason,
         test_a_template_named_in_any_script_previews,
         test_sample_without_credential_subject,
-        test_pdf_lays_the_background_under_page_one,
-        test_background_with_its_own_rotation_comes_out_portrait,
+        test_a_template_that_draws_the_background_shows_it_in_the_pdf_and_the_quick_view,
+        test_after_remove_background_the_template_previews_on_plain_paper,
+        test_a_template_that_loads_the_background_by_its_vdr_address_shows_it_in_the_quick_view,
+        test_a_template_that_loads_the_background_by_its_vdr_address_previews_with_it_in_the_pdf,
     ]
     passed = skipped = 0
     for test in tests:

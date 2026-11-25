@@ -1,7 +1,7 @@
 """VC Lab: preview a credential template as the PDF the Wallet prints, from uploaded files.
 
 VC Lab knows nothing about any organisation and reads nothing from the repo. The user uploads one set (the
-template, Certify's credential file, the Adapter's sample response and an optional background PDF); the dashboard
+template, Certify's credential file, the Adapter's sample response and an optional Background PNG); the dashboard
 holds it in the browser and sends it with every call, so the server keeps nothing. The renderer (src/renderer, at RENDERER_URL) maps the sample
 as Certify does and prints it as ait-mimoto does. See README.md.
 
@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import base64
 import os
+import re
 from pathlib import Path
 from typing import Any, AsyncGenerator, Literal
 from urllib.parse import quote
@@ -24,7 +25,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 from starlette.formparsers import MultiPartException, MultiPartParser
 
-import hardcopy
+import background
 import labset
 from certify_template_sync.sync import build_vc_template_base64
 from labset import MAX_UPLOAD, LabSet
@@ -53,18 +54,32 @@ def health() -> dict[str, str]:
 
 @app.post("/preview", response_class=HTMLResponse)
 async def preview(request: Request) -> HTMLResponse:
-    """The quick view: the HTML the renderer hands iText. Never with the background: the PDF is where it shows."""
+    """The quick view: the HTML the renderer hands iText, with the Background drawn where the template asks for it."""
     files = await _read_files(request, labset.SLOTS)
     return await run_in_threadpool(_preview, files)
 
 
 def _preview(files: dict[str, tuple[str, bytes]]) -> HTMLResponse:
-    return HTMLResponse(_render(_parse_set(files), "html").decode("utf-8"))
+    lab = _parse_set(files)
+    page = _render(lab, "html").decode("utf-8")
+    if lab.background:
+        # A browser can't reach the VDR address the Wallet loads the Background from, so it gets the picture itself.
+        page = _VDR_BACKGROUND.sub(lambda _: _data_uri(lab.background.value), page)
+    return HTMLResponse(page)
+
+
+# Where a template loads the Background from, once an organisation has put it on its VDR (the renderer serves the same
+# addresses to the PDF).
+_VDR_BACKGROUND = re.compile(r"http://vdr\.localhost/templates/[^\s\"'()<>]*/background\.png")
+
+
+def _data_uri(png: bytes) -> str:
+    return "data:image/png;base64," + base64.b64encode(png).decode("ascii")
 
 
 @app.post("/preview.pdf")
 async def preview_pdf(request: Request) -> Response:
-    """What the Wallet prints: the renderer's PDF, with the background under page 1 when one is sent."""
+    """What the Wallet prints: the renderer's PDF."""
     files = await _read_files(request, labset.SLOTS)
     return await run_in_threadpool(_preview_pdf, files)
 
@@ -72,8 +87,6 @@ async def preview_pdf(request: Request) -> Response:
 def _preview_pdf(files: dict[str, tuple[str, bytes]]) -> Response:
     lab = _parse_set(files)
     pdf = _render(lab, "pdf")
-    if lab.background:
-        pdf = hardcopy.lay_background(pdf, lab.background.value)
     # RFC 6266: filename* carries a name in any script (a Thai template name); filename is its ASCII stand-in.
     name = f"{Path(lab.template.filename).stem}.pdf"
     ascii_name = name.encode("ascii", "replace").decode("ascii").replace("?", "_")
@@ -91,6 +104,21 @@ async def download(request: Request) -> Response:
 def _download(files: dict[str, tuple[str, bytes]]) -> Response:
     headers = {"Content-Disposition": 'attachment; filename="vc-lab-set.zip"'}
     return Response(labset.to_zip(_parse_set(files)), media_type="application/zip", headers=headers)
+
+
+@app.post("/api/background")
+async def make_background(request: Request) -> Response:
+    """An uploaded PDF, PNG or JPEG in (as the background field), the Background PNG out: what the dashboard holds."""
+    files = await _read_files(request, ("background",))
+    return await run_in_threadpool(_make_background, files)
+
+
+def _make_background(files: dict[str, tuple[str, bytes]]) -> Response:
+    name, data = files["background"]
+    try:
+        return Response(background.to_png(labset.safe_filename(name, "background"), data), media_type="image/png")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/api/bundle")
@@ -133,6 +161,7 @@ def _render(lab: LabSet, output: Literal["html", "pdf"]) -> bytes:
         # The vc_template through template-sync's own transform: the text Certify stores and evaluates.
         "vcTemplate": base64.b64decode(build_vc_template_base64(lab.credential.value["vc_template"])).decode("utf-8"),
         "credentialFile": lab.credential.value,
+        "backgroundImage": _data_uri(lab.background.value) if lab.background else None,
         "locale": "en",
         "output": output,
     }
@@ -244,10 +273,11 @@ _DASHBOARD = """<!DOCTYPE html>
             <span class="file" data-slot="sample"></span></div>
         </div>
         <div class="slot">
-          <b>Background</b> <span class="ext">.pdf (A4)</span>
-          <div class="hint">The pre-printed paper (watermark, seal, signature, image); page 1 is used. It shows only in
-            the PDF.</div>
-          <div class="pick"><label>Choose file<input type="file" hidden data-field="background" accept=".pdf,application/pdf"></label>
+          <b>Background</b> <span class="ext">.pdf, .png or .jpg</span>
+          <div class="hint">The pre-printed paper (watermark, seal, signature, logo) as the Wallet draws it: one
+            picture, kept here as a PNG for the template's <code>$backgroundImage</code>. A PDF's page 1 is drawn at
+            its own size, 150 dpi.</div>
+          <div class="pick"><label>Choose file<input type="file" hidden data-field="background" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"></label>
             <span class="file" data-slot="background"></span></div>
         </div>
         <div class="warn">A background may be confidential. VC Lab has no login: upload one only on your own machine.
@@ -319,8 +349,8 @@ _DASHBOARD = """<!DOCTYPE html>
       const note = document.getElementById('backgroundNote');
       note.className = 'note' + (set.background ? ' strong' : '');
       note.textContent = set.background
-        ? 'Background loaded (' + set.background.name + '). It shows only in the PDF, not in the quick view.'
-        : 'The quick view never shows the background. The PDF does.';
+        ? 'Background loaded (' + set.background.name + '). A template that draws it shows it in the PDF and the quick view.'
+        : 'No Background: the template previews on plain paper.';
       document.getElementById('viewHint').textContent = OUTPUT_HINTS[output()];
       const need = missing();
       document.getElementById('exportPdf').disabled = need.length > 0;
@@ -363,6 +393,13 @@ _DASHBOARD = """<!DOCTYPE html>
               const bytes = Uint8Array.from(atob(f.data), c => c.charCodeAt(0));
               set[slot] = new File([bytes], f.filename);
             }
+          } catch (e) { showError(e.message); return; }
+        } else if (input.dataset.field === 'background') {
+          try { // the server makes the PNG; this page keeps only that
+            const f = new FormData(); f.append('background', file, file.name);
+            const res = await fetch('/api/background', {method: 'POST', body: f});
+            if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(typeof data.detail === 'string' ? data.detail : res.statusText); }
+            set.background = new File([await res.blob()], 'background.png', {type: 'image/png'});
           } catch (e) { showError(e.message); return; }
         } else {
           set[input.dataset.field] = file;
