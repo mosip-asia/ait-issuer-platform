@@ -27,6 +27,7 @@ sys.path[:0] = [str(VC_LAB_DIR), str(VC_LAB_DIR.parent)]  # VC Lab, and src/ for
 
 import main as vc_lab  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
+import pypdfium2  # noqa: E402
 from PIL import Image  # noqa: E402
 from pypdf import PdfReader, PdfWriter  # noqa: E402
 from pypdf.generic import DecodedStreamObject, NameObject  # noqa: E402
@@ -513,10 +514,10 @@ def _draws(image_tag: str) -> bytes:
     return TEMPLATE.replace('<div class="page">', image_tag + '\n<div class="page">', 1).encode()
 
 
-DRAWS_BACKGROUND = _draws('<img src="$!backgroundImage" style="position: absolute; width: 210mm; height: 297mm"/>')
+DRAWS_BACKGROUND = _draws('<img src="$!backgroundImage" style="position: absolute; left: -20mm; top: -20mm; width: 210mm; height: 297mm"/>')
 # The address the Wallet fetches the Background from once an organisation has put it on its VDR.
 VDR_BACKGROUND = "http://vdr.localhost/templates/example-record/v1/background.png"
-LOADS_BACKGROUND = _draws(f'<img src="{VDR_BACKGROUND}" style="position: absolute; width: 210mm; height: 297mm"/>')
+LOADS_BACKGROUND = _draws(f'<img src="{VDR_BACKGROUND}" style="position: absolute; left: -20mm; top: -20mm; width: 210mm; height: 297mm"/>')
 
 
 def _images(page) -> list[Image.Image]:
@@ -536,6 +537,19 @@ def test_a_template_that_draws_the_background_shows_it_in_the_pdf_and_the_quick_
 
     quick = _post("/preview", files).text
     assert "data:image/png;base64," + base64.b64encode(png).decode() in quick, "the quick view draws it too"
+    return True
+
+
+def test_a_pdf_background_prints_upright_under_the_record() -> bool:
+    """From the upload to the printed page: the paper's bottom-left corner is the page's bottom-left corner."""
+    if _skip_without_renderer("test_a_pdf_background_prints_upright_under_the_record"):
+        return False
+    png = _background("paper.pdf", _pdf(595.28, 841.89)).content  # a red square at the paper's bottom-left
+    res = _post("/preview.pdf", _set(template=("record.html", DRAWS_BACKGROUND), background=("background.png", png)))
+    assert res.status_code == 200, res.text
+    page = pypdfium2.PdfDocument(res.content)[0].render(scale=0.5).to_pil().convert("RGB")
+    assert page.getpixel((5, page.height - 5)) == (255, 0, 0), "the red square is at the page's bottom-left"
+    assert page.getpixel((page.width - 5, 5)) == (255, 255, 255), "the rest of the paper is white"
     return True
 
 
@@ -603,6 +617,7 @@ def main() -> None:
         test_a_template_named_in_any_script_previews,
         test_sample_without_credential_subject,
         test_a_template_that_draws_the_background_shows_it_in_the_pdf_and_the_quick_view,
+        test_a_pdf_background_prints_upright_under_the_record,
         test_after_remove_background_the_template_previews_on_plain_paper,
         test_a_template_that_loads_the_background_by_its_vdr_address_shows_it_in_the_quick_view,
         test_a_template_that_loads_the_background_by_its_vdr_address_previews_with_it_in_the_pdf,
