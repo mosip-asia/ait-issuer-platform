@@ -11,9 +11,9 @@ What each file is, and how a value travels from SIS to the page, is in [the temp
 | `template` | the HTML (Velocity) render template | the whole file |
 | `credential` | Certify's whole credential configuration file | its `vc_template` (the mapping) and `display`, as Certify and the Wallet read them |
 | `sample` | the Adapter's response, exactly as the Adapter sends it | its `credentialSubject`, or the whole file when it has none |
-| `background` (optional) | a PDF page, such as the organisation's pre-printed paper | page 1 |
+| `background` (optional) | the organisation's pre-printed paper, as the PNG the Wallet draws (`background.png`) | the whole picture, as the template's `$backgroundImage` |
 
-Choosing a file replaces that slot only; choosing a zip from Download replaces the whole set. Each file is checked on every call: the background must be a PDF, the credential file JSON with a `vc_template` object (holding a `credentialSubject` object), the sample a JSON object, and the template's `#if`/`#foreach`/`#macro` must each have their `#end`. One request may carry at most 20 MB.
+Choosing a file replaces that slot only; choosing a zip from Download replaces the whole set. Each file is checked on every call: the background must be a PNG, the credential file JSON with a `vc_template` object (holding a `credentialSubject` object), the sample a JSON object, and the template's `#if`/`#foreach`/`#macro` must each have their `#end`. One request may carry at most 20 MB.
 
 ## From sample to page
 
@@ -29,17 +29,26 @@ The dashboard (`/`) has a file input per slot (or one for a zip), the list of lo
 
 | Call | Does |
 |---|---|
-| `POST /preview` | the set as multipart (`template`, `credential`, `sample`, optional `background`); answers the quick view: the HTML the PDF is printed from, never with the background |
-| `POST /preview.pdf` | the same set; answers what the Wallet prints: the renderer's PDF, with the background under page 1 when one is sent |
+| `POST /preview` | the set as multipart (`template`, `credential`, `sample`, optional `background`, a PNG); answers the quick view: the HTML the PDF is printed from, with the Background drawn where the template asks for it |
+| `POST /preview.pdf` | the same set; answers what the Wallet prints: the renderer's PDF |
+| `POST /api/background` | a PDF, PNG or JPEG as the `background` field; answers the Background PNG (`image/png`), or 400 with the reason. The dashboard calls it when a file is chosen and keeps only the PNG |
 | `POST /download` | the same set; answers a zip with `template/`, `credential/`, `sample/` and `background/`, each file as sent |
 | `POST /api/bundle` | multipart with one `bundle` (a zip from Download); answers its files as `{slot: {filename, data}}`, `data` in base64, for the dashboard to hold |
 | `GET /health` | liveness |
 
 Rendering needs the template, the credential file and the sample; without them both previews answer 409, naming what is missing. A wrong file answers 400 with the reason. A template Velocity can't evaluate, or a sample or mapping Certify would refuse, answers 422 with the renderer's message (a Velocity error names its line and column). Without `RENDERER_URL` the previews answer 503.
 
-## The background (`hardcopy.py`)
+## The Background (`background.py`)
 
-`make_background(filename, data)` takes page 1 of an uploaded PDF, with its own `/Rotate` and crop box respected, and fits it on a portrait A4 page without redrawing it. `lay_background(pdf, background)` lays that page under page 1 of the renderer's PDF only, so later pages (the verification QR) print clean. This is VC Lab's own step, not the Wallet's: the Wallet draws a background only as the template's `$backgroundImage`.
+The Wallet draws a Background only as the template's `$backgroundImage`, a PNG, so VC Lab keeps nothing else. `to_png(filename, data)` makes that PNG from what a staff member has:
+
+- a PDF: page 1, drawn by `pypdfium2` at its own page size and 150 dpi, with its `/Rotate` and crop box respected;
+- a PNG: kept as is;
+- a JPEG: re-encoded to PNG at its own size.
+
+Anything else, or a file that can't be read (a PDF with no pages is one), is refused with the reason. The dashboard sends the upload to `POST /api/background`, keeps the PNG it gets back, and sends that PNG as the `background` slot with every call. The renderer gets it as `backgroundImage` and draws `$backgroundImage`; the logo of the organisation is part of the picture, as the Wallet prints it.
+
+The quick view draws it too. A template that loads it by its VDR address (`http://vdr.localhost/templates/<...>/background.png`) reaches the renderer's own copy in the PDF; a browser can't reach that address, so VC Lab replaces it in the quick view with the picture itself. Remove Background drops the slot, and the template previews on plain paper.
 
 > **A background may be confidential** (an organisation's watermark, seal and signature). It stays in your browser and goes to VC Lab only with each preview, which keeps nothing; another visitor can't get it back. But a deployed VC Lab has no login and is reached over whatever network its address crosses, so send a confidential one only to a VC Lab you trust.
 
@@ -59,7 +68,7 @@ Not checked yet: whether Certify needs a restart to pick up the new version.
 docker compose up -d vc-lab   # starts the renderer too; then open http://lab.localhost
 ```
 
-Tests (script-style, the web API with a small made-up set). The preview tests need the renderer and skip without `RENDERER_URL`; the background tests also need WeasyPrint's system libraries to draw their paper. Inside Compose both are there:
+Tests (script-style, the web API with a small made-up set). The preview tests need the renderer and skip without `RENDERER_URL`; the background conversion tests need nothing. Inside Compose the renderer is there:
 
 ```bash
 docker compose run --rm vc-lab python src/vc-lab/test_main.py   # everything
@@ -72,6 +81,6 @@ docker compose run --rm vc-lab python src/vc-lab/test_main.py   # everything
 src/vc-lab/
 ├── main.py       # the web app: dashboard (which holds the set) and stateless API, rendering through the renderer
 ├── labset.py     # the set a request carries: its slots, parsing and validation, the zip
-├── hardcopy.py   # the background page, laid under the renderer's PDF
+├── background.py # the Background: a PDF, PNG or JPEG made into one PNG
 └── test_main.py  # API tests
 ```

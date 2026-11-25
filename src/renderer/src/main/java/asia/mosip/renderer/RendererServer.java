@@ -29,7 +29,10 @@ import java.util.concurrent.Semaphore;
  */
 public final class RendererServer {
 
-    static final int MAX_REQUEST = 32 * 1024 * 1024;  // bytes; VC Lab sends at most an 8 MB set, base64 grows it
+    // Bytes. VC Lab takes at most 20 MB of files; the Background goes in as base64 (a third more) and the credential
+    // file twice. A Background alone at the limit is 27 MB and fits; a set of several near-limit files can pass it
+    // (413, which VC Lab shows as a 502).
+    static final int MAX_REQUEST = 32 * 1024 * 1024;
 
     // Spring Boot's ObjectMapper ignores unknown properties, so Mimoto does too.
     private static final ObjectMapper JSON = new ObjectMapper()
@@ -47,7 +50,7 @@ public final class RendererServer {
     /**
      * POST /render's body. record is the Adapter's answer as text, read as the plugin reads it; vcTemplate is the credential file's vc_template as the
      * text template-sync stores for Certify; credentialFile is Certify's credential file, as VC Lab holds it;
-     * backgroundImage is the Background as a PNG data URI, or null; output is "pdf" (the default) or "html", the
+     * backgroundImage is the Background as a PNG data URI, "" for none, or null for the credential file's own address; output is "pdf" (the default) or "html", the
      * evaluated template that the PDF would be printed from.
      */
     record RenderRequest(String template, String record, String vcTemplate, JsonNode credentialFile,
@@ -120,7 +123,7 @@ public final class RendererServer {
         }
         // The set's files at their VDR address: today the Background, as the PNG its data URI holds.
         String background = request.backgroundImage();
-        SetFiles files = new SetFiles(background == null ? Map.of()
+        SetFiles files = new SetFiles(background == null || background.isEmpty() ? Map.of()
                 : Map.of("background.png", Base64.getDecoder().decode(background.substring(background.indexOf(',') + 1))));
         String merged;
         byte[] pdf;

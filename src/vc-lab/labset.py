@@ -1,4 +1,4 @@
-"""The set of files one request carries: a template, a credential file, a sample and an optional background.
+"""The set of files one request carries: a template, a credential file, a sample and an optional Background (a PNG).
 
 Part of the vc-lab module. The dashboard holds the set and sends it with every call; the server keeps none. Every
 file is parsed here, at the request boundary, so a LabSet only ever holds files that render: a wrong file is a
@@ -15,7 +15,7 @@ import zipfile
 from dataclasses import dataclass
 from typing import Any, Callable, Generic, TypeVar
 
-import hardcopy
+import background
 
 MAX_UPLOAD = 20 * 1024 * 1024  # bytes: one request, and the files unpacked from one zip
 REQUIRED = ("template", "credential", "sample")
@@ -35,7 +35,7 @@ class LabSet:
     template: Loaded[str] | None = None  # the Velocity HTML
     credential: Loaded[dict[str, Any]] | None = None  # Certify's credential file, with a vc_template object
     sample: Loaded[dict[str, Any]] | None = None  # the Adapter's response, a JSON object
-    background: Loaded[bytes] | None = None  # the upload's page 1 fitted on portrait A4 (hardcopy.make_background)
+    background: Loaded[bytes] | None = None  # the PNG the template draws as $backgroundImage (background.to_png)
 
     def missing(self) -> list[str]:
         """The slots rendering needs that are empty."""
@@ -106,7 +106,7 @@ _PARSERS: dict[str, Callable[[str, bytes], Any]] = {
     "template": _template,
     "credential": _credential,
     "sample": lambda name, data: _json_object("sample", name, data),
-    "background": hardcopy.make_background,
+    "background": background.check_png,
 }
 assert set(_PARSERS) == set(SLOTS), "every slot of LabSet needs a parser"
 
