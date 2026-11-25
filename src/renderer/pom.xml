@@ -4,7 +4,7 @@
      velocity-tools 2.0, iText html2pdf 5.0.3 with itext7-core 8.0.3, Jackson 2.13.2(.2), commons-collections 3.2.2
      and ZXing 3.3.3. Change them only together with the Mimoto version the README names. The claims are mapped
      as Certify 0.14 maps them (ghcr.io/mosip-asia/ait-certify, BOOT-INF/lib of certify-service.jar): Velocity 1.7
-     again and org.json 20241224, with the Data-provider plugin's TemplateRecord.java, which the Dockerfile copies in.
+     again and org.json 20241224, with the renderer's copy of the Data-provider plugin's record step (TemplateRecord).
      Build: docker/Dockerfile.renderer (no Java or Maven needed on the host). -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
