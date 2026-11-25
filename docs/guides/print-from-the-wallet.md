@@ -23,8 +23,8 @@ That lets a template loop over `courses`; it doesn't change what any template pr
 
 - A Linux shell with these tools on its `PATH`: `bash`, `docker` (with Compose v2 and, if Docker's config names one, its credential helper), `git`, `curl`, `jq`, `openssl`, `python3` (3.8 or later; standard library only), `awk` and the usual coreutils (`sed`, `grep`, `tr`, `cut`, `base64`, `mktemp`, `id`, `wc`, `seq`, `timeout`, `cp`, `chmod`). `jq` is the one most boxes lack: `scripts/deploy.sh` runs a smoke test that exits without it. On Windows, run everything in WSL, from a clone inside WSL's own home folder (bind mounts fail from `/mnt/c`).
 - Ports 80 and 8088 free (Traefik publishes 80 and its dashboard on `TRAEFIK_DASHBOARD_PORT`, 8088 in `.env.example`), and `*.localhost` names resolving to this machine (Linux and recent Windows do this).
-- The internet. Certify and Mimoto fetch a JSON-LD context from `https://w3id.org` every time they sign or verify, the print check installs a font from Debian's package mirrors, and the first build pulls `injistack/mimoto:0.21.0` and `eclipse-temurin:21-jdk`. When w3id.org is slow, a print can fail with `signature_verification_failed`; run it again.
-- Free disk for the stack's four `ait-*` images, which are built from your clone, and for the base images they pull (`ait-mimoto` alone adds a layer of a few hundred MB).
+- The internet. Certify and Mimoto fetch a JSON-LD context from `https://w3id.org` every time they sign or verify, the print check installs a font from Debian's package mirrors, and the first build pulls `injistack/mimoto:0.21.0` and `eclipse-temurin:21-jdk` for `ait-mimoto`, and `maven:3.9-eclipse-temurin-21`, `eclipse-temurin:21-jre` and the renderer's libraries from Maven Central for `ait-renderer`. When w3id.org is slow, a print can fail with `signature_verification_failed`; run it again.
+- Free disk for the stack's five `ait-*` images (`ait-certify`, `ait-verify-ui`, `ait-vc`, `ait-renderer`, `ait-mimoto`), which are built from your clone, and for the base images they pull (`ait-mimoto` alone adds a layer of a few hundred MB).
 - One stack at a time: the stack's Compose project is `vc-stack`, with fixed container names and ports.
 
 ## 1. Bring the stack up
@@ -88,9 +88,9 @@ What it proves:
 - the Background is drawn at the page's full size, a font loaded through `@font-face` is embedded, and Thai text prints, typed in the template and as a claim value;
 - the VDR sends `Content-Type: text/html; charset=utf-8` for the template.
 
-The check also publishes a test copy of the credential files to the local stack for the run, made from the files git holds: it points `display[0].background_image` at the VDR and sets a made-up Thai `notes`. The `courses` mapping is the committed one. When it ends it republishes the files git holds and recreates Certify, so the stack is as committed. Two consequences:
+The check also publishes a test copy of the credential files to the local stack for the run, made from the files in the checkout's `deploy/<installation>/certify/credentials/` (the committed ones, unless you replaced one there, as section 6 does). In the copy it sets a made-up Thai `notes`, and it keeps `display[0].background_image.uri` when that is an address on the local VDR (`http://vdr.localhost/templates/...`), else points it at `<VDR>/templates/<credential configuration id>/background.png`. The `courses` mapping is the file's own. When it ends it republishes the checkout's files and recreates Certify; its line says `restored the committed credential file in Certify` either way. Two consequences:
 
-- A credential file you published by hand (below) takes no part in the check's prints: the copy replaces it when the check starts, and the committed file replaces the copy when it ends. Publish yours again after the check.
+- A credential file you published by hand from another folder (below) takes no part in the check's prints: the copy replaces it when the check starts, and the checkout's file replaces the copy when it ends. Publish yours again after the check, or copy it into the checkout's credentials folder instead (section 6).
 - If the restore fails, the check exits with status 1 and prints the command that does it by hand.
 
 The PDFs of the run are kept in a temporary folder, named on the line `PDFs: <folder>`. `original.pdf` is the print of whatever template the VDR held, and `swapped.pdf` the print of the check's test template.
@@ -142,14 +142,14 @@ A Background is the picture of an organisation's pre-printed paper. The platform
 
 Two things connect it:
 
-1. The file, at `<VDR>/templates/<credential configuration id>/<version>/background.png`. Locally, for version `v1`: `deploy/ait/vdr/templates/ait-transcript/v1/background.png`. It has to be an image of the paper, PNG, under that name: the template draws it with `<img>`. VC Lab makes it: it turns a PDF, PNG or JPEG into `background.png`, and Export Package writes it at that path (section 6).
-2. The credential file's `display[0].background_image.uri`, set to `http://vdr.localhost/templates/ait-transcript/v1/background.png`. Export Package sets it in the Package's credential file. Certify publishes it in its metadata, and Mimoto hands it to the template as `$backgroundImage`.
+1. The file, an image of the paper on the VDR: the template draws it with `<img>`, so Mimoto takes a PNG or a JPEG. VC Lab turns a PDF, PNG or JPEG into a PNG, and its Package puts it at `<VDR>/templates/<credential configuration id>/<version>/background.png`: locally, for version `v1`, `deploy/ait/vdr/templates/ait-transcript/v1/background.png` (section 6).
+2. The credential file's `display[0].background_image.uri`, the file's address: `http://vdr.localhost/templates/ait-transcript/v1/background.png` for that Package, which sets it in the Package's credential file. Certify publishes it in its metadata, and Mimoto hands it to the template as `$backgroundImage`.
 
 An Installation therefore needs both: its credential file points `display[0].background_image.uri` at the Background on its VDR, and its template draws `$backgroundImage`. The committed demo files do neither (`deploy/ait/certify/credentials/ait-transcript.json` sets only `background_color`, and the committed template doesn't use `$backgroundImage`), so publish the credential file with an address (next section). The print check does both for its own run.
 
 The template draws it as shown in "Template conventions".
 
-To see your own Background in the print check: the check's test copy keeps a `display[0].background_image.uri` on the local VDR, such as the one a Package's credential file carries once it is in `deploy/ait/certify/credentials/` (section 6). A file without one is pointed at `<VDR>/templates/<credential configuration id>/background.png`, so a Background you place there prints in the check. `original.pdf` shows it behind your template. For the swapped print the check puts its own made-up Background at that path and afterwards puts yours back byte for byte.
+To see your own Background in the print check, the check has to know its address. It keeps a `display[0].background_image.uri` on the local VDR, such as a Package's `.../ait-transcript/v1/background.png` once the Package's credential file is in `deploy/ait/certify/credentials/` (section 6). Only a file without such an address gets the check's own default, the unversioned `<VDR>/templates/<credential configuration id>/background.png`, and then a Background you place there prints in the check. `original.pdf` shows it behind your template. For the swapped print the check puts its own made-up Background at that path and afterwards puts yours back byte for byte.
 
 ### Publish a credential file by hand
 
@@ -170,7 +170,7 @@ To put the committed files back: `compose up -d --force-recreate template-sync c
 
 ## 6. Preview a set in VC Lab and print its Package
 
-VC Lab (`http://lab.localhost`) previews a set (template, credential file, sample record, Background) as the PDF the Wallet prints, through its renderer (`src/renderer/`, ADR 0002). This section runs the whole loop once with a made-up set, and checks the claim: preview in VC Lab, export a Package, place it on the local VDR and in Certify by hand, print from the Wallet, and compare the two PDFs' text. Run it after section 3's print check passes, from the repository root. `deploy.sh` has already started VC Lab and the renderer (`compose.yaml`).
+VC Lab (`http://lab.localhost`) previews a set (template, credential file, sample record, Background) as the PDF the Wallet prints, through its renderer (`src/renderer/`, ADR 0002). This section runs the whole loop once with a made-up set, and checks the claim: preview in VC Lab, export a Package, place it on the local VDR and in Certify by hand, print from the Wallet, and compare the two PDFs' text. Run it from the repository root on the stack sections 1 and 2 started, once section 3's print check passes on it (leave out section 3's last step, which stops the stack). `deploy.sh` has already started VC Lab and the renderer (`compose.yaml`).
 
 The made-up set:
 
@@ -217,22 +217,30 @@ curl -s http://issuer.localhost/.well-known/openid-credential-issuer \
   | jq -r '.credential_configurations_supported["ait-transcript"].display[0].background_image.uri'
 ```
 
-The last line prints `http://vdr.localhost/templates/ait-transcript/v1/background.png`, the Package's Background. Then print from the Wallet with the check command, and compare:
+The last line prints `http://vdr.localhost/templates/ait-transcript/v1/background.png`, the Package's Background. Then the check command: it prints from the Wallet through `scripts/print-check.sh` and compares that print's text with VC Lab's PDF, and its last line is the one verdict:
 
 ```bash
-./scripts/print-check.sh | tee /tmp/vc-lab-parity/print-check.log
-PDFS=$(sed -n 's/^PDFs: //p' /tmp/vc-lab-parity/print-check.log)
-docker run --rm --user "$(id -u):$(id -g)" -v /tmp/vc-lab-parity:/lab:ro -v "$PDFS:/wallet:ro" "$IMAGE" python -c "
-import difflib
+if ./scripts/print-check.sh > /tmp/vc-lab-parity/print-check.log 2>&1; then
+  docker run --rm --user "$(id -u):$(id -g)" -v /tmp/vc-lab-parity:/lab:ro \
+    -v "$(sed -n 's/^PDFs: //p' /tmp/vc-lab-parity/print-check.log):/wallet:ro" "$IMAGE" python -c "
+import difflib, sys
 from pypdf import PdfReader
 def lines(path):
     return [l.strip() for p in PdfReader(path).pages for l in (p.extract_text() or '').splitlines() if l.strip()]
 lab, wallet = lines('/lab/vclab.pdf'), lines('/wallet/original.pdf')
 diff = list(difflib.unified_diff(lab, wallet, 'VC Lab', 'Wallet', lineterm=''))
-print('\n'.join(diff + ['FAIL parity: the texts differ']) if diff else f'PASS parity: the same {len(lab)} lines of text')"
+if not lab or not wallet:
+    sys.exit('FAIL parity: a PDF has no text (VC Lab: %d lines, Wallet: %d lines)' % (len(lab), len(wallet)))
+if diff:
+    sys.exit('\n'.join(diff + ['FAIL parity: the texts differ']))
+print(f'PASS parity: the same {len(lab)} lines of text')"
+else
+  grep '^FAIL' /tmp/vc-lab-parity/print-check.log
+  echo "FAIL parity: the Wallet's print failed, see /tmp/vc-lab-parity/print-check.log"; false
+fi
 ```
 
-The print check ends `print check: PASS`: its first print, `original.pdf`, is the Package's template printed with the check's copy of the Package's credential file (the same but for a Thai `notes`, section 3), Background included. When the check ends, Certify holds the Package's file again. The compare ends `PASS parity: the same <n> lines of text`; on `FAIL parity` it prints the lines that differ. The QR code is an image and isn't compared: VC Lab draws a placeholder.
+It ends `PASS parity: the same <n> lines of text` with exit status 0, or a `FAIL parity` line with status 1: after the lines that differ, after the print check's own `FAIL` line, or when a PDF has no text. The print check's first print, `original.pdf`, is the Package's template printed with the check's copy of the Package's credential file (the same but for a Thai `notes`, section 3), Background included; when the check ends, Certify holds the Package's file again. The QR code is an image and isn't compared: VC Lab draws a placeholder.
 
 **Proven on the local stack (2026-11-25):** `PASS parity: the same 35 lines of text`, the claims not in `display_order` in the same order in both. Both PDFs are one A4 page drawing the same two images at the same places: the Background (1240 × 1754 px) at the page's full size and the QR code (400 × 400 px). The Package's `background.png` is the uploaded PNG, byte for byte.
 
@@ -301,7 +309,9 @@ Thas proves the Wallet's print here; Jo sets it up on dev and decides how. These
 
 ### 1. The image
 
-Run `ghcr.io/mosip-asia/ait-mimoto` where a plain Mimoto would run `injistack/mimoto:0.21.0`, with the same configuration, files and ports. It pulls without a login. A release tag publishes `ait-mimoto:<tag>`, since `scripts/build.sh` builds it beside `ait-certify`. `:latest` is published from commit `454e95e`, which has the first change only: run an image built from this work, which also has the second (item 6).
+Run `ghcr.io/mosip-asia/ait-mimoto` where a plain Mimoto would run `injistack/mimoto:0.21.0`, with the same configuration, files and ports. It pulls without a login. A release publishes `ait-mimoto:<tag>`, since `scripts/build.sh` builds it beside `ait-certify`: CI (`.github/workflows/ci.yml`) builds and pushes the images on a `v*` tag, or on a manual dispatch, tagged with the tag or branch name.
+
+**No published image has both changes yet.** `:latest` is published from commit `454e95e`, which has the first change only, not `SecureUberspector` (item 6). The first release cut after this work reaches `dev` publishes `ait-mimoto:<that tag>` with both, beside `ait-renderer:<that tag>` (item 7). Cutting that release is Thas's action; dev runs that tag.
 
 **Why:** Mimoto 0.21 hands every list of objects to the template as `""`, so a template can't draw the course grid by term. `ait-mimoto` also hands the template the claims as received, as `$credentialSubject`, so a template can loop over `$credentialSubject.courses` (see "Template conventions"). The SIS Adapter sends nothing new: `courses` is already in contract 0.5.0.
 
@@ -376,9 +386,9 @@ CD's `git checkout -f` puts back any tracked file replaced in the checkout, so a
 
 ### 6. `ait-mimoto` runs templates with `SecureUberspector`
 
-`ait-mimoto`'s second change: its print step runs Velocity with `SecureUberspector` (`src/mimoto/README.md`). Nothing to configure: it is in the image.
+`ait-mimoto`'s second change: its print step runs Velocity with `SecureUberspector` (`src/mimoto/README.md`). Nothing to configure: it is in the image, once an image with it is published (item 1).
 
-**Why:** Mimoto runs whatever template the VDR holds, inside the container that holds the Wallet's client key and its database password. `SecureUberspector` refuses method calls on Java's reflection and system classes, so `$x.getClass().forName("java.lang.Runtime")` prints as written. VC Lab's renderer runs the same setting, so a template that reaches for them shows the same in the preview as in the print. It is a second layer only: Velocity 1.7 has a known bypass (CVE-2020-13936), see item 10.
+**Why:** Mimoto runs whatever template the VDR holds, inside the container that holds the Wallet's client key and its database password. `SecureUberspector` refuses method calls on Java's reflection and system classes, so `$x.getClass().forName("java.lang.Runtime")` prints as written. VC Lab's renderer runs the same setting for the print template, so a print template that reaches for them shows the same in the preview as in the print. That holds for the print template only: the credential file's `vc_template` runs in Certify, whose Velocity has no `SecureUberspector`, while the renderer maps it with one (`src/renderer/README.md`, "Where it differs from Certify"), so a `vc_template` that calls such a method previews the call as written and Certify runs it. `SecureUberspector` is a second layer only: Velocity 1.7 has a known bypass (CVE-2020-13936), see item 10.
 
 **Where to see it working:** put a template that uses reflection under Mimoto's fixed name and run the check. Its first print, `original.pdf`, shows the call as written, and `#if` on it takes the other branch:
 
@@ -394,25 +404,27 @@ EOF
 git checkout -- deploy/ait/vdr/templates/AITUniversity-ait-transcript-template.html
 ```
 
-VC Lab shows the same for that template, in the quick view and in the PDF. **Proven on the local stack (2026-11-25):** VC Lab's quick view, VC Lab's PDF and `ait-mimoto`'s print each show `$credentialSubject.getClass().forName("java.lang.Runtime")` and `$credentialSubject.class.classLoader` as written, and `#if` on the first takes the other branch; all three answer 200.
+**Proven on the local stack (2026-11-25):** this block gave `print check: PASS`, and `original.pdf` reads `REFLECT: $credentialSubject.getClass().forName("java.lang.Runtime")` and `not reached`. The same two lines, in a longer reflection template, printed the same way in VC Lab's quick view, VC Lab's PDF and `ait-mimoto`'s print, all three answering 200.
 
 ### 7. VC Lab's renderer
 
 VC Lab previews through its own service, the renderer (`src/renderer/README.md`, ADR 0002). It is a separate container beside VC Lab, never the Wallet's `ait-mimoto`:
 
-- **Image:** `ghcr.io/mosip-asia/ait-renderer:<tag>`, built from `docker/Dockerfile.renderer` by `scripts/build.sh` beside the other images.
-- **Port:** 8080 inside the container (`PORT` changes it). No host port and no Traefik route: only VC Lab calls it.
-- **Environment:** none. No secrets, no volumes, no database. VC Lab finds it through its own `RENDERER_URL` (`http://renderer:8080` in `compose.yaml`); VC Lab reads nothing else from its environment but `PORT` and `HOST`, so the Installation folders and `*_DIR` variables `compose.yaml` still gives VC Lab are unused.
-- **Network:** one network marked `internal: true`, shared with VC Lab alone (`renderer-network` in `compose.yaml`). VC Lab joins it and Traefik's network; the renderer joins only it, so it has no route out and nothing but VC Lab reaches it.
+- **Image:** `ghcr.io/mosip-asia/ait-renderer:<tag>`, built from `docker/Dockerfile.renderer` by `scripts/build.sh` beside the other images. **It has never been published**, so no tag exists yet, and whether it pulls without a login is unchecked (a new GHCR package can start private). The release in item 1 publishes it, under the tag dev deploys.
+- **It must exist before dev starts VC Lab.** CD runs `scripts/deploy.sh <installation> --tag <tag>`, which pulls with `--ignore-pull-failures` and then starts the stack. `compose.yaml` gives the renderer a `build:` from `src/renderer`, which CD's sparse checkout (`deploy/<installation>`, `deploy/base`, `scripts`, `docker`) doesn't hold, and VC Lab `depends_on` the renderer. So without `ait-renderer:<that tag>` on GHCR, starting VC Lab on dev fails.
+- **Which Compose file:** VC Lab and the renderer are defined only in the root `compose.yaml`, which also `include`s every modular file (database, Certify, Verify, web Wallet, trust, Traefik). Dev's `COMPOSE_FILE` as `.env.example` and `compose.traefik-tls.yaml` show it is the modular list without `compose.yaml`, so it starts neither. Adding `compose.yaml` to that list (or using `compose.yaml:compose.traefik-tls.yaml`) starts both, and also the trust services, `vdr` and `vcga`, which that list leaves out (checked with `docker compose config --services`, 2026-11-25). Which form dev uses is Jo's call.
+- **Port:** 8080 inside the container: `compose.yaml`'s `RENDERER_URL` (`http://renderer:8080`) and the renderer's healthcheck both name 8080, so keep it. No host port and no Traefik route: only VC Lab calls it.
+- **Environment:** none. No secrets, no volumes, no database. VC Lab finds it through its own `RENDERER_URL`; VC Lab reads nothing else from its environment but `PORT` and `HOST`, so the Installation folders and `*_DIR` variables `compose.yaml` still gives VC Lab are unused.
+- **Network:** one network marked `internal: true`, shared with VC Lab alone (`renderer-network` in `compose.yaml`, `vc-stack-renderer-net` when the project is `vc-stack`). VC Lab joins it and the project's default network; the renderer joins only it, so it has no route out and nothing but VC Lab reaches it. Because VC Lab is on two networks, its label `traefik.docker.network=${COMPOSE_PROJECT_NAME}_default` tells Traefik which one to reach it on: on dev, Traefik has to be on that network, or the label has to name Traefik's.
 - **Container limits** (`compose.yaml`): read-only filesystem, all capabilities dropped, `no-new-privileges`, 1 GB of memory, at most 128 tasks, `restart: unless-stopped`; the image fixes a 640 MB heap and runs as uid 1000.
 
-**Why:** VC Lab runs any template a visitor uploads, and the renderer's Velocity has the same known bypass as Mimoto's (item 10). So the container is the boundary: it holds nothing worth taking and can reach nothing.
+**Why:** VC Lab runs any template a visitor uploads, and the renderer's Velocity has the same known bypass as Mimoto's (item 10). So the container is the boundary: no secrets, no files of the platform, and no route anywhere. What it does hold is each visitor's set while that visitor's render runs, the Background included, and a template that uses the bypass runs inside the same JVM as other visitors' renders: it can read what they send while it runs, or change state that later calls see (`src/renderer/README.md`, "Limits").
 
 **Where to see it working:** section 6's preview. `docker network inspect vc-stack-renderer-net --format '{{.Internal}} {{range .Containers}}{{.Name}} {{end}}'` prints `true` and the two containers, `vc-lab` and the renderer.
 
 ### 8. VC Lab is public, with no login
 
-VC Lab has no login. On dev, whoever reaches its host (`TRAEFIK_VCLAB_RULE`, ``Host(`lab.localhost`)`` locally) can preview any template through the renderer and upload a Background. It keeps nothing between calls: the set lives in the visitor's browser, so visitors never see each other's files. A request may carry 20 MB. Not hardened, by the spec's choice: size and path checks on a Package, pixel limits on a Background, a render timeout, a sandboxed quick view. Whether dev exposes VC Lab publicly, behind a network only staff reach, or not at all, is Jo's decision.
+VC Lab has no login. On dev, whoever reaches its host (`TRAEFIK_VCLAB_RULE`, ``Host(`lab.localhost`)`` locally) can preview any template through the renderer and upload a Background. VC Lab keeps nothing between calls: the set lives in the visitor's browser, and no endpoint hands a set back, so through VC Lab itself visitors don't see each other's files. That holds while templates stay inside Velocity's limits. A visitor whose template uses the Velocity 1.7 bypass runs code in the renderer, which holds each visitor's set, Background included, while it renders it, and can change state that later renders see (item 7). So a confidential Background is exposed to whoever else can reach VC Lab. A request may carry 20 MB. Not hardened, by the spec's choice: pixel limits on a Background, a render timeout, a sandboxed quick view, and the format of Export Package's config id and version (Load Package checks a Package's size, layout and paths). Whether dev exposes VC Lab publicly, behind a network only staff reach, or not at all, is Jo's decision.
 
 **Where to see it working:** `curl -s http://lab.localhost/health` answers without any credential, and `http://lab.localhost` opens the dashboard.
 
@@ -422,18 +434,25 @@ VC Lab publishes nothing. A Package exported for dev's VDR address (the third fi
 
 - `vdr/templates/<config id>/<version>/` (the template, `background.png`, `manifest.json`) to the VDR's `/templates/<config id>/<version>/`;
 - `template.html` also to Mimoto's fixed name, `<VDR>/templates/<issuer id>-<config id>-template.html` (`AITUniversity-ait-transcript-template.html` for the transcript), until a version pointer exists;
-- `certify/credentials/<config id>.json` into the folder template-sync reads (`CREDENTIALS_DIR`), then template-sync runs and Certify is recreated: Certify serves the new metadata only after a restart, and Mimoto sees it after its metadata cache (item 5);
+- `certify/credentials/<config id>.json` into the folder template-sync reads, which `compose.certify.yaml` mounts from the checkout's `deploy/<installation>/certify/credentials/`; then template-sync runs and Certify is recreated: Certify serves the new metadata only after a restart, and Mimoto sees it after its metadata cache (item 5);
 - `sample/` is not deployed: the manifest marks it `deploy: false`.
+
+**The next deploy undoes a hand placement.** On this platform the VDR's templates folder and Certify's credentials folder are the deployed git checkout (`compose.trust.yaml` mounts `deploy/<installation>/vdr/templates`, `compose.certify.yaml` mounts `deploy/<installation>/certify/credentials`). Mimoto's fixed-name template and `deploy/<installation>/certify/credentials/<config id>.json` are tracked files, and CD runs `git checkout -q -f <commit>` then `deploy.sh`, whose template-sync stores the committed credential file again. So copied by hand on dev, they last until the next deploy; untracked files, such as the `<config id>/<version>/` folder, stay. To last, a Package's template and credential file go into the repository and reach dev through CD.
 
 **What the committed files give a Package.** The Package carries what the set held, and the committed demo files don't use the Background: `ait-transcript.json` sets only `background_color`, and `AITUniversity-ait-transcript-template.html` draws `$logoUrl`, not `$backgroundImage`. Export Package adds the Background's address to the credential file, but a Package exported from the demo template prints no Background in the Wallet. It prints the issuers list's logo instead, which VC Lab's preview leaves out (`$logoUrl` is empty there: the logo belongs in the Background). So the template a deployment places has to draw `$backgroundImage` ("Template conventions"), as section 6's parity template does. The demo template's other calls (`$rowProperties.get`, `size()`, `entrySet()`) are ones `SecureUberspector` allows.
 
 **Where to see it working:** section 6. Its `jq` line shows the Package's Background address in Certify's metadata, and its print check prints the Package's template under the fixed name.
 
-### 10. Write access to the VDR's templates folder is control of the Wallet's printer
+### 10. Write access to the templates and credential files is control of the Wallet's printer and of issuance
 
-Mimoto fetches the template from `<VDR>/templates/` at every print and runs it, on Velocity 1.7. `SecureUberspector` (item 6) has a known bypass in that version (CVE-2020-13936), so whoever can write a template there can run code inside Mimoto, beside the Wallet's client key and database password. Only the organisation's admins may write to the VDR's templates folder. VC Lab never writes there. Upgrading Velocity is a separate change.
+Two folders hold code that runs:
 
-**Where to see it working:** section 4: a template replaced on the VDR prints at the next print, with Mimoto left running.
+- **The VDR's templates folder.** Mimoto fetches the template from `<VDR>/templates/` at every print and runs it, on Velocity 1.7. `SecureUberspector` (item 6) has a known bypass in that version (CVE-2020-13936), so whoever can write a template there can run code inside Mimoto, beside the Wallet's client key and database password.
+- **Certify's credentials folder.** A credential file's `vc_template` runs in Certify's Velocity 1.7 at every issuance, without `SecureUberspector` at all, so whoever can change a credential file can run code inside Certify, beside its signing key, and decide what it signs.
+
+Only the organisation's admins may write either. On this platform both are the deployed git checkout (item 9), so "who may write" means who can merge to the branch dev deploys and who can run CD, besides anyone with a shell on the host. VC Lab never writes to either. Upgrading Velocity is a separate change.
+
+**Where to see it working:** section 4: a template replaced on the VDR prints at the next print, with Mimoto left running. Section 6: a credential file copied into the checkout is what Certify signs once template-sync has run.
 
 ## When something fails
 
@@ -442,6 +461,7 @@ Mimoto fetches the template from `<VDR>/templates/` at every print and runs it, 
 | `mimoto-up: refused: Certify must trust the local Keycloak` | The two `AUTH_SERVER_*` lines, or a variable exported in the shell (it wins over `.env`). |
 | `FAIL setup: ... isn't in this ait-vc image` | The image is older than this branch: `./scripts/deploy.sh ait --build`. |
 | `mimoto-up.sh` stops while building `ait-mimoto` | The build pulls `injistack/mimoto:0.21.0` and `eclipse-temurin:21-jdk` and installs `zip` from Debian's mirrors: check the network and Docker's free disk, then run it again. |
+| `deploy.sh --build` stops while building `ait-renderer` | The build pulls `maven:3.9-eclipse-temurin-21` and `eclipse-temurin:21-jre` from Docker Hub and the renderer's libraries from Maven Central: check the network and Docker's free disk, then run it again. |
 | `FAIL template fetch: the VDR answers 404 for /templates/mimoto-...` | `./scripts/mimoto-up.sh` has never run on this checkout, so the files the VDR serves for Mimoto aren't there: run it. |
 | `FAIL setup: Mimoto's issuers list answered ...` | Mimoto isn't running (stopped, or the stack was brought down and only `deploy.sh` ran again). The four Mimoto files stay on the VDR as empty files once `mimoto-up.sh` has run, so the VDR still answers 200 and the check gets as far as asking Mimoto: run `./scripts/mimoto-up.sh`. |
 | `FAIL signature check ... signature_verification_failed` | Certify's rows hold a DID other than the key it signs with (run `./scripts/mimoto-up.sh`), or w3id.org was slow or unreachable. |

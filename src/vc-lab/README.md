@@ -76,7 +76,7 @@ Placing a Package on the local stack, printing it from the Wallet and comparing 
 
 ## Templates the preview refuses
 
-The renderer loads only `data:` URIs and the set's files, so a template that loads anything else by address, a font from the VDR included (`@font-face` with `http://vdr.localhost/templates/fonts/...`), answers 422 naming it, though the Wallet would print it. Use the 14 built-in fonts in a template you preview here. A template that calls a method on Java's reflection or system classes prints the call as written, in the preview and in the Wallet alike (both run Velocity with `SecureUberspector`).
+The renderer loads only `data:` URIs and the set's files, so a template that loads anything else by address, a font from the VDR included (`@font-face` with `http://vdr.localhost/templates/fonts/...`), answers 422 naming it, though the Wallet would print it. Use the 14 built-in fonts in a template you preview here. A template that calls a method on Java's reflection or system classes prints the call as written, in the preview and in the Wallet alike (both run Velocity with `SecureUberspector`). That holds for the template only: a credential file's `vc_template` that does it previews the call as written, while Certify, which runs no `SecureUberspector`, evaluates it (`src/renderer/README.md`, "Where it differs from Certify").
 
 ## Running
 
