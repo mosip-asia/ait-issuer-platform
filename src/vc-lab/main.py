@@ -16,6 +16,7 @@ import dataclasses
 import os
 from pathlib import Path
 from typing import Any, AsyncGenerator, Literal
+from urllib.parse import quote
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
@@ -100,8 +101,11 @@ def preview_pdf() -> Response:
     pdf = _render(lab, "pdf")
     if lab.background:
         pdf = hardcopy.lay_background(pdf, lab.background.value)
+    # RFC 6266: filename* carries a name in any script (a Thai template name); filename is its ASCII stand-in.
     name = f"{Path(lab.template.filename).stem}.pdf"
-    return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{name}"'})
+    ascii_name = name.encode("ascii", "replace").decode("ascii").replace("?", "_")
+    disposition = f"inline; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(name)}"
+    return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": disposition})
 
 
 @app.get("/download")
