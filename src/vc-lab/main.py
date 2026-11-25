@@ -443,6 +443,12 @@ _DASHBOARD = """<!DOCTYPE html>
           } catch (e) { showError(e.message); return; }
         } else {
           set[input.dataset.field] = file;
+          if (input.dataset.field === 'credential') { // the configuration id is the credential file's key
+            try {
+              const key = JSON.parse(await file.text()).credential_config_key_id;
+              if (typeof key === 'string' && key) document.getElementById('configId').value = key;
+            } catch (e) { /* the server names what is wrong with the file */ }
+          }
         }
         showError('');
         await show();

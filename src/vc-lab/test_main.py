@@ -384,6 +384,46 @@ def test_export_without_a_background_writes_none_and_leaves_the_credential_files
     assert bare["display"] == CREDENTIAL["display"], "no display[0].background_image invented"
 
 
+def test_a_template_loading_the_background_by_its_vdr_address_points_at_the_exported_version() -> None:
+    """The Package holds background.png under <config id>/<version>; the template must ask for exactly that."""
+    template = TEMPLATE.replace("</body>", '<img src="http://vdr.localhost/templates/example-record/background.png"/>'
+                                '<img src="http://vdr.localhost/templates/a/b/background.png"/></body>')
+    files = _set(template=("record.html", template.encode()), background=("background.png", _png()))
+    zipped = _zip_files(_export(files, version="v2").content)
+    exported = zipped["vdr/templates/example-record/v2/template.html"].decode()
+    address = "https://vdr.example.org/templates/example-record/v2/background.png"
+    assert exported.count(address) == 2, "both addresses, whatever folders they named"
+    credential = json.loads(zipped["certify/credentials/example-record.json"])
+    assert credential["display"][0]["background_image"]["uri"] == address
+    back = _read_set(_export(files, version="v2").content)
+    assert back["template"][1].decode().count("http://vdr.localhost/templates/example-record/v2/background.png") == 2
+
+
+def test_the_config_id_must_be_the_credential_files_key() -> None:
+    res = _export(_set(), config_id="other-id")
+    assert res.status_code == 400
+    assert "other-id" in res.json()["detail"] and "example-record" in res.json()["detail"]
+    no_key = {k: v for k, v in CREDENTIAL.items() if k != "credential_config_key_id"}
+    assert _export(_set(credential=("c.json", _json(no_key)))).status_code == 400
+
+
+def test_a_sample_named_manifest_json_still_reads_back() -> None:
+    files = _set(sample=("manifest.json", _json(SAMPLE)))
+    package = _export(files).content
+    assert "sample/manifest.json" in _zip_files(package)
+    assert _read_set(package)["sample"] == ("manifest.json", _json(SAMPLE))
+
+
+def test_a_background_image_that_is_not_an_object_is_replaced_by_the_address() -> None:
+    for value in (None, "old.png", 3, ["x"]):
+        credential = {**CREDENTIAL, "display": [{**CREDENTIAL["display"][0], "background_image": value}]}
+        res = _export(_set(credential=("c.json", _json(credential)), background=("background.png", _png())))
+        assert res.status_code == 200, (value, res.text)
+        written = json.loads(_zip_files(res.content)["certify/credentials/example-record.json"])
+        assert written["display"][0]["background_image"] == {
+            "uri": "https://vdr.example.org/templates/example-record/v1/background.png"}, value
+
+
 def test_export_asks_for_a_config_id_a_version_and_an_address() -> None:
     for case, params in {"no config id": {"config_id": ""}, "no version": {"version": " "},
                          "no VDR address": {"vdr_address": ""}, "an address that is no URL": {"vdr_address": "vdr"}}.items():
@@ -914,6 +954,10 @@ def main() -> None:
         test_export_package_lays_the_files_out_as_the_vdr_and_certify_take_them,
         test_the_manifest_names_the_config_the_version_the_vdr_and_each_component_with_its_role,
         test_export_without_a_background_writes_none_and_leaves_the_credential_files_address,
+        test_a_template_loading_the_background_by_its_vdr_address_points_at_the_exported_version,
+        test_the_config_id_must_be_the_credential_files_key,
+        test_a_sample_named_manifest_json_still_reads_back,
+        test_a_background_image_that_is_not_an_object_is_replaced_by_the_address,
         test_export_asks_for_a_config_id_a_version_and_an_address,
         test_a_package_reads_back_as_the_set_with_the_vdr_address_turned_back_to_local,
         test_a_package_without_a_background_reads_back_without_one,

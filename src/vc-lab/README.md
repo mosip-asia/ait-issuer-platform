@@ -65,6 +65,8 @@ sample/<name>.json                                      <name> is the uploaded s
 ```
 
 - `http://vdr.localhost` and `http://cdn.localhost` in the template and the credential file become the VDR address, by the function template-sync uses (`certify_template_sync.sync.rewrite_local_addresses`).
+- The config id must be the credential file's `credential_config_key_id` (template-sync stores the file under that key); export answers 400 naming both when they differ. Choosing a credential file fills the config id field from its key.
+- A template address of the Background, `http://vdr.localhost/templates/<any folders>/background.png`, is rewritten to `<VDR>/templates/<config id>/<version>/background.png`, where the Package puts the file.
 - With a Background, the credential file's `display[0].background_image.uri` is `<VDR>/templates/<config id>/<version>/background.png`. Without one, no `background.png` is written and the address is left as it was (rewritten like any other).
 - `manifest.json` holds `format` (`vc-lab-package`), `formatVersion`, `credentialConfigId`, `version`, `vdrAddress` and `components`: one `{role, path, deploy}` for each of `template`, `background`, `credential` and `sample`. The sample has `deploy: false`.
 - Load Package accepts exactly this layout and turns the manifest's VDR address back into `http://vdr.localhost` in the template and the credential file. The set previews the same as the one exported; it is not byte-identical (`cdn.localhost` is `vdr.localhost` again, and `background_image.uri` stays set).

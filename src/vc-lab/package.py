@@ -23,6 +23,7 @@ from __future__ import annotations
 import io
 import json
 import posixpath
+import re
 import zipfile
 from typing import Any
 from urllib.parse import urlparse
@@ -33,6 +34,8 @@ from labset import MAX_UPLOAD, LabSet, safe_filename
 LOCAL_VDR = "http://vdr.localhost"
 FORMAT = "vc-lab-package"
 ROLES = ("template", "background", "credential", "sample")
+_MANIFEST_PATH = re.compile(r"vdr/templates/[^/]+/[^/]+/manifest\.json")
+_VDR_BACKGROUND = re.compile(r"http://vdr\.localhost/templates/(?:[^\s\"'()<>]*/)?background\.png")
 
 
 def export(lab: LabSet, config_id: str, version: str, vdr_address: str) -> bytes:
@@ -44,7 +47,14 @@ def export(lab: LabSet, config_id: str, version: str, vdr_address: str) -> bytes
     if urlparse(vdr).scheme not in ("http", "https") or not urlparse(vdr).netloc:
         raise ValueError(f"the VDR address must be a URL such as https://vdr.example.org, not {vdr_address!r}")
 
+    key = lab.credential.value.get("credential_config_key_id")
+    if key != config_id:
+        raise ValueError(f"the credential configuration id {config_id!r} is not the credential file's "
+                         f"credential_config_key_id ({key!r}); template-sync stores the file under that key, so they "
+                         "must be the same")
+
     base = f"vdr/templates/{config_id}/{version}"
+    background_address = f"{vdr}/templates/{config_id}/{version}/background.png"
     paths = {
         "template": f"{base}/template.html",
         "background": f"{base}/background.png",
@@ -56,10 +66,13 @@ def export(lab: LabSet, config_id: str, version: str, vdr_address: str) -> bytes
         if not credential.get("display"):
             credential["display"] = [{}]
         first = credential["display"][0]
-        first["background_image"] = {**first.get("background_image", {}),
-                                     "uri": f"{vdr}/templates/{config_id}/{version}/background.png"}
+        old = first.get("background_image")
+        first["background_image"] = {**(old if isinstance(old, dict) else {}), "uri": background_address}
+    # The renderer serves a Background at http://vdr.localhost/templates/<any folders>/background.png; placed on the
+    # VDR it is at the version's folder, so a template that loads it must ask for that address.
+    template = _VDR_BACKGROUND.sub(lambda _: background_address, lab.template.value)
     contents = {
-        "template": rewrite_local_addresses(lab.template.value, vdr).encode("utf-8"),
+        "template": rewrite_local_addresses(template, vdr).encode("utf-8"),
         "background": lab.background.data if lab.background else None,
         "credential": json.dumps(credential, indent=2, ensure_ascii=False).encode("utf-8"),
         "sample": lab.sample.data,
@@ -90,7 +103,7 @@ def read(package: bytes) -> tuple[dict[str, tuple[str, bytes]], dict[str, str]]:
         if sum(m.file_size for m in members) > MAX_UPLOAD:
             raise ValueError(f"package unpacks to more than {MAX_UPLOAD // (1024 * 1024)} MB")
         names = {m.filename: m for m in members}
-        manifests = [n for n in names if posixpath.basename(n) == "manifest.json"]
+        manifests = [n for n in names if _MANIFEST_PATH.fullmatch(n)]
         if len(manifests) != 1:
             raise ValueError("a package holds one manifest.json, under vdr/templates/<config id>/<version>/")
         manifest = _manifest(z.read(manifests[0]))
