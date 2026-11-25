@@ -18,7 +18,7 @@ PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
 def to_png(filename: str, data: bytes) -> bytes:
     """An uploaded PDF (page 1), PNG or JPEG as a PNG. ValueError, naming the file, for anything else."""
-    if data.startswith(b"%PDF"):
+    if b"%PDF-" in data[:1024]:  # as PDF readers do: a newline or a BOM before the header is legal
         return _png_of(_first_page(filename, data))
     if data.startswith(PNG_MAGIC):
         _open(filename, data)

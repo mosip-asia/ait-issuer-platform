@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import base64
 import os
-import re
 from pathlib import Path
 from typing import Any, AsyncGenerator, Literal
 from urllib.parse import quote
@@ -65,13 +64,8 @@ def _preview(files: dict[str, tuple[str, bytes]]) -> HTMLResponse:
     page = _render(lab, "html").decode("utf-8")
     if lab.background:
         # A browser can't reach the VDR address the Wallet loads the Background from, so it gets the picture itself.
-        page = _VDR_BACKGROUND.sub(lambda _: _data_uri(lab.background.value), page)
+        page = package.VDR_BACKGROUND.sub(lambda _: _data_uri(lab.background.value), page)
     return HTMLResponse(page)
-
-
-# Where a template loads the Background from, once an organisation has put it on its VDR (the renderer serves the same
-# addresses to the PDF).
-_VDR_BACKGROUND = re.compile(r"http://vdr\.localhost/templates/[^\s\"'()<>]*/background\.png")
 
 
 def _data_uri(png: bytes) -> str:
@@ -354,6 +348,7 @@ _DASHBOARD = """<!DOCTYPE html>
     // A reload loses it, so leaving asks first while any file is loaded.
     let set = {};
     let seen = 0;        // the latest preview asked for; an older answer that arrives late is dropped
+    let changes = 0;     // the latest change of the Background or the whole set (a pick, Load Package, Remove, Clear); an older answer is void
     let shownUrl = null; // the blob the preview frame shows
     const output = () => document.querySelector('input[name=output]:checked').value;
     const showError = (text) => { document.getElementById('error').textContent = text || ''; };
@@ -421,9 +416,11 @@ _DASHBOARD = """<!DOCTYPE html>
         input.value = '';
         if (!file) return;
         if (input.dataset.field === 'package') {
+          const mine = ++changes;
           try {
             const res = await fetch('/api/package/read', {method: 'POST', body: (() => { const f = new FormData(); f.append('package', file); return f; })()});
             const data = await res.json();
+            if (mine !== changes) return;
             if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail));
             set = {};
             document.getElementById('configId').value = data.export.configId;
@@ -433,14 +430,17 @@ _DASHBOARD = """<!DOCTYPE html>
               const bytes = Uint8Array.from(atob(f.data), c => c.charCodeAt(0));
               set[slot] = new File([bytes], f.filename);
             }
-          } catch (e) { showError(e.message); return; }
+          } catch (e) { if (mine === changes) showError(e.message); return; }
         } else if (input.dataset.field === 'background') {
+          const mine = ++changes;
           try { // the server makes the PNG; this page keeps only that
             const f = new FormData(); f.append('background', file, file.name);
             const res = await fetch('/api/background', {method: 'POST', body: f});
             if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(typeof data.detail === 'string' ? data.detail : res.statusText); }
-            set.background = new File([await res.blob()], 'background.png', {type: 'image/png'});
-          } catch (e) { showError(e.message); return; }
+            const png = await res.blob();
+            if (mine !== changes) return;
+            set.background = new File([png], 'background.png', {type: 'image/png'});
+          } catch (e) { if (mine === changes) showError(e.message); return; }
         } else {
           set[input.dataset.field] = file;
           if (input.dataset.field === 'credential') { // the configuration id is the credential file's key
@@ -476,8 +476,8 @@ _DASHBOARD = """<!DOCTYPE html>
         URL.revokeObjectURL(link.href);
       } catch (e) { showError(e.message); }
     };
-    document.getElementById('removeBackground').onclick = () => { delete set.background; show(); };
-    document.getElementById('clear').onclick = () => { set = {}; showError(''); show(); };
+    document.getElementById('removeBackground').onclick = () => { changes++; delete set.background; show(); };
+    document.getElementById('clear').onclick = () => { changes++; set = {}; showError(''); show(); };
     show();
   </script>
 </body>

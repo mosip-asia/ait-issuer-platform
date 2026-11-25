@@ -24,6 +24,7 @@ import argparse
 import base64
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -82,9 +83,12 @@ def find_seed_sql_path():
 
 def rewrite_local_addresses(text, vdr_base):
     """The local stack's VDR and CDN addresses in `text`, as the VDR address (without its trailing slash).
-    template-sync and VC Lab's Export Package both use it, so a file means the same on either path."""
+    template-sync and VC Lab's Export Package both use it, so a file means the same on either path. An occurrence that
+    already starts with `vdr_base` (it may itself start with http://vdr.localhost) stays as it is, so a second pass
+    changes nothing."""
     vdr_base = vdr_base.rstrip("/")
-    return text.replace("http://vdr.localhost", vdr_base).replace("http://cdn.localhost", vdr_base)
+    pattern = re.escape(vdr_base) + r"|http://vdr\.localhost|http://cdn\.localhost"
+    return re.sub(pattern, lambda m: vdr_base, text)
 
 
 def load_credential_configs(creds_dir):
