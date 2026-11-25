@@ -19,6 +19,7 @@ import tempfile
 import zipfile
 from pathlib import Path
 from typing import Callable
+from urllib.parse import quote
 
 VC_LAB_DIR = Path(__file__).resolve().parent
 REPO_ROOT = VC_LAB_DIR.parent.parent
@@ -317,6 +318,38 @@ def test_velocity_and_mapping_errors_answer_422_with_the_engines_message() -> bo
     return True
 
 
+def test_a_record_certify_refuses_answers_422_with_the_plugins_reason() -> bool:
+    if _skip_without("test_a_record_certify_refuses_answers_422_with_the_plugins_reason", "renderer"):
+        return False
+    cases = {
+        "a reserved key": (_json({**SAMPLE, "credentialSubject": {**SUBJECT, "id": "st0001"}}),
+                           "the Adapter's record carries the forbidden key id"),
+        "a duplicate key": (b'{"name": "Ada Example", "name": "Ada Again", "thesisTitle": "T", "courses": []}',
+                            "the Adapter's answer is not the expected JSON"),
+    }
+    for case, (sample, reason) in cases.items():
+        _upload_set()
+        assert _upload(sample=("refused.json", sample)).status_code == 200, case
+        for path in ("/preview", "/preview.pdf"):
+            res = client.get(path)
+            assert res.status_code == 422, (case, path, res.status_code, res.text)
+            assert "adapter_error" in res.json()["detail"] and reason in res.json()["detail"], (case, res.json())
+    return True
+
+
+def test_a_template_named_in_any_script_previews() -> bool:
+    if _skip_without("test_a_template_named_in_any_script_previews", "renderer"):
+        return False
+    _upload_set()
+    assert _upload(template=("ใบรับรอง.html", TEMPLATE.encode())).status_code == 200
+    res = client.get("/preview.pdf")
+    assert res.status_code == 200, res.text
+    disposition = res.headers["content-disposition"]
+    assert "filename*=UTF-8''" + quote("ใบรับรอง.pdf") in disposition, disposition
+    assert "Ada Example" in PdfReader(io.BytesIO(res.content)).pages[0].extract_text()
+    return True
+
+
 def test_sample_without_credential_subject() -> bool:
     if _skip_without("test_sample_without_credential_subject", "renderer"):
         return False
@@ -377,6 +410,8 @@ def main() -> None:
         test_large_upload_stays_in_memory,
         test_grid_from_credential_subject_in_the_pdf_and_the_quick_view,
         test_velocity_and_mapping_errors_answer_422_with_the_engines_message,
+        test_a_record_certify_refuses_answers_422_with_the_plugins_reason,
+        test_a_template_named_in_any_script_previews,
         test_sample_without_credential_subject,
         test_pdf_lays_the_background_under_page_one,
         test_background_with_its_own_rotation_comes_out_portrait,

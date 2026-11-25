@@ -2,19 +2,48 @@ package asia.mosip.renderer;
 
 import java.util.Set;
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
+import org.json.JSONParserConfiguration;
 
 /**
- * The record as Certify's template takes it: the renderer's copy of the Data-provider plugin's one change to the
- * Adapter's values ({@code IssuerDataProviderPlugin.shape} and {@code escapeForQuotedTemplate} in
- * {@code src/issuer/}). Nothing makes the two match (ADR 0002): change both together.
+ * The record as Certify's template takes it: the renderer's copy of the Data-provider plugin's record step
+ * ({@code IssuerDataProviderPlugin.strictObject}, {@code record}'s forbidden keys, {@code shape} and
+ * {@code escapeForQuotedTemplate} in {@code src/issuer/}). Nothing makes the two match (ADR 0002): change both together.
  */
 final class TemplateRecord {
 
     /** The plugin's default {@code mosip.certify.adapter.structured-keys}: the one claim served as an array. */
     static final Set<String> STRUCTURED_KEYS = Set.of("courses");
 
+    /** Keys a record must not carry: Certify's reserved keys, and the trace keys the plugin adds. */
+    static final Set<String> FORBIDDEN_KEYS = Set.of("id", "_holderId", "_issuer", "validFrom", "validUntil",
+            "credentialStatus", "tokenSub", "tokenClientId");
+
+    private static final JSONParserConfiguration STRICT = new JSONParserConfiguration().withStrictMode();
+
     private TemplateRecord() {}
+
+    /**
+     * The Adapter's answer as a record, read as the plugin reads it: strict JSON only (org.json's lenient forms, a
+     * duplicate key or text after the object throw {@link JSONException}). VC Lab's one addition: an answer with a
+     * {@code credentialSubject} object is read as that object.
+     *
+     * @throws IllegalArgumentException with the plugin's reason, for a key in {@link #FORBIDDEN_KEYS}
+     */
+    static JSONObject record(String answer) {
+        JSONObject record = new JSONObject(answer, STRICT);
+        JSONObject subject = record.optJSONObject("credentialSubject");
+        if (subject != null) {
+            record = subject;
+        }
+        for (String key : record.keySet()) {
+            if (FORBIDDEN_KEYS.contains(key)) {
+                throw new IllegalArgumentException("the Adapter's record carries the forbidden key " + key);
+            }
+        }
+        return record;
+    }
 
     /**
      * The record for Certify's template, which substitutes every claim into a quoted slot ({@code "${fullName}"})
@@ -29,11 +58,11 @@ final class TemplateRecord {
         for (String key : record.keySet()) {
             Object value = record.get(key);
             if (value == JSONObject.NULL) {
-                throw new IllegalArgumentException("has null for " + key);
+                throw new IllegalArgumentException("the record has null for " + key);
             }
             boolean structured = value instanceof JSONObject || value instanceof JSONArray;
             if (structuredKeys.contains(key) ? !(value instanceof JSONArray) : structured) {
-                throw new IllegalArgumentException("has a " + value.getClass().getSimpleName() + " for " + key);
+                throw new IllegalArgumentException("the record has a " + value.getClass().getSimpleName() + " for " + key);
             }
             if (value instanceof String text) {
                 data.put(key, escapeForQuotedTemplate(text));

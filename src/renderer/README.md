@@ -10,7 +10,7 @@ Only VC Lab calls it, at the address in VC Lab's `RENDERER_URL`. In `compose.yam
 POST /render  application/json  ->  200 application/pdf or text/html  |  422 {"error": "<message>"}  |  400 {"error": "<message>"}
 {
   "template": "<HTML with Velocity>",
-  "record": { ...the Adapter's record... },
+  "record": "<the Adapter's answer, as text>",
   "vcTemplate": "<the credential file's vc_template, as the text template-sync stores for Certify>",
   "credentialFile": { "display": [...], "display_order": [...], "credential_subject": {...}, ... },
   "backgroundImage": "data:image/png;base64,..." | null,
@@ -19,7 +19,7 @@ POST /render  application/json  ->  200 application/pdf or text/html  |  422 {"e
 }
 ```
 
-- `record` and `vcTemplate` give the claims, mapped as Certify maps them. VC Lab makes `vcTemplate` with template-sync's own function (`build_vc_template_base64` in `src/certify_template_sync/sync.py`), so it holds that function's one change (`"courses": ${courses}` unquoted). Template-sync's file-level rewrites (`${CERTIFY_DID}`, `${VDR_BASE_URL}`, `${CDN_BASE_URL}`, `http://vdr.localhost`, `http://cdn.localhost`) are not applied to it.
+- `record` and `vcTemplate` give the claims, mapped as Certify maps them. `record` is text so the renderer can read it as the plugin does, strict JSON included. VC Lab makes `vcTemplate` with template-sync's own function (`build_vc_template_base64` in `src/certify_template_sync/sync.py`), so it holds that function's one change (`"courses": ${courses}` unquoted). Template-sync's file-level rewrites (`${CERTIFY_DID}`, `${VDR_BASE_URL}`, `${CDN_BASE_URL}`, `http://vdr.localhost`, `http://cdn.localhost`) are not applied to it.
 - `credentialFile` is Certify's credential file. The renderer reads it the way Certify publishes it and Mimoto reads it: `display`, `display_order` as `order`, and `credential_subject` as `credential_definition.credentialSubject`. For the claims it reads `credential_type`, `context` and `credential_status_purpose`.
 - `output` `html` answers the template as Velocity evaluated it, the HTML iText would print; `pdf` (or none) answers the PDF iText makes of that same HTML. VC Lab's quick view is the first, its PDF the second.
 - `backgroundImage`, when not null, replaces `display[0].background_image.uri`.
@@ -32,7 +32,7 @@ POST /render  application/json  ->  200 application/pdf or text/html  |  422 {"e
 
 `CertifyMapping.java` follows the steps Certify 0.14 takes for an `ldp_vc` credential, apart from the differences under "Where it differs from Certify", read from the bytecode of `certify-service.jar` in `ghcr.io/mosip-asia/ait-certify` (`CertifyIssuanceServiceImpl.getVerifiableCredential` and `VelocityTemplatingEngineImpl.format`), on Certify's library versions (`BOOT-INF/lib`): Velocity 1.7 and org.json 20241224.
 
-1. The record goes through this platform's Data-provider plugin's step: `TemplateRecord.shape`, the renderer's copy of the plugin's `shape` (`src/issuer/.../IssuerDataProviderPlugin.java`); change both together. Every string is JSON-escaped, `courses` becomes its JSON text, and a `null` or any other list or object is refused (`adapter_error`).
+1. The record goes through this platform's Data-provider plugin's step: `TemplateRecord`, the renderer's copy of the plugin's `strictObject`, `record` and `shape` (`src/issuer/.../IssuerDataProviderPlugin.java`); change both together. The answer is read as strict JSON (a duplicate key, a lenient form or text after the object is refused), a reserved or trace key (`id`, `_holderId`, `_issuer`, `validFrom`, `validUntil`, `credentialStatus`, `tokenSub`, `tokenClientId`) is refused, every string is JSON-escaped, `courses` becomes its JSON text, and a `null` or any other list or object is refused. Each refusal answers 422 with `adapter_error` and the plugin's reason.
 2. Certify's variables are added, as Certify adds them. The values are fixed placeholders, since VC Lab issues nothing:
 
    | Variable | From | Preview value |
@@ -56,9 +56,8 @@ Certify has one Velocity engine for every issuance, so a `#macro` in a `vc_templ
 
 The preview can print a record or mapping that Certify signs differently or refuses. What a designer would see:
 
-- The plugin's checks before `shape` are not repeated (reserved keys such as `id`, duplicate keys, a `credentialSubject` envelope, strict JSON), so the preview prints a record Certify refuses.
+- An answer with a `credentialSubject` object is read as that object (VC Lab takes the Adapter's response with or without that envelope); the plugin refuses the envelope.
 - Certify's `toJsonMap` and its extra variables (`rootContext`, `envConfigs`, `claim_169_values`, `credentialId`) are not reproduced: a mapping that uses them, or `$type` in quotes, previews differently from what Certify signs.
-- Number literals: Certify signs the Adapter's literal (`4.00`, `1E+5`) and the preview shows Jackson's (`4.0`, `100000.0`), so send numbers whose form matters as text.
 - Template-sync's file-level rewrites (`${CERTIFY_DID}`, `${VDR_BASE_URL}`, `${CDN_BASE_URL}`, `http://vdr.localhost`, `http://cdn.localhost`) are not applied to the preview's mapping, so they show literally inside a claim.
 
 ## What it repeats from Mimoto 0.21

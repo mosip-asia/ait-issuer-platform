@@ -46,18 +46,22 @@ final class CertifyMapping {
     private CertifyMapping() {}
 
     /**
-     * The credentialSubject Certify signs: the plugin's record step on {@code record}, Certify's template variables,
-     * Velocity 1.7 on {@code vcTemplate} (the text template-sync stores), then org.json on the result.
+     * The credentialSubject Certify signs: the plugin's record step on {@code answer} (the Adapter's answer as
+     * text), Certify's template variables, Velocity 1.7 on {@code vcTemplate} (the text template-sync stores), then
+     * org.json on the result.
      *
-     * @throws Refused when the plugin refuses the record, Velocity can't evaluate the text, or org.json can't read
+     * @throws Refused when the plugin refuses the answer, Velocity can't evaluate the text, or org.json can't read
      *     the result
      */
-    static JSONObject credentialSubject(String record, String vcTemplate, JsonNode credentialFile) throws Refused {
+    static JSONObject credentialSubject(String answer, String vcTemplate, JsonNode credentialFile) throws Refused {
         JSONObject data;
         try {
-            data = TemplateRecord.shape(new JSONObject(record), TemplateRecord.STRUCTURED_KEYS);
+            data = TemplateRecord.shape(TemplateRecord.record(answer), TemplateRecord.STRUCTURED_KEYS);
+        } catch (JSONException e) {
+            throw new Refused("Certify refuses this record (adapter_error): the Adapter's answer is not the expected"
+                    + " JSON: " + e.getMessage());
         } catch (IllegalArgumentException e) {
-            throw new Refused("Certify refuses this record (adapter_error): the record " + e.getMessage());
+            throw new Refused("Certify refuses this record (adapter_error): " + e.getMessage());
         }
         // IssuerDataProviderPlugin.fetchData
         data.put("tokenSub", TOKEN_SUB);

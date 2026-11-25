@@ -44,11 +44,11 @@ public final class RendererServer {
     static final int CHUNK = 64 * 1024;  // bytes per write: see send()
 
     /**
-     * POST /render's body. record is the Adapter's record; vcTemplate is the credential file's vc_template as the
+     * POST /render's body. record is the Adapter's answer as text, read as the plugin reads it; vcTemplate is the credential file's vc_template as the
      * text template-sync stores for Certify; credentialFile is Certify's credential file, as VC Lab holds it; output
      * is "pdf" (the default) or "html", the evaluated template that the PDF would be printed from.
      */
-    record RenderRequest(String template, JsonNode record, String vcTemplate, JsonNode credentialFile,
+    record RenderRequest(String template, String record, String vcTemplate, JsonNode credentialFile,
                          String backgroundImage, String locale, String output) {}
 
     public static void main(String[] args) throws IOException {
@@ -94,9 +94,9 @@ public final class RendererServer {
             error(exchange, 400, "expected the JSON render request: " + e.getMessage());
             return;
         }
-        if (request.template() == null || request.record() == null || !request.record().isObject()
+        if (request.template() == null || request.record() == null
                 || request.vcTemplate() == null || request.credentialFile() == null) {
-            error(exchange, 400, "template, record (an object), vcTemplate and credentialFile are required");
+            error(exchange, 400, "template, record (the Adapter's answer as text), vcTemplate and credentialFile are required");
             return;
         }
         boolean html = "html".equals(request.output());
@@ -110,7 +110,7 @@ public final class RendererServer {
         Map<String, Object> credentialSubject;
         try {
             // As the Wallet gets it: the signed credential's JSON text, read by Jackson.
-            credentialSubject = JSON.readValue(CertifyMapping.credentialSubject(request.record().toString(),
+            credentialSubject = JSON.readValue(CertifyMapping.credentialSubject(request.record(),
                     request.vcTemplate(), request.credentialFile()).toString(), new TypeReference<>() {});
         } catch (CertifyMapping.Refused e) {
             error(exchange, 422, e.getMessage());

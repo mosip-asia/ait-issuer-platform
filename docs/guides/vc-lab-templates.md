@@ -42,7 +42,7 @@ A course table loops over the claim as a list: `#foreach($t in $credentialSubjec
 
 ## Known limits (2026-11-25)
 
-- **Certify takes only flat fields.** Its data-provider plugin passes the Adapter's top-level fields and lists named in `mosip.certify.adapter.structured-keys` (default `courses`); it refuses nested objects and `null`s. The renderer refuses the same, with the reason, so a mapping that reads `${thesis.title}` fails in VC Lab as in Certify.
+- **Certify takes only flat fields.** Its data-provider plugin passes the Adapter's top-level fields and lists named in `mosip.certify.adapter.structured-keys` (default `courses`); it refuses nested objects, `null`s, keys Certify reserves (`id`, `validFrom`, ...) and JSON that isn't strict (a duplicate key). The renderer refuses the same, with the reason, so a mapping that reads `${thesis.title}` fails in VC Lab as in Certify.
 - **Numbers print as sent.** A credit sent as `3.0` prints `3.0`.
 - **The preview fetches nothing.** The renderer has no network beyond VC Lab, so an image or font a template loads by address doesn't draw, and `$logoUrl` is empty: the logo belongs in the background.
 - **Issuing with a credential file from VC Lab:** run the sync tool with its folder mounted; see [VC Lab's README](../../src/vc-lab/README.md#issuing-with-a-credential-file-from-vc-lab).
