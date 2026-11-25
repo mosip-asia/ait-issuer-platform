@@ -36,7 +36,7 @@ This repository houses the **Institutional Verifiable Credential Platform (Issue
 - [Transcript credential](./concepts/transcript-credential.md): Schema structure, subject claims, and gotchas.
 - [How to add a Verifiable Credential](./guides/how-to-add-vc.md): Step-by-step developer tutorial for adding new credentials to Certify.
 - [Credential templates in VC Lab](./guides/vc-lab-templates.md): How a SIS field reaches the printed page (mapping, `#claimValue`), the four files VC Lab takes, and its PDF and quick view.
-- [Print from the Wallet on the local stack](./guides/print-from-the-wallet.md): Start `ait-mimoto` beside the local stack, run the print check (course grid from `courses`), swap a template, place a Background, and see what running it on dev takes.
+- [Print from the Wallet on the local stack](./guides/print-from-the-wallet.md): Start `ait-mimoto` beside the local stack, run the print check (course grid from `courses`), swap a template, place a Background, print a VC Lab Package and compare it with VC Lab's preview, and see what running it on dev takes (VC Lab and its renderer included).
 - [VC revocation](./concepts/vc-revocation.md): Bitstring Status List v1.0, revocation batches, and status verification.
 - [Wallet developer URLs](./guides/wallet-developer-urls.md) & [Non-Inji OpenID4VCI wallets](./guides/other-openid4vci-wallets.md): Guidelines for external wallet integration.
 - [Schemas](./schemas/): Master JSON schemas and sample credential payloads.

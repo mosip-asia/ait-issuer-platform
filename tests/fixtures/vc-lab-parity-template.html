@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"/>
+<title>VC Lab parity</title>
+<style>
+  /* Built-in fonts only: VC Lab refuses a font loaded by address. A page without margins so the Background reaches
+     the paper's edge, and the Background as an image under the layout. */
+  @page { size: A4; margin: 0; }
+  body { margin: 0; font-family: Helvetica, sans-serif; font-size: 9pt; }
+  .page { position: relative; width: 595.28pt; height: 841.89pt; }
+  .background { position: absolute; left: 0; top: 0; width: 595.28pt; height: 841.89pt; }
+  .content { position: absolute; left: 30pt; top: 30pt; width: 535pt; }
+  .qr { position: absolute; right: 30pt; bottom: 30pt; width: 90pt; height: 90pt; }
+  p { margin: 1pt 0; }
+</style>
+</head>
+<body>
+<!-- The template of the runbook's made-up set (docs/guides/print-from-the-wallet.md, section 6, "Preview a set in
+     VC Lab and print its Package"): previewed in VC Lab, exported, placed on the VDR and printed by the Wallet, then the two PDFs'
+     text compared. It prints every claim Mimoto hands it except notes, which scripts/print-check.sh replaces with a
+     Thai text for its run, and the course grid from $credentialSubject (ait-mimoto). -->
+<div class="page">
+#if($backgroundImage && $backgroundImage != "")<img class="background" src="$backgroundImage"/>#end
+<div class="content">
+<p>VC-LAB-PARITY-TEMPLATE</p>
+#foreach($claim in $rowProperties.entrySet())
+#if($claim.key != "notes")
+#foreach($shown in $claim.value.entrySet())
+<p>$claim.key: $shown.value</p>
+#end
+#end
+#end
+<p>COURSE-GRID-START</p>
+#if($credentialSubject && $credentialSubject.courses)
+#foreach($term in $credentialSubject.courses)
+<p>TERM | $!term.term | $!term.credits | $!term.gpa | $!term.cumGpa ;</p>
+#foreach($c in $term.courses)
+<p>COURSE | $!c.no | $!c.title | $!c.lab | $!c.lec | $!c.credits | $!c.grade ;</p>
+#end
+#end
+#else
+<p>NO-CREDENTIAL-SUBJECT</p>
+#end
+<p>COURSE-GRID-END</p>
+</div>
+#if($qrCodeImage && $qrCodeImage != "")<img class="qr" src="data:image/png;base64,$qrCodeImage"/>#end
+</div>
+</body>
+</html>
