@@ -32,7 +32,7 @@ That lets a template loop over `courses`; it doesn't change what any template pr
 ```bash
 git clone https://github.com/mosip-asia/ait-issuer-platform.git ait-transcript
 cd ait-transcript
-git switch feat/print-through-ait-mimoto     # until this work reaches dev; then stay on dev
+git switch feat/vc-lab-prints-like-wallet     # until this work reaches dev; then stay on dev
 cp .env.example .env
 ```
 
@@ -134,7 +134,7 @@ If a run is killed between the swap and the restore, the next check refuses:
 
 ## Fonts
 
-Any font other than the 14 built-in ones comes in through `@font-face`, and the file has to be on the VDR: place it yourself under `deploy/ait/vdr/templates/fonts/` (for example `narrow.ttf`) and name it by absolute address, `src: url("http://vdr.localhost/templates/fonts/narrow.ttf")`. If the file isn't there, the template falls back to a built-in face without telling you (the built-in faces have no Thai), so check the PDF, for example with `pdffonts`, for the font you expect. Git ignores `ttf`, `otf`, `woff` and `woff2` files under an Installation's `vdr/templates/` folder, as it does Backgrounds, because a font's licence may forbid publishing it in a repository. Which fonts an organisation may publish on its own VDR is its licensing question.
+Any font other than the 14 built-in ones comes in through `@font-face`, and the file has to be on the VDR: place it yourself under `deploy/ait/vdr/templates/fonts/` (for example `narrow.ttf`) and name it by absolute address, `src: url("http://vdr.localhost/templates/fonts/narrow.ttf")`. VC Lab can't preview such a template: its renderer loads nothing but the set's files and answers 422 naming the font's address (section 6). If the file isn't there, the template falls back to a built-in face without telling you (the built-in faces have no Thai), so check the PDF, for example with `pdffonts`, for the font you expect. Git ignores `ttf`, `otf`, `woff` and `woff2` files under an Installation's `vdr/templates/` folder, as it does Backgrounds, because a font's licence may forbid publishing it in a repository. Which fonts an organisation may publish on its own VDR is its licensing question.
 
 ## 5. Place a Background
 
@@ -142,14 +142,14 @@ A Background is the picture of an organisation's pre-printed paper. The platform
 
 Two things connect it:
 
-1. The file, at `<VDR>/templates/<credential configuration id>/background.png`. Locally: `deploy/ait/vdr/templates/ait-transcript/background.png` (make the folder). It has to be an image, PNG or JPEG, of the paper, saved under that name: the template draws it with `<img>`. VC Lab's Background is a PDF on `dev`, which the Wallet can't draw, so the image comes from the organisation, not from VC Lab.
-2. The credential file's `display[0].background_image.uri`, set to `http://vdr.localhost/templates/ait-transcript/background.png`. Certify publishes it in its metadata, and Mimoto hands it to the template as `$backgroundImage`.
+1. The file, at `<VDR>/templates/<credential configuration id>/<version>/background.png`. Locally, for version `v1`: `deploy/ait/vdr/templates/ait-transcript/v1/background.png`. It has to be an image of the paper, PNG, under that name: the template draws it with `<img>`. VC Lab makes it: it turns a PDF, PNG or JPEG into `background.png`, and Export Package writes it at that path (section 6).
+2. The credential file's `display[0].background_image.uri`, set to `http://vdr.localhost/templates/ait-transcript/v1/background.png`. Export Package sets it in the Package's credential file. Certify publishes it in its metadata, and Mimoto hands it to the template as `$backgroundImage`.
 
 An Installation therefore needs both: its credential file points `display[0].background_image.uri` at the Background on its VDR, and its template draws `$backgroundImage`. The committed demo files do neither (`deploy/ait/certify/credentials/ait-transcript.json` sets only `background_color`, and the committed template doesn't use `$backgroundImage`), so publish the credential file with an address (next section). The print check does both for its own run.
 
 The template draws it as shown in "Template conventions".
 
-To see your own Background in the print check: the check's test copy of the credential file already points `display[0].background_image` at `<VDR>/templates/<credential configuration id>/background.png`, so a Background you place there prints in the check. `original.pdf` shows it behind your template. For the swapped print the check puts its own made-up Background at that path and afterwards puts yours back byte for byte.
+To see your own Background in the print check: the check's test copy keeps a `display[0].background_image.uri` on the local VDR, such as the one a Package's credential file carries once it is in `deploy/ait/certify/credentials/` (section 6). A file without one is pointed at `<VDR>/templates/<credential configuration id>/background.png`, so a Background you place there prints in the check. `original.pdf` shows it behind your template. For the swapped print the check puts its own made-up Background at that path and afterwards puts yours back byte for byte.
 
 ### Publish a credential file by hand
 
@@ -167,6 +167,80 @@ compose restart certify
 `template-sync` keeps Certify's live DID because `.env` holds it as `CERTIFY_DID` and the overlay passes it on (steps 3 and 4 of the start command in section 2); with the placeholder every credential would fail to verify. Certify has to restart to serve the new metadata. Mimoto fetches that metadata from Certify with a cache, which the local Mimoto sets to 0 so a published address shows at once; a Mimoto that was already running keeps its old setting until it is recreated.
 
 To put the committed files back: `compose up -d --force-recreate template-sync certify`, with the `compose` function above. The function sets the two variables for its own command only, so nothing leaks into a later `deploy.sh`.
+
+## 6. Preview a set in VC Lab and print its Package
+
+VC Lab (`http://lab.localhost`) previews a set (template, credential file, sample record, Background) as the PDF the Wallet prints, through its renderer (`src/renderer/`, ADR 0002). This section runs the whole loop once with a made-up set, and checks the claim: preview in VC Lab, export a Package, place it on the local VDR and in Certify by hand, print from the Wallet, and compare the two PDFs' text. Run it after section 3's print check passes, from the repository root. `deploy.sh` has already started VC Lab and the renderer (`compose.yaml`).
+
+The made-up set:
+
+- the template `tests/fixtures/vc-lab-parity-template.html`: every claim but `notes` (the print check replaces `notes` with a Thai text for its run), the course grid from `$credentialSubject`, the Background through `$backgroundImage`, and the QR code. It loads no font by address: VC Lab's renderer loads only the set's files and answers 422 naming any other address, so a template like `tests/fixtures/print-check-template.html`, whose font comes from the VDR, can't preview in VC Lab;
+- the committed credential file, `deploy/ait/certify/credentials/ait-transcript.json`;
+- the sample: the mock Adapter's answer for the made-up student `st120001`, as Certify gets it;
+- a made-up Background, drawn below.
+
+In a browser this is the dashboard at `http://lab.localhost`: choose the four files, read the PDF ("what the Wallet prints"), then fill the credential configuration id, version and VDR address and press Export Package. The commands make the same calls:
+
+```bash
+mkdir -p /tmp/vc-lab-parity
+IMAGE=ghcr.io/mosip-asia/ait-vc:$(grep ^IMAGE_TAG= .env | cut -d= -f2)
+curl -sf http://adapter.localhost/student/st120001/transcript -o /tmp/vc-lab-parity/st120001.json
+docker run --rm "$IMAGE" python -c "
+import sys
+from PIL import Image, ImageDraw
+page = Image.new('RGB', (1240, 1754), 'white')
+ImageDraw.Draw(page).rectangle([0, 0, 1239, 150], fill=(210, 225, 240))
+page.save(sys.stdout.buffer, 'PNG')" > /tmp/vc-lab-parity/background.png
+SET=(-F template=@tests/fixtures/vc-lab-parity-template.html
+     -F credential=@deploy/ait/certify/credentials/ait-transcript.json
+     -F sample=@/tmp/vc-lab-parity/st120001.json
+     -F background=@/tmp/vc-lab-parity/background.png)
+curl -sf "${SET[@]}" http://lab.localhost/preview.pdf -o /tmp/vc-lab-parity/vclab.pdf
+curl -sf "${SET[@]}" -F config_id=ait-transcript -F version=v1 -F vdr_address=http://vdr.localhost \
+  http://lab.localhost/api/package/export -o /tmp/vc-lab-parity/package.zip
+```
+
+`curl -sf` exits non-zero on an error status; send the same call without `-f` to read VC Lab's message. The Package holds `vdr/templates/ait-transcript/v1/{template.html,background.png,manifest.json}`, `certify/credentials/ait-transcript.json` and `sample/st120001.json` (`src/vc-lab/README.md`, "The Package"). The config id has to be the credential file's `credential_config_key_id`.
+
+Place it by hand. Locally the checkout is the VDR (`deploy/ait/vdr/templates/` is its `/templates/`) and Certify's credential folder. Mimoto reads the template only under its fixed name, `<issuer id>-<credential configuration id>-template.html`, so `template.html` is copied to that name too, until a version pointer exists. Certify serves the new credential file once template-sync has stored it and Certify is recreated:
+
+```bash
+python3 -m zipfile -e /tmp/vc-lab-parity/package.zip /tmp/vc-lab-parity/package
+cp -r /tmp/vc-lab-parity/package/vdr/templates/ait-transcript deploy/ait/vdr/templates/
+cp /tmp/vc-lab-parity/package/vdr/templates/ait-transcript/v1/template.html \
+  deploy/ait/vdr/templates/AITUniversity-ait-transcript-template.html
+cp /tmp/vc-lab-parity/package/certify/credentials/ait-transcript.json deploy/ait/certify/credentials/ait-transcript.json
+compose() { COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE="$(grep ^COMPOSE_FILE= .env | cut -d= -f2-):compose.mimoto.yaml" docker compose "$@"; }
+compose up -d --force-recreate template-sync certify
+until curl -sf -o /dev/null http://issuer.localhost/.well-known/openid-credential-issuer; do sleep 5; done
+curl -s http://issuer.localhost/.well-known/openid-credential-issuer \
+  | jq -r '.credential_configurations_supported["ait-transcript"].display[0].background_image.uri'
+```
+
+The last line prints `http://vdr.localhost/templates/ait-transcript/v1/background.png`, the Package's Background. Then print from the Wallet with the check command, and compare:
+
+```bash
+./scripts/print-check.sh | tee /tmp/vc-lab-parity/print-check.log
+PDFS=$(sed -n 's/^PDFs: //p' /tmp/vc-lab-parity/print-check.log)
+docker run --rm --user "$(id -u):$(id -g)" -v /tmp/vc-lab-parity:/lab:ro -v "$PDFS:/wallet:ro" "$IMAGE" python -c "
+import difflib
+from pypdf import PdfReader
+def lines(path):
+    return [l.strip() for p in PdfReader(path).pages for l in (p.extract_text() or '').splitlines() if l.strip()]
+lab, wallet = lines('/lab/vclab.pdf'), lines('/wallet/original.pdf')
+diff = list(difflib.unified_diff(lab, wallet, 'VC Lab', 'Wallet', lineterm=''))
+print('\n'.join(diff + ['FAIL parity: the texts differ']) if diff else f'PASS parity: the same {len(lab)} lines of text')"
+```
+
+The print check ends `print check: PASS`: its first print, `original.pdf`, is the Package's template with the Package's credential file (and its Thai `notes`), Background included. The compare ends `PASS parity: the same <n> lines of text`; on `FAIL parity` it prints the lines that differ. The QR code is an image and isn't compared: VC Lab draws a placeholder.
+
+Put the committed files back:
+
+```bash
+git checkout -- deploy/ait/vdr/templates/AITUniversity-ait-transcript-template.html deploy/ait/certify/credentials/ait-transcript.json
+rm -rf deploy/ait/vdr/templates/ait-transcript/v1 /tmp/vc-lab-parity
+compose up -d --force-recreate template-sync certify
+```
 
 ## Template conventions
 
