@@ -30,6 +30,8 @@ This repository houses the **Institutional Verifiable Credential Platform (Issue
 ## 2. Deep Dives & Architectural Decisions
 
 - [ADR 0001: Approval gate sits beside the data path](./adr/0001-approval-gate-beside-the-data-path.md): Why the plugin reads records directly and the Gateway is optional.
+- [ADR 0002: VC Lab previews through its own copy of Mimoto's print code](./adr/0002-vc-lab-previews-through-its-own-copy-of-the-print-code.md): Why VC Lab has its own renderer service and never calls the Wallet's `ait-mimoto`.
+- [ADR 0003: A Package is Installation-neutral](./adr/0003-a-package-is-installation-neutral.md): Why a Package keeps local addresses and template-sync makes them an Installation's.
 - [Deviations from the proposal](./project/issuer-v0.1/deviations.md): Documented differences between proposal and current implementation.
 - [SIS Adapter handover](./project/issuer-v0.1/sis-adapter-handover.md): Field mapping and expectations for the real SIS Adapter.
 - [Transcript JSON-LD context](./concepts/transcript-context.md): Signing rules, `@json` course representations, and context hashing.
