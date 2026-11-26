@@ -416,6 +416,35 @@ def test_a_background_image_that_is_not_an_object_is_replaced_by_the_address() -
             "uri": "http://vdr.localhost/templates/example-record/v1/background.png"}, value
 
 
+def test_a_removed_background_leaves_no_stale_address_in_the_next_export() -> None:
+    """Export with a Background, load it, remove the Background, export as v2: the credential file names no Background."""
+    first = _export(_set(background=("background.png", _png()))).content
+    loaded = _read_set(first)
+    del loaded["background"]
+    zipped = _zip_files(_export(loaded, version="v2").content)
+    assert "vdr/templates/example-record/v2/background.png" not in zipped
+    credential = json.loads(zipped["certify/credentials/example-record.json"])
+    assert credential["display"] == CREDENTIAL["display"], "no background_image left behind"
+
+    other_keys = {**CREDENTIAL, "display": [{**CREDENTIAL["display"][0], "background_image": {
+        "uri": "http://vdr.localhost/templates/example-record/v7/background.png", "alt_text": "paper"}}]}
+    written = json.loads(_zip_files(_export(_set(credential=("c.json", _json(other_keys)))).content)
+                         ["certify/credentials/example-record.json"])
+    assert written["display"][0]["background_image"] == {"alt_text": "paper"}, "only the fixed path's uri goes"
+
+
+def test_an_address_that_is_not_the_fixed_path_survives_an_export_without_a_background() -> None:
+    """The hackathon credential files' background_image.uri is a card image, not a Background: it stays."""
+    for uri in ("http://vdr.localhost/assets/AIT_globe.png",
+                "http://vdr.localhost/templates/other-record/v1/background.png",
+                "https://vdr.example.org/templates/example-record/v1/background.png",
+                "http://vdr.localhost/templates/example-record/v1/background.png?v=2"):
+        credential = {**CREDENTIAL, "display": [{**CREDENTIAL["display"][0], "background_image": {"uri": uri}}]}
+        zipped = _zip_files(_export(_set(credential=("c.json", _json(credential)))).content)
+        assert json.loads(zipped["certify/credentials/example-record.json"]) == credential, uri
+
+
+
 def test_export_asks_for_a_config_id_a_version_and_an_address() -> None:
     for case, params in {"no config id": {"config_id": ""}, "no version": {"version": " "},
                          "no VDR address": {"vdr_address": ""}, "an address that is no URL": {"vdr_address": "vdr"}}.items():
@@ -1048,6 +1077,8 @@ def main() -> None:
         test_the_config_id_must_be_the_credential_files_key,
         test_a_sample_named_manifest_json_still_reads_back,
         test_a_background_image_that_is_not_an_object_is_replaced_by_the_address,
+        test_a_removed_background_leaves_no_stale_address_in_the_next_export,
+        test_an_address_that_is_not_the_fixed_path_survives_an_export_without_a_background,
         test_export_asks_for_a_config_id_a_version_and_an_address,
         test_a_package_reads_back_as_the_set_it_holds,
         test_a_package_without_a_background_reads_back_without_one,

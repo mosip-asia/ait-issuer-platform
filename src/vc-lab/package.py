@@ -70,6 +70,13 @@ def export(lab: LabSet, config_id: str, version: str, vdr_address: str) -> bytes
         old = first.get("background_image")
         first["background_image"] = {**(old if isinstance(old, dict) else {}),
                                      "uri": f"{LOCAL_VDR}/templates/{config_id}/{version}/background.png"}
+    elif credential.get("display") and isinstance(image := credential["display"][0].get("background_image"), dict):
+        # No Background: drop only an address on the fixed path, a removed Background's; any other image stays.
+        fixed = rf"{re.escape(LOCAL_VDR)}/templates/{re.escape(config_id)}/[^/]+/background\.png"
+        if isinstance(image.get("uri"), str) and re.fullmatch(fixed, image["uri"]):
+            del image["uri"]
+            if not image:
+                del credential["display"][0]["background_image"]
     # A template draws the Background as $backgroundImage, which the Wallet fills from display[0].background_image.uri.
     contents = {
         "template": lab.template.data,
