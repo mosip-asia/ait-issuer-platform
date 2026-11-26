@@ -343,7 +343,12 @@ _DASHBOARD = """<!DOCTYPE html>
     // A reload loses it, so leaving asks first while any file is loaded.
     let set = {};
     let seen = 0;        // the latest preview asked for; an older answer that arrives late is dropped
-    let changes = 0;     // the latest change of the Background or the whole set (a pick, Load Package, Remove, Clear); an older answer is void
+    // Every action on the set (a pick, Load Package, Remove, Clear) takes the next number. One that succeeds alters the
+    // set only when no newer action has altered it since: an older answer that lands late is void, and an action that
+    // fails alters nothing, so it voids nothing either.
+    let actions = 0;     // the latest action started
+    let applied = 0;     // the action that last altered the set
+    const current = (mine) => mine > applied;
     let shownUrl = null; // the blob the preview frame shows
     const output = () => document.querySelector('input[name=output]:checked').value;
     const showError = (text) => { document.getElementById('error').textContent = text || ''; };
@@ -411,12 +416,13 @@ _DASHBOARD = """<!DOCTYPE html>
         input.value = '';
         if (!file) return;
         if (input.dataset.field === 'package') {
-          const mine = ++changes;
+          const mine = ++actions;
           try {
             const res = await fetch('/api/package/read', {method: 'POST', body: (() => { const f = new FormData(); f.append('package', file); return f; })()});
             const data = await res.json();
-            if (mine !== changes) return;
+            if (!current(mine)) return;
             if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail));
+            applied = mine;
             set = {};
             document.getElementById('configId').value = data.export.configId;
             document.getElementById('version').value = data.export.version;
@@ -425,18 +431,20 @@ _DASHBOARD = """<!DOCTYPE html>
               const bytes = Uint8Array.from(atob(f.data), c => c.charCodeAt(0));
               set[slot] = new File([bytes], f.filename);
             }
-          } catch (e) { if (mine === changes) showError(e.message); return; }
+          } catch (e) { if (current(mine)) showError(e.message); return; }
         } else if (input.dataset.field === 'background') {
-          const mine = ++changes;
+          const mine = ++actions;
           try { // the server makes the PNG; this page keeps only that
             const f = new FormData(); f.append('background', file, file.name);
             const res = await fetch('/api/background', {method: 'POST', body: f});
             if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(typeof data.detail === 'string' ? data.detail : res.statusText); }
             const png = await res.blob();
-            if (mine !== changes) return;
+            if (!current(mine)) return;
+            applied = mine;
             set.background = new File([png], 'background.png', {type: 'image/png'});
-          } catch (e) { if (mine === changes) showError(e.message); return; }
+          } catch (e) { if (current(mine)) showError(e.message); return; }
         } else {
+          applied = ++actions;
           set[input.dataset.field] = file;
           if (input.dataset.field === 'credential') { // the configuration id is the credential file's key
             try {
@@ -471,8 +479,8 @@ _DASHBOARD = """<!DOCTYPE html>
         URL.revokeObjectURL(link.href);
       } catch (e) { showError(e.message); }
     };
-    document.getElementById('removeBackground').onclick = () => { changes++; delete set.background; show(); };
-    document.getElementById('clear').onclick = () => { changes++; set = {}; showError(''); show(); };
+    document.getElementById('removeBackground').onclick = () => { applied = ++actions; delete set.background; show(); };
+    document.getElementById('clear').onclick = () => { applied = ++actions; set = {}; showError(''); show(); };
     show();
   </script>
 </body>
