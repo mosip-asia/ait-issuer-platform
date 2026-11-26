@@ -384,19 +384,18 @@ def test_export_without_a_background_writes_none_and_leaves_the_credential_files
     assert bare["display"] == CREDENTIAL["display"], "no display[0].background_image invented"
 
 
-def test_a_template_loading_the_background_by_its_vdr_address_points_at_the_exported_version() -> None:
-    """The Package holds background.png under <config id>/<version>; the template must ask for exactly that."""
+def test_the_backgrounds_address_goes_into_the_credential_file_and_a_templates_addresses_stay_as_they_are() -> None:
+    """The Package holds background.png under <config id>/<version>, and the credential file names it there: the
+    Wallet fills $backgroundImage from display[0].background_image.uri. A template's addresses are not the Background's."""
     template = TEMPLATE.replace("</body>", '<img src="http://vdr.localhost/templates/example-record/background.png"/>'
                                 '<img src="http://vdr.localhost/templates/a/b/background.png"/></body>')
     files = _set(template=("record.html", template.encode()), background=("background.png", _png()))
     zipped = _zip_files(_export(files, version="v2").content)
     exported = zipped["vdr/templates/example-record/v2/template.html"].decode()
-    address = "https://vdr.example.org/templates/example-record/v2/background.png"
-    assert exported.count(address) == 2, "both addresses, whatever folders they named"
+    assert exported == template.replace(LOCAL_VDR, "https://vdr.example.org"), "only the local host, rewritten"
     credential = json.loads(zipped["certify/credentials/example-record.json"])
-    assert credential["display"][0]["background_image"]["uri"] == address
-    back = _read_set(_export(files, version="v2").content)
-    assert back["template"][1].decode().count("http://vdr.localhost/templates/example-record/v2/background.png") == 2
+    assert credential["display"][0]["background_image"]["uri"] == \
+        "https://vdr.example.org/templates/example-record/v2/background.png"
 
 
 def test_the_config_id_must_be_the_credential_files_key() -> None:
@@ -684,13 +683,15 @@ def test_export_with_a_vdr_address_under_the_local_one_writes_it_once_in_the_tem
     template = zipped[f"{PACKAGE_DIR}/template.html"].decode()
     credential = zipped["certify/credentials/example-record.json"].decode()
     assert f"{vdr}:8088" not in template + credential, "the VDR address written twice"
+    assert f'src="{vdr}/templates/old/v0/background.png"' in template
     address = f"{vdr}/templates/example-record/v1/background.png"
-    assert f'src="{address}"' in template and json.loads(credential)["display"][0]["background_image"]["uri"] == address
+    assert json.loads(credential)["display"][0]["background_image"]["uri"] == address
     assert f"{vdr}/logo.png" in template and f"{vdr}/fonts/f.css" in template
     assert json.loads(credential)["display"][0]["logo"] == {"url": f"{vdr}/logo.png"}
 
 
-def test_the_quick_view_draws_a_background_at_any_address_under_the_vdr_templates_folder() -> None:
+def test_the_quick_view_is_the_renderers_html_as_it_is() -> None:
+    """The Background reaches it as $backgroundImage's data URI; an address in the template is never swapped for it."""
     png = _png()
     template = TEMPLATE.replace("</body>", '<img src="http://vdr.localhost/templates/background.png"/>'
                                 '<img src="http://vdr.localhost/templates/a/b/background.png"/>'
@@ -710,9 +711,7 @@ def test_the_quick_view_draws_a_background_at_any_address_under_the_vdr_template
     finally:
         vc_lab.httpx.post, vc_lab.RENDERER_URL = real_post, real_url
     assert res.status_code == 200, res.text
-    uri = "data:image/png;base64," + base64.b64encode(png).decode()
-    assert res.text.count(uri) == 2, "both background.png addresses become the picture"
-    assert "http://vdr.localhost/templates/a/other.png" in res.text, "another file is left alone"
+    assert res.text == template, "the renderer's HTML, unchanged"
 
 
 def test_velocity_1_7_block_directives_balance() -> None:
@@ -824,78 +823,13 @@ def test_export_and_read_back_with_a_vdr_address_that_starts_a_local_one() -> No
     exported = zipped[f"{PACKAGE_DIR}/template.html"].decode()
     exported_credential = zipped["certify/credentials/example-record.json"].decode()
     assert "localhost" not in exported + exported_credential, "every local address is the VDR address"
-    for address in ("http://vdr/templates/example-record/v1/background.png", "http://vdr/assets/logo.png", "http://vdr/l.png"):
+    for address in ("http://vdr/templates/x/background.png", "http://vdr/assets/logo.png", "http://vdr/l.png"):
         assert f'src="{address}"' in exported, address
     back = _read_set(res.content)
     read_template, read_credential = back["template"][1].decode(), back["credential"][1].decode()
     assert "localhost.localhost" not in read_template + read_credential
     assert 'src="http://vdr.localhost/assets/logo.png"' in read_template
     assert json.loads(read_credential)["display"][0]["logo"] == {"url": "http://vdr.localhost/assets/logo.png"}
-
-
-# What the renderer's SetFiles serves as the Background: an address under http://vdr.localhost/templates/ whose text
-# after the last / is exactly background.png. True when it is the Background.
-BACKGROUND_ADDRESSES = {
-    "http://vdr.localhost/templates/example-record/v1/background.png": True,
-    "http://vdr.localhost/templates/background.png": True,
-    "http://vdr.localhost/templates/a/b/background.png": True,
-    "http://vdr.localhost/templates/a(1)/background.png": True,
-    "http://vdr.localhost/templates/my folder/background.png": True,
-    "http://vdr.localhost/templates/a/background.pngs/logo.png": False,
-    "http://vdr.localhost/templates/a/background.png.bak": False,
-    "http://vdr.localhost/templates/a/background.png?v=2": False,
-    "http://vdr.localhost/templates/a/other.png": False,
-}
-# The ways a template names an address that iText loads.
-ADDRESS_FORMS = {
-    "double-quoted": '<img src="{}"/>',
-    "single-quoted": "<img src='{}'/>",
-    "css url()": '<div style="background-image: url({})">x</div>',
-    "css url(\"\")": "<div style=\"background-image: url('{}')\">x</div>",
-}
-
-
-def _with_address(form: str, address: str) -> bytes:
-    return _with_body(ADDRESS_FORMS[form].format(address))
-
-
-def _forms_of(address: str) -> list[str]:
-    """The forms that can carry the address. CSS has no unquoted address with a space in it, and iText's CSS parser
-    drops a url() with a parenthesis in it, quoted or not, without asking for it (it prints no image and refuses
-    nothing), so no CSS form carries one."""
-    return [form for form in ADDRESS_FORMS
-            if not (form.startswith("css") and ("(" in address or (form == "css url()" and " " in address)))]
-
-
-def test_the_quick_view_and_export_take_the_background_at_exactly_the_renderers_addresses() -> None:
-    png = _png()
-    uri = "data:image/png;base64," + base64.b64encode(png).decode()
-    moved = "https://vdr.example.org/templates/example-record/v1/background.png"
-
-    class Renderer:  # stands in for the renderer: it hands back the template as the HTML
-        status_code = 200
-
-        def __init__(self, request: dict) -> None:
-            self.content = request["template"].encode()
-
-    real_post, real_url = vc_lab.httpx.post, vc_lab.RENDERER_URL
-    vc_lab.httpx.post = lambda url, json, timeout: Renderer(json)
-    vc_lab.RENDERER_URL = "http://renderer.test"
-    try:
-        for address, is_background in BACKGROUND_ADDRESSES.items():
-            for form in _forms_of(address):
-                files = _set(template=("t.html", _with_address(form, address)), background=("background.png", png))
-                quick = _post("/preview", files)
-                assert quick.status_code == 200, quick.text
-                shown = ADDRESS_FORMS[form].format(uri if is_background else address)
-                assert shown in quick.text, ("quick view", form, address)
-                res = _export(files)
-                assert res.status_code == 200, res.text
-                exported = _zip_files(res.content)[f"{PACKAGE_DIR}/template.html"].decode()
-                written = ADDRESS_FORMS[form].format(moved if is_background else address.replace(LOCAL_VDR, "https://vdr.example.org"))
-                assert written in exported, ("export", form, address)
-    finally:
-        vc_lab.httpx.post, vc_lab.RENDERER_URL = real_post, real_url
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -1056,7 +990,6 @@ _PAPER = "width: 210mm; height: 297mm; margin: -20mm 0 0 -20mm"
 DRAWS_BACKGROUND = _with_body(f'<div style="height: 0"><img src="$!backgroundImage" style="{_PAPER}"/></div>')
 # The address the Wallet fetches the Background from once an organisation has put it on its VDR.
 VDR_BACKGROUND = "http://vdr.localhost/templates/example-record/v1/background.png"
-LOADS_BACKGROUND = _with_body(f'<div style="height: 0"><img src="{VDR_BACKGROUND}" style="{_PAPER}"/></div>')
 
 
 def _images(page) -> list[Image.Image]:
@@ -1122,24 +1055,23 @@ def test_the_guides_credential_file_with_a_background_address_previews_on_plain_
     return True
 
 
-def test_a_template_that_loads_the_background_by_its_vdr_address_shows_it_in_the_quick_view() -> bool:
-    if _skip_without_renderer("test_a_template_that_loads_the_background_by_its_vdr_address_shows_it_in_the_quick_view"):
+def test_a_template_that_loads_the_background_by_its_vdr_address_answers_422_naming_it() -> bool:
+    """The renderer serves no address, the Background's included: a template draws it with $backgroundImage. Every
+    form of the address is refused alike, with a Background loaded or not."""
+    if _skip_without_renderer("test_a_template_that_loads_the_background_by_its_vdr_address_answers_422_naming_it"):
         return False
-    png = _png(40, 60)
-    quick = _post("/preview", _set(template=("record.html", LOADS_BACKGROUND), background=("background.png", png)))
-    assert quick.status_code == 200, quick.text
-    assert "http://vdr.localhost" not in quick.text, "a browser can't reach that address"
-    assert "data:image/png;base64," + base64.b64encode(png).decode() in quick.text
-    return True
-
-
-def test_a_template_that_loads_the_background_by_its_vdr_address_previews_with_it_in_the_pdf() -> bool:
-    """Ticket 04 serves background.png at its VDR address; VC Lab sends it the uploaded Background."""
-    if _skip_without_renderer("test_a_template_that_loads_the_background_by_its_vdr_address_previews_with_it_in_the_pdf"):
-        return False
-    files = _set(template=("record.html", LOADS_BACKGROUND), background=("background.png", _png(40, 60)))
-    pages = _pages(files)
-    assert [i.size for i in _images(pages[0])] == [(40, 60)], "the uploaded Background, from the VDR address"
+    addresses = [VDR_BACKGROUND, "http://vdr.localhost/templates/background.png",
+                 "http://vdr.localhost/templates/a(1)/background.png", "http://vdr.localhost/templates/my folder/background.png",
+                 "http://vdr.localhost/templates/a/background.pngs/logo.png", "http://vdr.localhost/templates/a/background.png.bak",
+                 "http://vdr.localhost/templates/a/background.png?v=2"]
+    for address in addresses:
+        for background in ({}, {"background": ("background.png", _png(40, 60))}):
+            files = _set(template=("record.html", _with_body(f'<img src="{address}"/>')), **background)
+            for path in ("/preview", "/preview.pdf"):
+                res = _post(path, files)
+                assert res.status_code == 422, (address, path, bool(background), res.status_code)
+                assert "$backgroundImage" in res.json()["detail"], (address, path, res.json())
+                assert address.split("/templates/")[1].split(" ")[0] in res.json()["detail"], (address, path, res.json())
     return True
 
 
@@ -1152,27 +1084,10 @@ def test_velocity_renders_every_template_the_balance_check_must_accept() -> bool
     return True
 
 
-def test_the_pdf_takes_the_background_at_the_same_addresses_as_the_quick_view_and_export() -> bool:
-    """The renderer's SetFiles is the one definition; BACKGROUND_ADDRESSES, which the quick view and export test
-    follows, must say what it does."""
-    if _skip_without_renderer("test_the_pdf_takes_the_background_at_the_same_addresses_as_the_quick_view_and_export"):
-        return False
-    for address, is_background in BACKGROUND_ADDRESSES.items():
-        for form in _forms_of(address):
-            files = _set(template=("t.html", _with_address(form, address)), background=("background.png", _png(40, 60)))
-            res = _post("/preview.pdf", files)
-            if is_background:
-                assert res.status_code == 200, (form, address, res.text[:300])
-                assert [i.size for i in _images(PdfReader(io.BytesIO(res.content)).pages[0])] == [(40, 60)], (form, address)
-            else:
-                assert res.status_code == 422 and "the template loads" in res.text, (form, address, res.text[:300])
-    return True
-
-
 def test_a_loaded_package_previews_the_same_as_the_original() -> bool:
     if _skip_without_renderer("test_a_loaded_package_previews_the_same_as_the_original"):
         return False
-    original = _set(template=("record.html", LOADS_BACKGROUND), background=("background.png", _png(40, 60)))
+    original = _set(template=("record.html", DRAWS_BACKGROUND), background=("background.png", _png(40, 60)))
     loaded = _read_set(_export(original).content)
     for path in ("/preview", "/preview.pdf"):
         assert _post(path, loaded).status_code == 200, path
@@ -1182,7 +1097,7 @@ def test_a_loaded_package_previews_the_same_as_the_original() -> bool:
     for a, b in zip(mine, theirs):
         assert a.extract_text() == b.extract_text()
     assert [i.size for i in _images(theirs[0])] == [i.size for i in _images(mine[0])] == [(40, 60)], \
-        "the Background, found at its VDR address again"
+        "the Background, from $backgroundImage again"
     return True
 
 
@@ -1205,7 +1120,7 @@ def main() -> None:
         test_export_package_lays_the_files_out_as_the_vdr_and_certify_take_them,
         test_the_manifest_names_the_config_the_version_the_vdr_and_each_component_with_its_role,
         test_export_without_a_background_writes_none_and_leaves_the_credential_files_address,
-        test_a_template_loading_the_background_by_its_vdr_address_points_at_the_exported_version,
+        test_the_backgrounds_address_goes_into_the_credential_file_and_a_templates_addresses_stay_as_they_are,
         test_the_config_id_must_be_the_credential_files_key,
         test_a_sample_named_manifest_json_still_reads_back,
         test_a_background_image_that_is_not_an_object_is_replaced_by_the_address,
@@ -1226,7 +1141,7 @@ def main() -> None:
         test_a_cmyk_jpeg_background_is_converted_through_its_profile_and_carries_none,
         test_a_background_that_is_not_a_pdf_png_or_jpeg_answers_400_with_the_reason,
         test_export_with_a_vdr_address_under_the_local_one_writes_it_once_in_the_template_and_the_credential,
-        test_the_quick_view_draws_a_background_at_any_address_under_the_vdr_templates_folder,
+        test_the_quick_view_is_the_renderers_html_as_it_is,
         test_velocity_1_7_block_directives_balance,
         test_a_pdf_background_with_bytes_before_the_header_is_still_a_pdf,
         test_a_png_or_jpeg_whose_metadata_mentions_a_pdf_is_still_an_image,
@@ -1234,7 +1149,6 @@ def main() -> None:
         test_every_committed_velocity_template_passes_the_balance_check,
         test_a_template_is_checked_in_linear_time,
         test_export_and_read_back_with_a_vdr_address_that_starts_a_local_one,
-        test_the_quick_view_and_export_take_the_background_at_exactly_the_renderers_addresses,
         test_grid_from_credential_subject_in_the_pdf_and_the_quick_view,
         test_two_visitors_each_preview_their_own_set,
         test_velocity_and_mapping_errors_answer_422_with_the_engines_message,
@@ -1248,10 +1162,8 @@ def main() -> None:
         test_a_pdf_background_prints_upright_under_the_record,
         test_after_remove_background_the_template_previews_on_plain_paper,
         test_the_guides_credential_file_with_a_background_address_previews_on_plain_paper_without_one,
-        test_a_template_that_loads_the_background_by_its_vdr_address_shows_it_in_the_quick_view,
-        test_a_template_that_loads_the_background_by_its_vdr_address_previews_with_it_in_the_pdf,
+        test_a_template_that_loads_the_background_by_its_vdr_address_answers_422_naming_it,
         test_velocity_renders_every_template_the_balance_check_must_accept,
-        test_the_pdf_takes_the_background_at_the_same_addresses_as_the_quick_view_and_export,
         test_a_loaded_package_previews_the_same_as_the_original,
     ]
     passed = skipped = 0

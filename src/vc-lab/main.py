@@ -54,18 +54,13 @@ def health() -> dict[str, str]:
 
 @app.post("/preview", response_class=HTMLResponse)
 async def preview(request: Request) -> HTMLResponse:
-    """The quick view: the HTML the renderer hands iText, with the Background drawn where the template asks for it."""
+    """The quick view: the HTML the renderer hands iText, the Background in it as $backgroundImage's data URI."""
     files = await _read_files(request, labset.SLOTS)
     return await run_in_threadpool(_preview, files)
 
 
 def _preview(files: dict[str, tuple[str, bytes]]) -> HTMLResponse:
-    lab = _parse_set(files)
-    page = _render(lab, "html").decode("utf-8")
-    if lab.background:
-        # A browser can't reach the VDR address the Wallet loads the Background from, so it gets the picture itself.
-        page = package.VDR_BACKGROUND.sub(lambda _: _data_uri(lab.background.value), page)
-    return HTMLResponse(page)
+    return HTMLResponse(_render(_parse_set(files), "html").decode("utf-8"))
 
 
 def _data_uri(png: bytes) -> str:
