@@ -58,31 +58,9 @@ def parse(slot: str, filename: str, data: bytes) -> Loaded[Any]:
 
 def _template(name: str, data: bytes) -> str:
     try:
-        source = data.decode("utf-8")
+        return data.decode("utf-8")  # Velocity's own errors, with line and column, come from the renderer
     except UnicodeDecodeError:
         raise ValueError(f"template {name!r} is not UTF-8 text") from None
-    depth = 0
-    for tag in _VELOCITY.finditer(source):
-        word = tag.group("word") or tag.group("braced")
-        if tag.group("escape") is None or len(tag.group("escape")) % 2:  # a comment or unparsed text, or an escaped #
-            continue
-        depth += -1 if word == "end" else 1
-        if depth < 0:
-            raise ValueError(f"template {name!r} has an #end without an #if, #foreach, #macro, #define or #@macro")
-    if depth:
-        raise ValueError(f"template {name!r} has {depth} #if, #foreach, #macro, #define or #@macro without an #end")
-    return source
-
-
-# One pass over the source, so what a comment or #[[unparsed]]# holds is never read as a directive. Velocity 1.7's block
-# directives (each closed by #end) in their plain and #{braced} forms, and #@name( for a block macro call (#@name with no
-# ( after it, and #{@name}, are text); a directive behind an odd number of backslashes is escaped. Linear: a backslash
-# run is matched from its first backslash only, and a comment or unparsed text that never closes runs to the end.
-_VELOCITY = re.compile(
-    r"##[^\n]*|#\*.*?(?:\*#|\Z)|#\[\[.*?(?:\]\]#|\Z)"  # a line comment, a block comment, unparsed text
-    r"|(?<!\\)(?P<escape>\\*)#(?:(?P<word>if|foreach|macro|define|end)\b|\{(?P<braced>if|foreach|macro|define|end)\}"
-    r"|@\w+\s*\()",
-    re.DOTALL)
 
 
 def _json_object(slot: str, name: str, data: bytes) -> dict[str, Any]:

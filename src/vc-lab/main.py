@@ -244,6 +244,7 @@ _DASHBOARD = """<!DOCTYPE html>
     .pick { display: flex; align-items: center; gap: 10px; font-size: 13px; }
     .pick label { padding: 5px 10px; border: 1px solid var(--border); border-radius: 6px; background: #f1f5f9; cursor: pointer; white-space: nowrap; }
     .pick label:hover { background: #e2e8f0; }
+    .pick label:has(input:disabled) { opacity: .45; cursor: default; }
     .file { word-break: break-all; }
     .file.none { color: var(--muted); font-style: italic; }
     .file.set { color: #047857; font-weight: 600; }
@@ -313,6 +314,7 @@ _DASHBOARD = """<!DOCTYPE html>
             <label>VDR address <input id="vdrAddress" placeholder="https://vdr.example.org"></label>
           </div>
         </div>
+        <div class="hint" id="busy"></div>
         <div id="error"></div>
         <div class="row">
           <button id="exportPdf">Open PDF</button>
@@ -343,12 +345,9 @@ _DASHBOARD = """<!DOCTYPE html>
     // A reload loses it, so leaving asks first while any file is loaded.
     let set = {};
     let seen = 0;        // the latest preview asked for; an older answer that arrives late is dropped
-    // Every action on the set (a pick, Load Package, Remove, Clear) takes the next number. One that succeeds alters the
-    // set only when no newer action has altered it since: an older answer that lands late is void, and an action that
-    // fails alters nothing, so it voids nothing either.
-    let actions = 0;     // the latest action started
-    let applied = 0;     // the action that last altered the set
-    const current = (mine) => mine > applied;
+    // While a Background converts or a Package loads, nothing else may change the set: every file input, Remove
+    // Background and Clear are disabled until the answer lands, so two answers never overlap. Previews stay on.
+    let busy = false;
     let shownUrl = null; // the blob the preview frame shows
     const output = () => document.querySelector('input[name=output]:checked').value;
     const showError = (text) => { document.getElementById('error').textContent = text || ''; };
@@ -364,6 +363,14 @@ _DASHBOARD = """<!DOCTYPE html>
     window.addEventListener('beforeunload', (event) => {
       if (Object.keys(set).length) { event.preventDefault(); event.returnValue = ''; }
     });
+
+    function setBusy(text) {
+      busy = Boolean(text);
+      for (const input of document.querySelectorAll('input[type=file]')) input.disabled = busy;
+      document.getElementById('clear').disabled = busy;
+      document.getElementById('removeBackground').disabled = busy || !set.background;
+      document.getElementById('busy').textContent = text || '';
+    }
 
     async function post(url) {
       const res = await fetch(url, {method: 'POST', body: form()});
@@ -387,7 +394,7 @@ _DASHBOARD = """<!DOCTYPE html>
       const need = missing();
       document.getElementById('exportPdf').disabled = need.length > 0;
       document.getElementById('exportPackage').disabled = need.length > 0;
-      document.getElementById('removeBackground').disabled = !set.background;
+      document.getElementById('removeBackground').disabled = busy || !set.background;
       document.getElementById('empty').textContent = need.length ? 'Upload these to see the preview: ' + need.map(s => NAMES[s]).join(', ') + '.' : '';
       const frame = document.getElementById('preview');
       frame.hidden = need.length > 0;
@@ -416,13 +423,11 @@ _DASHBOARD = """<!DOCTYPE html>
         input.value = '';
         if (!file) return;
         if (input.dataset.field === 'package') {
-          const mine = ++actions;
+          setBusy('loading…');
           try {
             const res = await fetch('/api/package/read', {method: 'POST', body: (() => { const f = new FormData(); f.append('package', file); return f; })()});
             const data = await res.json();
-            if (!current(mine)) return;
             if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail));
-            applied = mine;
             set = {};
             document.getElementById('configId').value = data.export.configId;
             document.getElementById('version').value = data.export.version;
@@ -431,20 +436,17 @@ _DASHBOARD = """<!DOCTYPE html>
               const bytes = Uint8Array.from(atob(f.data), c => c.charCodeAt(0));
               set[slot] = new File([bytes], f.filename);
             }
-          } catch (e) { if (current(mine)) showError(e.message); return; }
+          } catch (e) { showError(e.message); return; } finally { setBusy(''); }
         } else if (input.dataset.field === 'background') {
-          const mine = ++actions;
+          setBusy('converting…');
           try { // the server makes the PNG; this page keeps only that
             const f = new FormData(); f.append('background', file, file.name);
             const res = await fetch('/api/background', {method: 'POST', body: f});
             if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(typeof data.detail === 'string' ? data.detail : res.statusText); }
             const png = await res.blob();
-            if (!current(mine)) return;
-            applied = mine;
             set.background = new File([png], 'background.png', {type: 'image/png'});
-          } catch (e) { if (current(mine)) showError(e.message); return; }
+          } catch (e) { showError(e.message); return; } finally { setBusy(''); }
         } else {
-          applied = ++actions;
           set[input.dataset.field] = file;
           if (input.dataset.field === 'credential') { // the configuration id is the credential file's key
             try {
@@ -479,8 +481,8 @@ _DASHBOARD = """<!DOCTYPE html>
         URL.revokeObjectURL(link.href);
       } catch (e) { showError(e.message); }
     };
-    document.getElementById('removeBackground').onclick = () => { applied = ++actions; delete set.background; show(); };
-    document.getElementById('clear').onclick = () => { applied = ++actions; set = {}; showError(''); show(); };
+    document.getElementById('removeBackground').onclick = () => { delete set.background; show(); };
+    document.getElementById('clear').onclick = () => { set = {}; showError(''); show(); };
     show();
   </script>
 </body>

@@ -13,7 +13,7 @@ What each file is, and how a value travels from SIS to the page, is in [the temp
 | `sample` | the Adapter's response, exactly as the Adapter sends it | its `credentialSubject`, or the whole file when it has none |
 | `background` (optional) | the organisation's pre-printed paper, as the PNG the Wallet draws (`background.png`) | the whole picture, as the template's `$backgroundImage` |
 
-Choosing a file replaces that slot only; loading a Package replaces the whole set. Each file is checked on every call: the background must be a PNG, the credential file JSON with a `vc_template` object (holding a `credentialSubject` object), the sample a JSON object, and the template's `#if`/`#foreach`/`#macro` must each have their `#end`. One request may carry at most 20 MB.
+Choosing a file replaces that slot only; loading a Package replaces the whole set. Each file is checked on every call: the background must be a PNG, the credential file JSON with a `vc_template` object (holding a `credentialSubject` object), the sample a JSON object, and the template UTF-8 text. VC Lab checks nothing inside a template: Velocity does, in the renderer (an unbalanced `#if` answers 422 with its line and column). One request may carry at most 20 MB.
 
 ## From sample to page
 
@@ -29,7 +29,7 @@ The dashboard (`/`) has a file input per slot plus Load Package, the list of loa
 
 | Call | Does |
 |---|---|
-| `POST /preview` | the set as multipart (`template`, `credential`, `sample`, optional `background`, a PNG); answers the quick view: the HTML the PDF is printed from, with the Background drawn where the template asks for it |
+| `POST /preview` | the set as multipart (`template`, `credential`, `sample`, optional `background`, a PNG); answers the quick view: the HTML the PDF is printed from. The Background is drawn only through the template's `$backgroundImage` |
 | `POST /preview.pdf` | the same set; answers what the Wallet prints: the renderer's PDF |
 | `POST /api/background` | a PDF, PNG or JPEG as the `background` field; answers the Background PNG (`image/png`), or 400 with the reason. The dashboard calls it when a file is chosen and keeps only the PNG |
 | `POST /api/package/export` | the same set, plus the text fields `config_id`, `version` and `vdr_address`; answers the Package zip ([The Package](#the-package)). 409 names what the set lacks, 400 a missing field or an address that is no URL |
