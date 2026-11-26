@@ -337,7 +337,7 @@ def test_export_package_lays_the_files_out_as_the_vdr_and_certify_take_them() ->
     zipped = _zip_files(res.content)
     assert sorted(zipped) == sorted(["certify/credentials/example-record.json", f"{PACKAGE_DIR}/background.png",
                                      f"{PACKAGE_DIR}/manifest.json", f"{PACKAGE_DIR}/template.html",
-                                     "sample/adapter-response.json"])
+                                     "sample/sample.json"])
     assert zipped[f"{PACKAGE_DIR}/background.png"] == paper
 
     assert zipped[f"{PACKAGE_DIR}/template.html"] == LOCAL_TEMPLATE.encode(), "the template, byte for byte"
@@ -348,7 +348,7 @@ def test_export_package_lays_the_files_out_as_the_vdr_and_certify_take_them() ->
         "http://vdr.localhost/templates/example-record/v1/background.png"
     assert credential["vc_template"] == CREDENTIAL["vc_template"], "only the Background's address changes"
 
-    assert json.loads(zipped["sample/adapter-response.json"]) == SAMPLE, "the sample goes as it is"
+    assert json.loads(zipped["sample/sample.json"]) == SAMPLE, "the sample goes as it is"
 
 
 def test_the_manifest_names_the_config_the_version_the_vdr_and_each_component_with_its_role() -> None:
@@ -360,7 +360,7 @@ def test_the_manifest_names_the_config_the_version_the_vdr_and_each_component_wi
         {"role": "template", "path": f"{PACKAGE_DIR}/template.html", "deploy": True},
         {"role": "background", "path": f"{PACKAGE_DIR}/background.png", "deploy": True},
         {"role": "credential", "path": "certify/credentials/example-record.json", "deploy": True},
-        {"role": "sample", "path": "sample/adapter-response.json", "deploy": False},
+        {"role": "sample", "path": "sample/sample.json", "deploy": False},
     ]
 
 
@@ -399,11 +399,13 @@ def test_the_config_id_must_be_the_credential_files_key() -> None:
     assert _export(_set(credential=("c.json", _json(no_key)))).status_code == 400
 
 
-def test_a_sample_named_manifest_json_still_reads_back() -> None:
+def test_the_sample_is_always_sample_json() -> None:
+    """Whatever the uploaded sample is called (manifest.json too), the Package holds it as sample/sample.json."""
     files = _set(sample=("manifest.json", _json(SAMPLE)))
     package = _export(files).content
-    assert "sample/manifest.json" in _zip_files(package)
-    assert _read_set(package)["sample"] == ("manifest.json", _json(SAMPLE))
+    zipped = _zip_files(package)
+    assert "sample/sample.json" in zipped and "sample/manifest.json" not in zipped
+    assert _read_set(package)["sample"] == ("sample.json", _json(SAMPLE))
 
 
 def test_a_background_image_that_is_not_an_object_is_replaced_by_the_address() -> None:
@@ -466,7 +468,7 @@ def test_a_package_reads_back_as_the_set_it_holds() -> None:
     got = _read_set(package)
     assert sorted(got) == ["background", "credential", "sample", "template"]
     assert got["background"] == ("background.png", paper)
-    assert got["sample"] == ("adapter-response.json", _json(SAMPLE))
+    assert got["sample"] == ("sample.json", _json(SAMPLE))
     assert got["template"] == ("template.html", LOCAL_TEMPLATE.encode()), "as exported, with no replacement"
     zipped = _zip_files(package)
     assert got["credential"] == ("example-record.json", zipped["certify/credentials/example-record.json"])
@@ -499,7 +501,10 @@ def test_read_package_accepts_only_the_exported_layout() -> None:
         "manifest not JSON": broken(**{f"{PACKAGE_DIR}/manifest.json": b"{oops"}),
         "template missing": broken(**{f"{PACKAGE_DIR}/template.html": None}),
         "credential file missing": broken(**{"certify/credentials/example-record.json": None}),
-        "sample missing": broken(**{"sample/adapter-response.json": None}),
+        "sample missing": broken(**{"sample/sample.json": None}),
+        "a sample under another name": _zip_of({**{n: d for n, d in good.items() if n != "sample/sample.json"},
+            "sample/other.json": good["sample/sample.json"],
+            f"{PACKAGE_DIR}/manifest.json": good[f"{PACKAGE_DIR}/manifest.json"].replace(b"sample/sample.json", b"sample/other.json")}),
         "a Background the manifest does not list": broken(**{f"{PACKAGE_DIR}/manifest.json": json.dumps(
             {**json.loads(good[f"{PACKAGE_DIR}/manifest.json"]), "components": [
                 c for c in json.loads(good[f"{PACKAGE_DIR}/manifest.json"])["components"]
@@ -1075,7 +1080,7 @@ def main() -> None:
         test_export_without_a_background_writes_none_and_leaves_the_credential_files_address,
         test_the_backgrounds_address_goes_into_the_credential_file_and_a_templates_addresses_stay_as_they_are,
         test_the_config_id_must_be_the_credential_files_key,
-        test_a_sample_named_manifest_json_still_reads_back,
+        test_the_sample_is_always_sample_json,
         test_a_background_image_that_is_not_an_object_is_replaced_by_the_address,
         test_a_removed_background_leaves_no_stale_address_in_the_next_export,
         test_an_address_that_is_not_the_fixed_path_survives_an_export_without_a_background,

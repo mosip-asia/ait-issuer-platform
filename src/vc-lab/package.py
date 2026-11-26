@@ -9,7 +9,7 @@ the manifest only. The layout:
     vdr/templates/<config id>/<version>/background.png      (when a Background is loaded)
     vdr/templates/<config id>/<version>/manifest.json
     certify/credentials/<config id>.json
-    sample/<name>.json                                      (not deployed; <name> is the sample's uploaded name)
+    sample/sample.json                                      (not deployed; whatever the sample's uploaded name)
 
 manifest.json names the config id, the version, the VDR address and each component with its role:
 
@@ -31,11 +31,12 @@ import zipfile
 from typing import Any
 from urllib.parse import urlparse
 
-from labset import MAX_UPLOAD, LabSet, safe_filename
+from labset import MAX_UPLOAD, LabSet
 
 LOCAL_VDR = "http://vdr.localhost"  # the Background's fixed path is under the local VDR
 FORMAT = "vc-lab-package"
 ROLES = ("template", "background", "credential", "sample")
+SAMPLE_PATH = "sample/sample.json"  # whatever the uploaded sample is called
 _MANIFEST_PATH = re.compile(r"vdr/templates/[^/]+/[^/]+/manifest\.json")
 
 
@@ -59,7 +60,7 @@ def export(lab: LabSet, config_id: str, version: str, vdr_address: str) -> bytes
         "template": f"{base}/template.html",
         "background": f"{base}/background.png",
         "credential": f"certify/credentials/{config_id}.json",
-        "sample": f"sample/{_sample_name(lab.sample.filename)}.json",
+        "sample": SAMPLE_PATH,
     }
     # The files keep the local addresses; template-sync makes the credential file the Installation's (ADR 0003).
     credential = copy.deepcopy(lab.credential.value)
@@ -125,13 +126,9 @@ def read(package: bytes) -> tuple[dict[str, tuple[str, bytes]], dict[str, str]]:
         if missing := [role for role in ("template", "credential", "sample") if role not in listed]:
             raise ValueError(f"the manifest lists no {', '.join(missing)}")
         expected = {"template": f"{base}/template.html", "background": f"{base}/background.png",
-                    "credential": f"certify/credentials/{config_id}.json"}
+                    "credential": f"certify/credentials/{config_id}.json", "sample": SAMPLE_PATH}
         for role, path in listed.items():
-            if role == "sample":
-                ok = path.startswith("sample/") and path.endswith(".json") and posixpath.dirname(path) == "sample"
-            else:
-                ok = path == expected[role]
-            if not ok:
+            if path != expected[role]:
                 raise ValueError(f"the {role} is listed at {path!r}, which is not where a package puts it")
         if unlisted := sorted(set(names) - set(listed.values()) - {manifests[0]}):
             raise ValueError(f"the package holds {unlisted[0]!r}, which its manifest does not list")
@@ -157,9 +154,3 @@ def _manifest(data: bytes) -> dict[str, Any]:
         raise ValueError(f"manifest.json is not a {FORMAT} manifest (format, credentialConfigId, version, "
                          "vdrAddress and components)")
     return manifest
-
-
-def _sample_name(filename: str) -> str:
-    """The uploaded sample's name without its .json, as one safe path part."""
-    name = safe_filename(filename, "sample")
-    return name[:-5] if name.lower().endswith(".json") and len(name) > 5 else name

@@ -61,7 +61,7 @@ vdr/templates/<config id>/<version>/template.html
 vdr/templates/<config id>/<version>/background.png      only when a Background is loaded
 vdr/templates/<config id>/<version>/manifest.json
 certify/credentials/<config id>.json
-sample/<name>.json                                      <name> is the uploaded sample's name; never deployed
+sample/sample.json                                      whatever the uploaded sample is called; never deployed
 ```
 
 - `template.html` is the uploaded template, byte for byte. The credential file is the uploaded one, apart from `display[0].background_image.uri` (next points).

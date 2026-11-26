@@ -200,7 +200,7 @@ curl -sf "${SET[@]}" -F config_id=ait-transcript -F version=v1 -F vdr_address=ht
   http://lab.localhost/api/package/export -o /tmp/vc-lab-parity/package.zip
 ```
 
-`curl -sf` exits non-zero on an error status; send the same call without `-f` to read VC Lab's message. The Package holds `vdr/templates/ait-transcript/v1/{template.html,background.png,manifest.json}`, `certify/credentials/ait-transcript.json` and `sample/st120001.json` (`src/vc-lab/README.md`, "The Package"). The config id has to be the credential file's `credential_config_key_id`.
+`curl -sf` exits non-zero on an error status; send the same call without `-f` to read VC Lab's message. The Package holds `vdr/templates/ait-transcript/v1/{template.html,background.png,manifest.json}`, `certify/credentials/ait-transcript.json` and `sample/sample.json` (`src/vc-lab/README.md`, "The Package"). The config id has to be the credential file's `credential_config_key_id`.
 
 Place it by hand. Locally the checkout is the VDR (`deploy/ait/vdr/templates/` is its `/templates/`) and Certify's credential folder. Mimoto reads the template only under its fixed name, `<issuer id>-<credential configuration id>-template.html`, so `template.html` is copied to that name too, until a version pointer exists. Certify serves the new credential file once template-sync has stored it and Certify is recreated:
 
