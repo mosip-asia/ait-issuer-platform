@@ -75,10 +75,27 @@ def test_the_rewrite_leaves_an_address_that_already_starts_with_the_vdr_address_
     assert sync.rewrite_local_addresses(once, base) == once, "a second pass changes nothing"
 
 
+def test_a_vdr_address_that_is_the_start_of_a_local_address_still_replaces_it() -> None:
+    # http://vdr is the VDR's Compose service name; it is the start of http://vdr.localhost.
+    text = '"http://vdr.localhost/contexts/x.json" "http://cdn.localhost/assets/a.png"'
+    for base in ("http://vdr", "http://cdn", "http://vdr.local", "http://cdn.localhost", "http://vdr.localhost:8080",
+                 "http://vdr.localhost/sub", "http://vdr.localhost.example.org"):
+        once = sync.rewrite_local_addresses(text, base)
+        assert once == f'"{base}/contexts/x.json" "{base}/assets/a.png"', (base, once)
+        assert sync.rewrite_local_addresses(once, base) == once, (base, "a second pass changes nothing")
+
+
+def test_only_a_whole_local_host_is_a_local_address() -> None:
+    text = "http://vdr.localhost.example.org/a http://cdn.localhostx/b http://vdr.localhost:9000/c http://vdr.localhost"
+    assert sync.rewrite_local_addresses(text, "https://v.example") == (
+        "http://vdr.localhost.example.org/a http://cdn.localhostx/b https://v.example:9000/c https://v.example")
+
+
 def test_the_committed_credentials_are_rewritten_as_before_for_the_two_addresses_in_use() -> None:
     files = [p for d in CREDENTIAL_DIRS for p in sorted(d.glob("*.json"))]
     assert files, "no committed credential files"
-    for base in ("https://vdr.dpi.ait.ac.th", "http://vdr.localhost"):
+    for base in ("https://vdr.dpi.ait.ac.th", "http://vdr.localhost", "http://vdr.localhost:8080", "http://vdr",
+                 "http://cdn"):
         for path in files:
             text = path.read_text(encoding="utf-8")
             plain = text.replace("http://vdr.localhost", base).replace("http://cdn.localhost", base)
