@@ -501,8 +501,6 @@ def test_rejects_wrong_files() -> None:
         "credential not JSON": {"credential": ("c.json", b"{oops")},
         "sample not JSON": {"sample": ("s.json", b"{oops")},
         "sample not an object": {"sample": ("s.json", b"[1]")},
-        "template with a stray #end": {"template": ("t.html", b"<p>#if($x)a#end#end</p>")},
-        "template missing an #end": {"template": ("t.html", b"<p>#foreach($c in $terms)$c</p>")},
         "credential with display not a list": {"credential": ("c.json", _json({**CREDENTIAL, "display": {"name": "x"}}))},
         "credential with a logo not an object": {
             "credential": ("c.json", _json({**CREDENTIAL, "display": [{"name": "x", "logo": "logo.png"}]}))},
@@ -513,10 +511,6 @@ def test_rejects_wrong_files() -> None:
             res = send(path, _set(**changes))
             assert res.status_code == 400, (case, path, res.status_code, res.text)
             assert isinstance(res.json()["detail"], str) and res.json()["detail"], (case, path)
-    ok = _export(_set(template=("t.html", b"## #end in a comment\n#* #foreach *#<p>ok</p>")))
-    assert ok.status_code == 200, "Velocity comments don't count"
-
-
 def test_a_request_over_20_mb_is_refused() -> None:
     assert vc_lab.MAX_UPLOAD == 20 * 1024 * 1024
     big = b"<p>big</p>" + b" " * (15 * 1024 * 1024)
@@ -714,66 +708,6 @@ def test_the_quick_view_is_the_renderers_html_as_it_is() -> None:
     assert res.text == template, "the renderer's HTML, unchanged"
 
 
-def test_velocity_1_7_block_directives_balance() -> None:
-    balanced = {
-        "#define": b"#define($x)hi#end $x",
-        "#@macro": b"#@m()x#end",
-        "unparsed content": b"#[[ #end ]]#",
-        "braced end": b"#if(true)a#{end}",
-        "escaped": b"<p>\\#end</p>",
-        "braced opener": b"#{if}(true)a#end",
-        "braced foreach": b"#{foreach}($a in $b)$a#{end}",
-    }
-    for case, source in balanced.items():
-        res = _post("/preview", _set(template=("t.html", source)))
-        assert res.status_code != 400, (case, res.text)
-    unbalanced = {
-        "define without end": b"#define($x)hi",
-        "stray end": b"#end",
-        "braced end, stray": b"#if(true)a#{end}#{end}",
-        "block macro without end": b"#@m()x",
-        "escaped end does not close": b"#if(true)a\\#end",
-        "unparsed end does not close": b"#if(true)#[[ #end ]]#",
-    }
-    for case, source in unbalanced.items():
-        res = _post("/preview", _set(template=("t.html", source)))
-        assert res.status_code == 400, (case, res.status_code)
-
-
-# Templates Velocity 1.7 renders (checked against the renderer), each with a # the balance check must not take for a
-# block. #@name opens a block only when ( follows it, and #{@name} is no block form at all.
-VELOCITY_RENDERS = [
-    "<p>mail #@home now</p>", "a #{@m} b", "#@1x", "#@ m", "#{@m}()x", "#@1x()y#end", "#@m_x()y#end",
-    "#macro(m)[$!bodyContent]#end#@m ()x#end", "#macro(m)[$!bodyContent]#end#@m\n()x#end",
-    "#macro(m)[$!bodyContent]#end#@m()x#end", "#@undefinedmacro()x#end",
-    "#if(true)a#end", "#{if}(true)a#{else}b#{end}", "#define($b)hi#end$b", "#[[#if(]]#", "\\#if(true)a\\#end",
-    "\\\\#if(true)a#end", "#if(true)a\\#end#end", "\\#end", "\\#@m()x", "\\#define($b)", "#if (true)a#end",
-    "#if(true)#[[ #end ]]#b#end", "\\## x #if(true)a#end", "#if(true)a#end ## #end", "#if(true)a#{end}b",
-    "#{define}($b)hi#end$b", "#if(true)a#else#end", "#if(true)a#elseif(false)b#end", "\\#foo #if(true)a#end",
-    "#if(true)a\\\\\\#end#end", "#[[ a ]] b ]]# #if(true)a#end", "#*#if(true)a#end*#", "#if(true)a#end#*",
-    "#[[ ## ]]# #if(true)a#end", "#if(true)#set($d = \"#\")${d}end #end", "#IF(true)a#END", "#if(true)a#end\\",
-    "#{foreach}($i in [1])$i#end", "#set($s = \"#if(true)y#end\")$s", "\\\\\\#if(true)a", "#if(true)a\\\\#end",
-    "#\\if(true)", "$esc#if(true)a#end", "#if(true)a#end##", "#if(true)a###end\n#end", "#if(true)<!-- #end -->",
-    "#evaluate('#if(true)x#end')", "#if(true)a#end}", "#*",
-]
-
-
-def test_the_balance_check_takes_no_hash_for_a_block_that_velocity_does_not() -> None:
-    for body in VELOCITY_RENDERS:
-        res = _post("/api/package/export", _set(template=("t.html", _with_body(body))))
-        assert res.status_code == 400 and "config" in res.text, (body, res.text[:200])  # parsed, then refused: no id
-    for body in ("#@m()x", "#@m ()x", "#if(true)a#{end}#{end}", "#{@m}()x#{end}"):
-        res = _post("/api/package/export", _set(template=("t.html", _with_body(body))))
-        assert res.status_code == 400 and "#end" in res.text, (body, res.text[:200])
-
-
-def test_every_committed_velocity_template_passes_the_balance_check() -> None:
-    paths = sorted(REPO_ROOT.glob("deploy/*/vdr/templates/*.html")) + sorted(REPO_ROOT.glob("tests/fixtures/*.html"))
-    assert len(paths) >= 3, paths
-    for path in paths:
-        vc_lab.labset.parse("template", path.name, path.read_bytes())
-
-
 def test_a_pdf_background_with_bytes_before_the_header_is_still_a_pdf() -> None:
     for case, lead in (("a newline", b"\n"), ("a UTF-8 BOM", b"\xef\xbb\xbf"), ("junk", b"junk\r\n" * 3)):
         res = _background("paper.pdf", lead + _pdf(200, 300))
@@ -797,17 +731,6 @@ def test_a_png_or_jpeg_whose_metadata_mentions_a_pdf_is_still_an_image() -> None
     Image.new("RGB", (40, 60), (200, 30, 30)).save(out, "JPEG", comment=b"made from %PDF-1.4 scan")
     jpeg = _background("paper.jpg", out.getvalue())
     assert jpeg.status_code == 200 and _image(jpeg.content).size == (40, 60), jpeg.text
-
-
-def test_a_template_is_checked_in_linear_time() -> None:
-    import time
-    # A run of backslashes with no directive after it, and openers of unparsed text or a comment that never close.
-    for case, run in (("backslashes", b"\\"), ("#[[ never closed", b"#[[ "), ("#* never closed", b"#* ")):
-        started = time.perf_counter()
-        res = _post("/api/package/export", _set(template=("t.html", b"<p>" + run * 40_000 + b"</p>")))
-        took = time.perf_counter() - started
-        assert res.status_code == 400 and "config" in res.text, (case, res.text[:200])  # parsed, then refused: no id
-        assert took < 0.5, f"{case}: 40,000 of them took {took:.2f} s"
 
 
 def test_export_and_read_back_with_a_vdr_address_that_starts_a_local_one() -> None:
@@ -873,7 +796,7 @@ def test_two_visitors_each_preview_their_own_set() -> bool:
 def test_velocity_and_mapping_errors_answer_422_with_the_engines_message() -> bool:
     if _skip_without_renderer("test_velocity_and_mapping_errors_answer_422_with_the_engines_message"):
         return False
-    bad = _set(template=("bad.html", b"<p>ok</p>\n<p>#set($x = )</p>"))  # balanced, so it passes the checks
+    bad = _set(template=("bad.html", b"<p>ok</p>\n<p>#set($x = )</p>"))
     for path in ("/preview", "/preview.pdf"):
         res = _post(path, bad)
         assert res.status_code == 422, (path, res.status_code, res.text)
@@ -884,6 +807,22 @@ def test_velocity_and_mapping_errors_answer_422_with_the_engines_message() -> bo
         res = _post(path, null)
         assert res.status_code == 422, (path, res.status_code, res.text)
         assert "null for thesisTitle" in res.json()["detail"], (path, "the plugin's refusal", res.json())
+    return True
+
+
+def test_an_unbalanced_template_answers_422_with_velocitys_message() -> bool:
+    if _skip_without_renderer("test_an_unbalanced_template_answers_422_with_velocitys_message"):
+        return False
+    cases = {  # VC Lab keeps no block check of its own: the renderer's Velocity answers, with its line and column
+        "an #if without an #end": b"<p>ok</p>\n#if(true)a",
+        "a stray #end": b"<p>ok</p>\n<p>#end</p>",
+    }
+    for case, source in cases.items():
+        for path in ("/preview", "/preview.pdf"):
+            res = _post(path, _set(template=("t.html", source)))
+            assert res.status_code == 422, (case, path, res.status_code, res.text)
+            detail = res.json()["detail"]
+            assert "line 2" in detail and "column" in detail, (case, path, "Velocity's own message", detail)
     return True
 
 
@@ -1075,15 +1014,6 @@ def test_a_template_that_loads_the_background_by_its_vdr_address_answers_422_nam
     return True
 
 
-def test_velocity_renders_every_template_the_balance_check_must_accept() -> bool:
-    if _skip_without_renderer("test_velocity_renders_every_template_the_balance_check_must_accept"):
-        return False
-    for body in VELOCITY_RENDERS:
-        res = _post("/preview", _set(template=("t.html", _with_body(body))))
-        assert res.status_code == 200, (body, res.text[:200])
-    return True
-
-
 def test_a_loaded_package_previews_the_same_as_the_original() -> bool:
     if _skip_without_renderer("test_a_loaded_package_previews_the_same_as_the_original"):
         return False
@@ -1142,16 +1072,13 @@ def main() -> None:
         test_a_background_that_is_not_a_pdf_png_or_jpeg_answers_400_with_the_reason,
         test_export_with_a_vdr_address_under_the_local_one_writes_it_once_in_the_template_and_the_credential,
         test_the_quick_view_is_the_renderers_html_as_it_is,
-        test_velocity_1_7_block_directives_balance,
         test_a_pdf_background_with_bytes_before_the_header_is_still_a_pdf,
         test_a_png_or_jpeg_whose_metadata_mentions_a_pdf_is_still_an_image,
-        test_the_balance_check_takes_no_hash_for_a_block_that_velocity_does_not,
-        test_every_committed_velocity_template_passes_the_balance_check,
-        test_a_template_is_checked_in_linear_time,
         test_export_and_read_back_with_a_vdr_address_that_starts_a_local_one,
         test_grid_from_credential_subject_in_the_pdf_and_the_quick_view,
         test_two_visitors_each_preview_their_own_set,
         test_velocity_and_mapping_errors_answer_422_with_the_engines_message,
+        test_an_unbalanced_template_answers_422_with_velocitys_message,
         test_a_record_certify_refuses_answers_422_with_the_plugins_reason,
         test_a_template_named_in_any_script_previews,
         test_sample_without_credential_subject,
@@ -1163,7 +1090,6 @@ def main() -> None:
         test_after_remove_background_the_template_previews_on_plain_paper,
         test_the_guides_credential_file_with_a_background_address_previews_on_plain_paper_without_one,
         test_a_template_that_loads_the_background_by_its_vdr_address_answers_422_naming_it,
-        test_velocity_renders_every_template_the_balance_check_must_accept,
         test_a_loaded_package_previews_the_same_as_the_original,
     ]
     passed = skipped = 0
