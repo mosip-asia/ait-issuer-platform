@@ -26,16 +26,16 @@ final class TemplateRecord {
 
     /**
      * The Adapter's answer as a record, read as the plugin reads it: strict JSON only (org.json's lenient forms, a
-     * duplicate key or text after the object throw {@link JSONException}). VC Lab's one addition: an answer with a
-     * {@code credentialSubject} object is read as that object.
+     * duplicate key or text after the object throw {@link JSONException}).
      *
-     * @throws IllegalArgumentException with the plugin's reason, for a key in {@link #FORBIDDEN_KEYS}
+     * @throws IllegalArgumentException with the plugin's reason, for a key in {@link #FORBIDDEN_KEYS}; for a
+     *     {@code credentialSubject} key, which the plugin refuses too (in {@link #shape}), with a clearer one
      */
     static JSONObject record(String answer) {
         JSONObject record = new JSONObject(answer, STRICT);
-        JSONObject subject = record.optJSONObject("credentialSubject");
-        if (subject != null) {
-            record = subject;
+        if (record.has("credentialSubject")) {
+            throw new IllegalArgumentException("the sample has a credentialSubject: that is a credential, not the"
+                    + " Adapter's record; upload the Adapter's answer");
         }
         for (String key : record.keySet()) {
             if (FORBIDDEN_KEYS.contains(key)) {

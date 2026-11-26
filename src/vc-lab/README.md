@@ -10,7 +10,7 @@ What each file is, and how a value travels from SIS to the page, is in [the temp
 |---|---|---|
 | `template` | the HTML (Velocity) render template | the whole file |
 | `credential` | Certify's whole credential configuration file | its `vc_template` (the mapping) and `display`, as Certify and the Wallet read them |
-| `sample` | the Adapter's response, exactly as the Adapter sends it | its `credentialSubject`, or the whole file when it has none |
+| `sample` | the Adapter's response, exactly as the Adapter sends it: the flat record | the whole file; one with a `credentialSubject` is a credential, refused with 422 as the plugin refuses it |
 | `background` (optional) | the organisation's pre-printed paper, as the PNG the Wallet draws (`background.png`) | the whole picture, as the template's `$backgroundImage` |
 
 Choosing a file replaces that slot only; loading a Package replaces the whole set. Each file is checked on every call: the background must be a PNG, the credential file JSON with a `vc_template` object (holding a `credentialSubject` object), the sample a JSON object, and the template UTF-8 text. VC Lab checks nothing inside a template: Velocity does, in the renderer (an unbalanced `#if` answers 422 with its line and column). One request may carry at most 20 MB.
@@ -19,7 +19,7 @@ Choosing a file replaces that slot only; loading a Package replaces the whole se
 
 VC Lab renders nothing itself. It sends the set to the renderer (`src/renderer`, at `RENDERER_URL`; ADR 0002), VC Lab's own copy of `ait-mimoto`'s print code and Certify's claim mapping:
 
-1. The record is the sample's `credentialSubject`, or the whole sample.
+1. The record is the whole sample, as the Adapter sends it.
 2. The credential file's `vc_template` goes through template-sync's own transform (`build_vc_template_base64`, which unquotes `"courses": ${courses}`), so the renderer evaluates the text Certify stores.
 3. The renderer maps the record to claims as Certify does, then evaluates the template with the variables `ait-mimoto` gives (`$credentialSubject`, `$rowProperties`, `$titleName`, `$qrCodeImage`, ...), and hands back that HTML (the quick view) or the PDF iText prints from it (what the Wallet prints). Both come from the same evaluation. The renderer's README lists the variables and where it differs from Certify and `ait-mimoto`.
 

@@ -92,7 +92,8 @@ CREDENTIAL = {
 }
 
 TRICKY_TITLE = "Costs in $titleName & #if($x)loops#end"
-SUBJECT = {
+# The Adapter's record, flat, as the Adapter contract (docs/contracts/adapter-openapi.yaml) has it.
+SAMPLE = {
     "name": "Ada Example",
     "thesisTitle": "On Small Fixtures",
     "courses": [
@@ -101,8 +102,6 @@ SUBJECT = {
         {"label": "Term Two", "items": [{"code": "XY201", "title": "Seams", "grade": "A"}]},
     ],
 }
-SAMPLE = {"@context": ["https://www.w3.org/ns/credentials/v2"], "type": ["VerifiableCredential"],
-          "issuer": "did:example:adapter", "credentialSubject": SUBJECT}
 
 
 def _json(value: object) -> bytes:
@@ -782,8 +781,8 @@ def test_grid_from_credential_subject_in_the_pdf_and_the_quick_view() -> bool:
 def test_two_visitors_each_preview_their_own_set() -> bool:
     if _skip_without_renderer("test_two_visitors_each_preview_their_own_set"):
         return False
-    mine = _set(sample=("mine.json", _json({**SAMPLE, "credentialSubject": {**SUBJECT, "name": "Ada Mine"}})))
-    theirs = _set(sample=("theirs.json", _json({**SAMPLE, "credentialSubject": {**SUBJECT, "name": "Bo Theirs"}})))
+    mine = _set(sample=("mine.json", _json({**SAMPLE, "name": "Ada Mine"})))
+    theirs = _set(sample=("theirs.json", _json({**SAMPLE, "name": "Bo Theirs"})))
     for _ in range(2):  # interleaved, twice, so the second call of each would show a remembered set
         for files, name, other in ((mine, "Ada Mine", "Bo Theirs"), (theirs, "Bo Theirs", "Ada Mine")):
             quick = html.unescape(_post("/preview", files).text)
@@ -802,7 +801,7 @@ def test_velocity_and_mapping_errors_answer_422_with_the_engines_message() -> bo
         assert res.status_code == 422, (path, res.status_code, res.text)
         assert "line 2" in res.json()["detail"], (path, "Velocity names the line", res.json())
 
-    null = _set(sample=("null.json", _json({**SUBJECT, "thesisTitle": None})))
+    null = _set(sample=("null.json", _json({**SAMPLE, "thesisTitle": None})))
     for path in ("/preview", "/preview.pdf"):
         res = _post(path, null)
         assert res.status_code == 422, (path, res.status_code, res.text)
@@ -844,7 +843,7 @@ def test_a_record_certify_refuses_answers_422_with_the_plugins_reason() -> bool:
     if _skip_without_renderer("test_a_record_certify_refuses_answers_422_with_the_plugins_reason"):
         return False
     cases = {
-        "a reserved key": (_json({**SAMPLE, "credentialSubject": {**SUBJECT, "id": "st0001"}}),
+        "a reserved key": (_json({**SAMPLE, "id": "st0001"}),
                            "the Adapter's record carries the forbidden key id"),
         "a duplicate key": (b'{"name": "Ada Example", "name": "Ada Again", "thesisTitle": "T", "courses": []}',
                             "the Adapter's answer is not the expected JSON"),
@@ -868,12 +867,18 @@ def test_a_template_named_in_any_script_previews() -> bool:
     return True
 
 
-def test_sample_without_credential_subject() -> bool:
-    if _skip_without_renderer("test_sample_without_credential_subject"):
+def test_a_sample_with_a_credential_subject_answers_422() -> bool:
+    """The plugin refuses a record wrapped in a credential, so the preview does too, saying what to upload."""
+    if _skip_without_renderer("test_a_sample_with_a_credential_subject_answers_422"):
         return False
-    with_envelope = _post("/preview", _set()).text
-    assert _post("/preview", _set(sample=("bare.json", _json(SUBJECT)))).text == with_envelope, \
-        "a bare record renders the same"
+    credential = {"@context": ["https://www.w3.org/ns/credentials/v2"], "type": ["VerifiableCredential"],
+                  "issuer": "did:example:adapter", "credentialSubject": SAMPLE}
+    for path in ("/preview", "/preview.pdf"):
+        res = _post(path, _set(sample=("credential.json", _json(credential))))
+        assert res.status_code == 422, (path, res.status_code, res.text[:200])
+        detail = res.json()["detail"]
+        assert "adapter_error" in detail and "the sample has a credentialSubject" in detail, (path, detail)
+        assert "upload the Adapter's answer" in detail, (path, detail)
     return True
 
 
@@ -1096,7 +1101,7 @@ def main() -> None:
         test_a_vc_template_nested_too_deep_answers_422,
         test_a_record_certify_refuses_answers_422_with_the_plugins_reason,
         test_a_template_named_in_any_script_previews,
-        test_sample_without_credential_subject,
+        test_a_sample_with_a_credential_subject_answers_422,
         test_a_template_reaching_for_an_address_answers_422_naming_it,
         test_a_template_that_draws_logo_url_previews_without_a_logo,
         test_reflection_fails_in_the_print_template_and_the_vc_template,
