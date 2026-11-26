@@ -48,7 +48,7 @@ The Wallet draws a Background only as the template's `$backgroundImage`, a PNG, 
 
 Anything else, or a file that can't be read (a PDF with no pages is one), is refused with the reason. The dashboard sends the upload to `POST /api/background`, keeps the PNG it gets back, and sends that PNG as the `background` slot with every call. The renderer gets it as `backgroundImage` and draws `$backgroundImage`; the logo of the organisation is part of the picture, as the Wallet prints it.
 
-The quick view draws it too. A template that loads it by its VDR address (`http://vdr.localhost/templates/<...>/background.png`) reaches the renderer's own copy in the PDF; a browser can't reach that address, so VC Lab replaces it in the quick view with the picture itself. Remove Background drops the slot, and the template previews on plain paper.
+The quick view draws it too, as the same data URI. A template draws the Background only with `$backgroundImage`, which the Wallet fills from the credential file's `display[0].background_image.uri`; one that loads it by its VDR address (`http://vdr.localhost/templates/<...>/background.png`) answers 422 naming it, like any other address. Remove Background drops the slot, and the template previews on plain paper.
 
 > **A background may be confidential** (an organisation's watermark, seal and signature). It stays in your browser and goes to VC Lab only with each preview, which keeps nothing; another visitor can't get it back. But a deployed VC Lab has no login and is reached over whatever network its address crosses, so send a confidential one only to a VC Lab you trust.
 
@@ -66,7 +66,6 @@ sample/<name>.json                                      <name> is the uploaded s
 
 - `http://vdr.localhost` and `http://cdn.localhost` in the template and the credential file become the VDR address, by the function template-sync uses (`certify_template_sync.sync.rewrite_local_addresses`).
 - The config id must be the credential file's `credential_config_key_id` (template-sync stores the file under that key); export answers 400 naming both when they differ. Choosing a credential file fills the config id field from its key.
-- A template address of the Background, `http://vdr.localhost/templates/<any folders>/background.png`, is rewritten to `<VDR>/templates/<config id>/<version>/background.png`, where the Package puts the file.
 - With a Background, the credential file's `display[0].background_image.uri` is `<VDR>/templates/<config id>/<version>/background.png`. Without one, no `background.png` is written and the address is left as it was (rewritten like any other).
 - `manifest.json` holds `format` (`vc-lab-package`), `formatVersion`, `credentialConfigId`, `version`, `vdrAddress` and `components`: one `{role, path, deploy}` for each of `template`, `background`, `credential` and `sample`. The sample has `deploy: false`.
 - Load Package accepts exactly this layout and turns the manifest's VDR address back into `http://vdr.localhost` in the template and the credential file. The set previews the same as the one exported; it is not byte-identical (`cdn.localhost` is `vdr.localhost` again, and `background_image.uri` stays set).
@@ -76,7 +75,7 @@ Placing a Package on the local stack, printing it from the Wallet and comparing 
 
 ## Templates the preview refuses
 
-The renderer loads only `data:` URIs and the set's files, so a template that loads anything else by address, a font from the VDR included (`@font-face` with `http://vdr.localhost/templates/fonts/...`), answers 422 naming it, though the Wallet would print it. Use the 14 built-in fonts in a template you preview here. A template that calls a method on Java's reflection or system classes prints the call as written, in the preview and in the Wallet alike (both run Velocity with `SecureUberspector`). That holds for the template only: a credential file's `vc_template` that does it previews the call as written, while Certify, which runs no `SecureUberspector`, evaluates it (`src/renderer/README.md`, "Where it differs from Certify").
+The renderer loads only `data:` URIs, so a template that loads anything by address, a font from the VDR included (`@font-face` with `http://vdr.localhost/templates/fonts/...`), answers 422 naming it, though the Wallet would print it. Use the 14 built-in fonts in a template you preview here. A template that calls a method on Java's reflection or system classes prints the call as written, in the preview and in the Wallet alike (both run Velocity with `SecureUberspector`). That holds for the template only: a credential file's `vc_template` that does it previews the call as written, while Certify, which runs no `SecureUberspector`, evaluates it (`src/renderer/README.md`, "Where it differs from Certify").
 
 ## Running
 

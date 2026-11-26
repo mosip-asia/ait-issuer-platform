@@ -134,7 +134,7 @@ If a run is killed between the swap and the restore, the next check refuses:
 
 ## Fonts
 
-Any font other than the 14 built-in ones comes in through `@font-face`, and the file has to be on the VDR: place it yourself under `deploy/ait/vdr/templates/fonts/` (for example `narrow.ttf`) and name it by absolute address, `src: url("http://vdr.localhost/templates/fonts/narrow.ttf")`. VC Lab can't preview such a template: its renderer loads nothing but the set's files and answers 422 naming the font's address (section 6). If the file isn't there, the template falls back to a built-in face without telling you (the built-in faces have no Thai), so check the PDF, for example with `pdffonts`, for the font you expect. Git ignores `ttf`, `otf`, `woff` and `woff2` files under an Installation's `vdr/templates/` folder, as it does Backgrounds, because a font's licence may forbid publishing it in a repository. Which fonts an organisation may publish on its own VDR is its licensing question.
+Any font other than the 14 built-in ones comes in through `@font-face`, and the file has to be on the VDR: place it yourself under `deploy/ait/vdr/templates/fonts/` (for example `narrow.ttf`) and name it by absolute address, `src: url("http://vdr.localhost/templates/fonts/narrow.ttf")`. VC Lab can't preview such a template: its renderer loads nothing but `data:` URIs and answers 422 naming the font's address (section 6). If the file isn't there, the template falls back to a built-in face without telling you (the built-in faces have no Thai), so check the PDF, for example with `pdffonts`, for the font you expect. Git ignores `ttf`, `otf`, `woff` and `woff2` files under an Installation's `vdr/templates/` folder, as it does Backgrounds, because a font's licence may forbid publishing it in a repository. Which fonts an organisation may publish on its own VDR is its licensing question.
 
 ## 5. Place a Background
 
@@ -174,7 +174,7 @@ VC Lab (`http://lab.localhost`) previews a set (template, credential file, sampl
 
 The made-up set:
 
-- the template `tests/fixtures/vc-lab-parity-template.html`: every claim but `notes` (the print check replaces `notes` with a Thai text for its run), the course grid from `$credentialSubject`, the Background through `$backgroundImage`, and the QR code. It loads no font by address: VC Lab's renderer loads only the set's files and answers 422 naming any other address, so a template like `tests/fixtures/print-check-template.html`, whose font comes from the VDR, can't preview in VC Lab;
+- the template `tests/fixtures/vc-lab-parity-template.html`: every claim but `notes` (the print check replaces `notes` with a Thai text for its run), the course grid from `$credentialSubject`, the Background through `$backgroundImage`, and the QR code. It loads no font by address: VC Lab's renderer loads only `data:` URIs and answers 422 naming any address, so a template like `tests/fixtures/print-check-template.html`, whose font comes from the VDR, can't preview in VC Lab;
 - the committed credential file, `deploy/ait/certify/credentials/ait-transcript.json`;
 - the sample: the mock Adapter's answer for the made-up student `st120001`, as Certify gets it;
 - a made-up Background, drawn below.
@@ -474,7 +474,7 @@ Only the organisation's admins may write either. On this platform both are the d
 | A swapped template prints with an old macro body | Mimoto registers a `#macro` once; rename it or recreate Mimoto (section 4). |
 | A VC Lab call in section 6 exits with `curl: (22) ... 409` | The set lacks a file: the call's own answer (without `-f`) names it. |
 | `... 400` from VC Lab | A file isn't what its slot takes (the Background must be a PNG), or Export's config id isn't the credential file's `credential_config_key_id`: the answer says which. |
-| `... 422` from VC Lab | The template or the mapping fails in the renderer, or the template loads an address other than a `data:` URI or the set's `background.png` (a font by address is one): the answer names the line or the address. |
+| `... 422` from VC Lab | The template or the mapping fails in the renderer, or the template loads an address other than a `data:` URI (a font, or the Background's VDR address: draw the Background with `$backgroundImage`): the answer names the line or the address. |
 | `... 502` or `503` from VC Lab | The renderer isn't running (`docker compose ps renderer`), or VC Lab has no `RENDERER_URL`. |
 | `FAIL setup: couldn't read ait-transcript's display from Certify's metadata` | Certify is down or still starting, for example just after `compose up -d --force-recreate ... certify`: wait until `http://issuer.localhost/.well-known/openid-credential-issuer` answers, then run the check again. |
 | Section 6's `jq` line prints `null` | Certify serves the old credential file: the Package's file isn't in `deploy/ait/certify/credentials/`, or Certify wasn't recreated after template-sync. |
