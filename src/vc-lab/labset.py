@@ -75,11 +75,13 @@ def _template(name: str, data: bytes) -> str:
 
 
 # One pass over the source, so what a comment or #[[unparsed]]# holds is never read as a directive. Velocity 1.7's block
-# directives (each closed by #end) in their plain and #{braced} forms, with #@name for a block macro call; a directive
-# behind an odd number of backslashes is escaped.
+# directives (each closed by #end) in their plain and #{braced} forms, and #@name( for a block macro call (#@name with no
+# ( after it, and #{@name}, are text); a directive behind an odd number of backslashes is escaped. Linear: a backslash
+# run is matched from its first backslash only, and a comment or unparsed text that never closes runs to the end.
 _VELOCITY = re.compile(
-    r"##[^\n]*|#\*.*?\*#|#\[\[.*?\]\]#"  # a line comment, a block comment, unparsed text
-    r"|(?P<escape>\\*)#(?:(?P<word>if|foreach|macro|define|end)\b|\{(?P<braced>if|foreach|macro|define|end|@\w+)\}|@\w+)",
+    r"##[^\n]*|#\*.*?(?:\*#|\Z)|#\[\[.*?(?:\]\]#|\Z)"  # a line comment, a block comment, unparsed text
+    r"|(?<!\\)(?P<escape>\\*)#(?:(?P<word>if|foreach|macro|define|end)\b|\{(?P<braced>if|foreach|macro|define|end)\}"
+    r"|@\w+\s*\()",
     re.DOTALL)
 
 

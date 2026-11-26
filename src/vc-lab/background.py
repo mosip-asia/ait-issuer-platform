@@ -18,13 +18,15 @@ PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
 def to_png(filename: str, data: bytes) -> bytes:
     """An uploaded PDF (page 1), PNG or JPEG as a PNG. ValueError, naming the file, for anything else."""
-    if b"%PDF-" in data[:1024]:  # as PDF readers do: a newline or a BOM before the header is legal
-        return _png_of(_first_page(filename, data))
     if data.startswith(PNG_MAGIC):
         _open(filename, data)
         return data
     if data.startswith(b"\xff\xd8\xff"):
         return _png_of(_srgb(ImageOps.exif_transpose(_open(filename, data))))
+    # The images' magic first: a PNG's or JPEG's metadata may mention %PDF. pdfium finds a header that starts at any
+    # byte up to 1024 (a newline or a BOM before it is legal), so this looks where it does.
+    if b"%PDF" in data[:1024 + len(b"%PDF")]:
+        return _png_of(_first_page(filename, data))
     raise ValueError(f"background {filename!r} is not a PDF, PNG or JPEG")
 
 

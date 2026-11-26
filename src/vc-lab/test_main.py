@@ -384,19 +384,18 @@ def test_export_without_a_background_writes_none_and_leaves_the_credential_files
     assert bare["display"] == CREDENTIAL["display"], "no display[0].background_image invented"
 
 
-def test_a_template_loading_the_background_by_its_vdr_address_points_at_the_exported_version() -> None:
-    """The Package holds background.png under <config id>/<version>; the template must ask for exactly that."""
+def test_the_backgrounds_address_goes_into_the_credential_file_and_a_templates_addresses_stay_as_they_are() -> None:
+    """The Package holds background.png under <config id>/<version>, and the credential file names it there: the
+    Wallet fills $backgroundImage from display[0].background_image.uri. A template's addresses are not the Background's."""
     template = TEMPLATE.replace("</body>", '<img src="http://vdr.localhost/templates/example-record/background.png"/>'
                                 '<img src="http://vdr.localhost/templates/a/b/background.png"/></body>')
     files = _set(template=("record.html", template.encode()), background=("background.png", _png()))
     zipped = _zip_files(_export(files, version="v2").content)
     exported = zipped["vdr/templates/example-record/v2/template.html"].decode()
-    address = "https://vdr.example.org/templates/example-record/v2/background.png"
-    assert exported.count(address) == 2, "both addresses, whatever folders they named"
+    assert exported == template.replace(LOCAL_VDR, "https://vdr.example.org"), "only the local host, rewritten"
     credential = json.loads(zipped["certify/credentials/example-record.json"])
-    assert credential["display"][0]["background_image"]["uri"] == address
-    back = _read_set(_export(files, version="v2").content)
-    assert back["template"][1].decode().count("http://vdr.localhost/templates/example-record/v2/background.png") == 2
+    assert credential["display"][0]["background_image"]["uri"] == \
+        "https://vdr.example.org/templates/example-record/v2/background.png"
 
 
 def test_the_config_id_must_be_the_credential_files_key() -> None:
@@ -684,13 +683,15 @@ def test_export_with_a_vdr_address_under_the_local_one_writes_it_once_in_the_tem
     template = zipped[f"{PACKAGE_DIR}/template.html"].decode()
     credential = zipped["certify/credentials/example-record.json"].decode()
     assert f"{vdr}:8088" not in template + credential, "the VDR address written twice"
+    assert f'src="{vdr}/templates/old/v0/background.png"' in template
     address = f"{vdr}/templates/example-record/v1/background.png"
-    assert f'src="{address}"' in template and json.loads(credential)["display"][0]["background_image"]["uri"] == address
+    assert json.loads(credential)["display"][0]["background_image"]["uri"] == address
     assert f"{vdr}/logo.png" in template and f"{vdr}/fonts/f.css" in template
     assert json.loads(credential)["display"][0]["logo"] == {"url": f"{vdr}/logo.png"}
 
 
-def test_the_quick_view_draws_a_background_at_any_address_under_the_vdr_templates_folder() -> None:
+def test_the_quick_view_is_the_renderers_html_as_it_is() -> None:
+    """The Background reaches it as $backgroundImage's data URI; an address in the template is never swapped for it."""
     png = _png()
     template = TEMPLATE.replace("</body>", '<img src="http://vdr.localhost/templates/background.png"/>'
                                 '<img src="http://vdr.localhost/templates/a/b/background.png"/>'
@@ -710,9 +711,7 @@ def test_the_quick_view_draws_a_background_at_any_address_under_the_vdr_template
     finally:
         vc_lab.httpx.post, vc_lab.RENDERER_URL = real_post, real_url
     assert res.status_code == 200, res.text
-    uri = "data:image/png;base64," + base64.b64encode(png).decode()
-    assert res.text.count(uri) == 2, "both background.png addresses become the picture"
-    assert "http://vdr.localhost/templates/a/other.png" in res.text, "another file is left alone"
+    assert res.text == template, "the renderer's HTML, unchanged"
 
 
 def test_velocity_1_7_block_directives_balance() -> None:
@@ -741,13 +740,96 @@ def test_velocity_1_7_block_directives_balance() -> None:
         assert res.status_code == 400, (case, res.status_code)
 
 
+# Templates Velocity 1.7 renders (checked against the renderer), each with a # the balance check must not take for a
+# block. #@name opens a block only when ( follows it, and #{@name} is no block form at all.
+VELOCITY_RENDERS = [
+    "<p>mail #@home now</p>", "a #{@m} b", "#@1x", "#@ m", "#{@m}()x", "#@1x()y#end", "#@m_x()y#end",
+    "#macro(m)[$!bodyContent]#end#@m ()x#end", "#macro(m)[$!bodyContent]#end#@m\n()x#end",
+    "#macro(m)[$!bodyContent]#end#@m()x#end", "#@undefinedmacro()x#end",
+    "#if(true)a#end", "#{if}(true)a#{else}b#{end}", "#define($b)hi#end$b", "#[[#if(]]#", "\\#if(true)a\\#end",
+    "\\\\#if(true)a#end", "#if(true)a\\#end#end", "\\#end", "\\#@m()x", "\\#define($b)", "#if (true)a#end",
+    "#if(true)#[[ #end ]]#b#end", "\\## x #if(true)a#end", "#if(true)a#end ## #end", "#if(true)a#{end}b",
+    "#{define}($b)hi#end$b", "#if(true)a#else#end", "#if(true)a#elseif(false)b#end", "\\#foo #if(true)a#end",
+    "#if(true)a\\\\\\#end#end", "#[[ a ]] b ]]# #if(true)a#end", "#*#if(true)a#end*#", "#if(true)a#end#*",
+    "#[[ ## ]]# #if(true)a#end", "#if(true)#set($d = \"#\")${d}end #end", "#IF(true)a#END", "#if(true)a#end\\",
+    "#{foreach}($i in [1])$i#end", "#set($s = \"#if(true)y#end\")$s", "\\\\\\#if(true)a", "#if(true)a\\\\#end",
+    "#\\if(true)", "$esc#if(true)a#end", "#if(true)a#end##", "#if(true)a###end\n#end", "#if(true)<!-- #end -->",
+    "#evaluate('#if(true)x#end')", "#if(true)a#end}", "#*",
+]
+
+
+def test_the_balance_check_takes_no_hash_for_a_block_that_velocity_does_not() -> None:
+    for body in VELOCITY_RENDERS:
+        res = _post("/api/package/export", _set(template=("t.html", _with_body(body))))
+        assert res.status_code == 400 and "config" in res.text, (body, res.text[:200])  # parsed, then refused: no id
+    for body in ("#@m()x", "#@m ()x", "#if(true)a#{end}#{end}", "#{@m}()x#{end}"):
+        res = _post("/api/package/export", _set(template=("t.html", _with_body(body))))
+        assert res.status_code == 400 and "#end" in res.text, (body, res.text[:200])
+
+
+def test_every_committed_velocity_template_passes_the_balance_check() -> None:
+    paths = sorted(REPO_ROOT.glob("deploy/*/vdr/templates/*.html")) + sorted(REPO_ROOT.glob("tests/fixtures/*.html"))
+    assert len(paths) >= 3, paths
+    for path in paths:
+        vc_lab.labset.parse("template", path.name, path.read_bytes())
+
+
 def test_a_pdf_background_with_bytes_before_the_header_is_still_a_pdf() -> None:
     for case, lead in (("a newline", b"\n"), ("a UTF-8 BOM", b"\xef\xbb\xbf"), ("junk", b"junk\r\n" * 3)):
         res = _background("paper.pdf", lead + _pdf(200, 300))
         assert res.status_code == 200, (case, res.text)
         assert _image(res.content).size == (417, 625), case
-    far = _background("paper.pdf", bytes(1024) + _pdf(200, 300))
-    assert far.status_code == 400, "the header must be in the first 1024 bytes"
+    edge = _background("paper.pdf", bytes(1024) + _pdf(200, 300))
+    assert edge.status_code == 200, ("pdfium opens a header that starts at byte 1024", edge.text)
+    far = _background("paper.pdf", bytes(1025) + _pdf(200, 300))
+    assert far.status_code == 400, "pdfium looks for the header no further than byte 1024"
+
+
+def test_a_png_or_jpeg_whose_metadata_mentions_a_pdf_is_still_an_image() -> None:
+    from PIL import PngImagePlugin
+    info = PngImagePlugin.PngInfo()
+    info.add_text("Comment", "exported from scan.pdf (%PDF-1.7)")
+    out = io.BytesIO()
+    Image.new("RGB", (40, 60), (200, 30, 30)).save(out, "PNG", pnginfo=info)
+    png = _background("paper.png", out.getvalue())
+    assert png.status_code == 200 and png.content == out.getvalue(), png.text
+    out = io.BytesIO()
+    Image.new("RGB", (40, 60), (200, 30, 30)).save(out, "JPEG", comment=b"made from %PDF-1.4 scan")
+    jpeg = _background("paper.jpg", out.getvalue())
+    assert jpeg.status_code == 200 and _image(jpeg.content).size == (40, 60), jpeg.text
+
+
+def test_a_template_is_checked_in_linear_time() -> None:
+    import time
+    # A run of backslashes with no directive after it, and openers of unparsed text or a comment that never close.
+    for case, run in (("backslashes", b"\\"), ("#[[ never closed", b"#[[ "), ("#* never closed", b"#* ")):
+        started = time.perf_counter()
+        res = _post("/api/package/export", _set(template=("t.html", b"<p>" + run * 40_000 + b"</p>")))
+        took = time.perf_counter() - started
+        assert res.status_code == 400 and "config" in res.text, (case, res.text[:200])  # parsed, then refused: no id
+        assert took < 0.5, f"{case}: 40,000 of them took {took:.2f} s"
+
+
+def test_export_and_read_back_with_a_vdr_address_that_starts_a_local_one() -> None:
+    vdr = "http://vdr"  # the VDR's Compose service name, the start of http://vdr.localhost
+    template = TEMPLATE.replace("</body>", '<img src="http://vdr.localhost/templates/x/background.png"/>'
+                                '<img src="http://vdr.localhost/assets/logo.png"/><img src="http://cdn.localhost/l.png"/></body>')
+    credential = {**CREDENTIAL, "display": [{**CREDENTIAL["display"][0], "logo": {"url": "http://vdr.localhost/assets/logo.png"}}]}
+    files = _set(template=("record.html", template.encode()), credential=("record.json", _json(credential)),
+                 background=("background.png", _png()))
+    res = _export(files, vdr_address=vdr)
+    assert res.status_code == 200, res.text
+    zipped = _zip_files(res.content)
+    exported = zipped[f"{PACKAGE_DIR}/template.html"].decode()
+    exported_credential = zipped["certify/credentials/example-record.json"].decode()
+    assert "localhost" not in exported + exported_credential, "every local address is the VDR address"
+    for address in ("http://vdr/templates/x/background.png", "http://vdr/assets/logo.png", "http://vdr/l.png"):
+        assert f'src="{address}"' in exported, address
+    back = _read_set(res.content)
+    read_template, read_credential = back["template"][1].decode(), back["credential"][1].decode()
+    assert "localhost.localhost" not in read_template + read_credential
+    assert 'src="http://vdr.localhost/assets/logo.png"' in read_template
+    assert json.loads(read_credential)["display"][0]["logo"] == {"url": "http://vdr.localhost/assets/logo.png"}
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -908,7 +990,6 @@ _PAPER = "width: 210mm; height: 297mm; margin: -20mm 0 0 -20mm"
 DRAWS_BACKGROUND = _with_body(f'<div style="height: 0"><img src="$!backgroundImage" style="{_PAPER}"/></div>')
 # The address the Wallet fetches the Background from once an organisation has put it on its VDR.
 VDR_BACKGROUND = "http://vdr.localhost/templates/example-record/v1/background.png"
-LOADS_BACKGROUND = _with_body(f'<div style="height: 0"><img src="{VDR_BACKGROUND}" style="{_PAPER}"/></div>')
 
 
 def _images(page) -> list[Image.Image]:
@@ -974,31 +1055,39 @@ def test_the_guides_credential_file_with_a_background_address_previews_on_plain_
     return True
 
 
-def test_a_template_that_loads_the_background_by_its_vdr_address_shows_it_in_the_quick_view() -> bool:
-    if _skip_without_renderer("test_a_template_that_loads_the_background_by_its_vdr_address_shows_it_in_the_quick_view"):
+def test_a_template_that_loads_the_background_by_its_vdr_address_answers_422_naming_it() -> bool:
+    """The renderer serves no address, the Background's included: a template draws it with $backgroundImage. Every
+    form of the address is refused alike, with a Background loaded or not."""
+    if _skip_without_renderer("test_a_template_that_loads_the_background_by_its_vdr_address_answers_422_naming_it"):
         return False
-    png = _png(40, 60)
-    quick = _post("/preview", _set(template=("record.html", LOADS_BACKGROUND), background=("background.png", png)))
-    assert quick.status_code == 200, quick.text
-    assert "http://vdr.localhost" not in quick.text, "a browser can't reach that address"
-    assert "data:image/png;base64," + base64.b64encode(png).decode() in quick.text
+    addresses = [VDR_BACKGROUND, "http://vdr.localhost/templates/background.png",
+                 "http://vdr.localhost/templates/a(1)/background.png", "http://vdr.localhost/templates/my folder/background.png",
+                 "http://vdr.localhost/templates/a/background.pngs/logo.png", "http://vdr.localhost/templates/a/background.png.bak",
+                 "http://vdr.localhost/templates/a/background.png?v=2"]
+    for address in addresses:
+        for background in ({}, {"background": ("background.png", _png(40, 60))}):
+            files = _set(template=("record.html", _with_body(f'<img src="{address}"/>')), **background)
+            for path in ("/preview", "/preview.pdf"):
+                res = _post(path, files)
+                assert res.status_code == 422, (address, path, bool(background), res.status_code)
+                assert "$backgroundImage" in res.json()["detail"], (address, path, res.json())
+                assert address.split("/templates/")[1].split(" ")[0] in res.json()["detail"], (address, path, res.json())
     return True
 
 
-def test_a_template_that_loads_the_background_by_its_vdr_address_previews_with_it_in_the_pdf() -> bool:
-    """Ticket 04 serves background.png at its VDR address; VC Lab sends it the uploaded Background."""
-    if _skip_without_renderer("test_a_template_that_loads_the_background_by_its_vdr_address_previews_with_it_in_the_pdf"):
+def test_velocity_renders_every_template_the_balance_check_must_accept() -> bool:
+    if _skip_without_renderer("test_velocity_renders_every_template_the_balance_check_must_accept"):
         return False
-    files = _set(template=("record.html", LOADS_BACKGROUND), background=("background.png", _png(40, 60)))
-    pages = _pages(files)
-    assert [i.size for i in _images(pages[0])] == [(40, 60)], "the uploaded Background, from the VDR address"
+    for body in VELOCITY_RENDERS:
+        res = _post("/preview", _set(template=("t.html", _with_body(body))))
+        assert res.status_code == 200, (body, res.text[:200])
     return True
 
 
 def test_a_loaded_package_previews_the_same_as_the_original() -> bool:
     if _skip_without_renderer("test_a_loaded_package_previews_the_same_as_the_original"):
         return False
-    original = _set(template=("record.html", LOADS_BACKGROUND), background=("background.png", _png(40, 60)))
+    original = _set(template=("record.html", DRAWS_BACKGROUND), background=("background.png", _png(40, 60)))
     loaded = _read_set(_export(original).content)
     for path in ("/preview", "/preview.pdf"):
         assert _post(path, loaded).status_code == 200, path
@@ -1008,7 +1097,7 @@ def test_a_loaded_package_previews_the_same_as_the_original() -> bool:
     for a, b in zip(mine, theirs):
         assert a.extract_text() == b.extract_text()
     assert [i.size for i in _images(theirs[0])] == [i.size for i in _images(mine[0])] == [(40, 60)], \
-        "the Background, found at its VDR address again"
+        "the Background, from $backgroundImage again"
     return True
 
 
@@ -1031,7 +1120,7 @@ def main() -> None:
         test_export_package_lays_the_files_out_as_the_vdr_and_certify_take_them,
         test_the_manifest_names_the_config_the_version_the_vdr_and_each_component_with_its_role,
         test_export_without_a_background_writes_none_and_leaves_the_credential_files_address,
-        test_a_template_loading_the_background_by_its_vdr_address_points_at_the_exported_version,
+        test_the_backgrounds_address_goes_into_the_credential_file_and_a_templates_addresses_stay_as_they_are,
         test_the_config_id_must_be_the_credential_files_key,
         test_a_sample_named_manifest_json_still_reads_back,
         test_a_background_image_that_is_not_an_object_is_replaced_by_the_address,
@@ -1052,9 +1141,14 @@ def main() -> None:
         test_a_cmyk_jpeg_background_is_converted_through_its_profile_and_carries_none,
         test_a_background_that_is_not_a_pdf_png_or_jpeg_answers_400_with_the_reason,
         test_export_with_a_vdr_address_under_the_local_one_writes_it_once_in_the_template_and_the_credential,
-        test_the_quick_view_draws_a_background_at_any_address_under_the_vdr_templates_folder,
+        test_the_quick_view_is_the_renderers_html_as_it_is,
         test_velocity_1_7_block_directives_balance,
         test_a_pdf_background_with_bytes_before_the_header_is_still_a_pdf,
+        test_a_png_or_jpeg_whose_metadata_mentions_a_pdf_is_still_an_image,
+        test_the_balance_check_takes_no_hash_for_a_block_that_velocity_does_not,
+        test_every_committed_velocity_template_passes_the_balance_check,
+        test_a_template_is_checked_in_linear_time,
+        test_export_and_read_back_with_a_vdr_address_that_starts_a_local_one,
         test_grid_from_credential_subject_in_the_pdf_and_the_quick_view,
         test_two_visitors_each_preview_their_own_set,
         test_velocity_and_mapping_errors_answer_422_with_the_engines_message,
@@ -1068,8 +1162,8 @@ def main() -> None:
         test_a_pdf_background_prints_upright_under_the_record,
         test_after_remove_background_the_template_previews_on_plain_paper,
         test_the_guides_credential_file_with_a_background_address_previews_on_plain_paper_without_one,
-        test_a_template_that_loads_the_background_by_its_vdr_address_shows_it_in_the_quick_view,
-        test_a_template_that_loads_the_background_by_its_vdr_address_previews_with_it_in_the_pdf,
+        test_a_template_that_loads_the_background_by_its_vdr_address_answers_422_naming_it,
+        test_velocity_renders_every_template_the_balance_check_must_accept,
         test_a_loaded_package_previews_the_same_as_the_original,
     ]
     passed = skipped = 0

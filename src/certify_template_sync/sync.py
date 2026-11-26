@@ -83,12 +83,15 @@ def find_seed_sql_path():
 
 def rewrite_local_addresses(text, vdr_base):
     """The local stack's VDR and CDN addresses in `text`, as the VDR address (without its trailing slash).
-    template-sync and VC Lab's Export Package both use it, so a file means the same on either path. An occurrence that
-    already starts with `vdr_base` (it may itself start with http://vdr.localhost) stays as it is, so a second pass
-    changes nothing."""
+    template-sync and VC Lab's Export Package both use it, so a file means the same on either path.
+    A local address is the whole host: http://vdr.localhost.example.org is not one. Where `vdr_base` and a local address
+    both start at one place, the longer is the one there, so an address already written as `vdr_base` stays as it is
+    (`vdr_base` may itself start with http://vdr.localhost) and a base that starts one (http://vdr, the VDR's Compose
+    service name) still replaces it. A second pass changes nothing."""
     vdr_base = vdr_base.rstrip("/")
-    pattern = re.escape(vdr_base) + r"|http://vdr\.localhost|http://cdn\.localhost"
-    return re.sub(pattern, lambda m: vdr_base, text)
+    local, base = r"http://(?:vdr|cdn)\.localhost(?![\w.-])", re.escape(vdr_base)
+    longer_first = (base, local) if len(vdr_base) >= len("http://vdr.localhost") else (local, base)
+    return re.sub("|".join(longer_first), lambda m: vdr_base, text)
 
 
 def load_credential_configs(creds_dir):

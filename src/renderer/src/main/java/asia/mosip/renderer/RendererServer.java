@@ -16,7 +16,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
@@ -121,17 +120,15 @@ public final class RendererServer {
             error(exchange, 422, e.getMessage());
             return;
         }
-        // The set's files at their VDR address: today the Background, as the PNG its data URI holds.
         String background = request.backgroundImage();
-        SetFiles files = new SetFiles(background == null || background.isEmpty() ? Map.of()
-                : Map.of("background.png", Base64.getDecoder().decode(background.substring(background.indexOf(',') + 1))));
+        RefusedAddresses addresses = new RefusedAddresses();
         String merged;
         byte[] pdf;
         try {
             merged = PRINTER.generateHtml(request.template(), credentialSubject, metadata,
                     background, request.locale() != null ? request.locale() : "en");
             // Printed for the quick view too, which must not show what the print can't load.
-            pdf = PRINTER.toPdf(merged, files);
+            pdf = PRINTER.toPdf(merged, addresses);
         } catch (Exception e) {
             // The input parsed, so what failed is printing it, as Mimoto would fail: the message is the answer.
             // Velocity's names the template's line and column; iText's names what it couldn't lay out.
@@ -143,10 +140,9 @@ public final class RendererServer {
             error(exchange, 422, "the template nests its blocks too deep to print");
             return;
         }
-        if (!files.refused().isEmpty()) {
-            error(exchange, 422, "the template loads " + String.join(", ", files.refused()) + ": the preview loads"
-                    + " only data: URIs and the set's files at " + SetFiles.VDR_TEMPLATES + "<any folders>/<file name>"
-                    + " (background.png, when a Background is loaded)");
+        if (!addresses.refused().isEmpty()) {
+            error(exchange, 422, "the template loads " + String.join(", ", addresses.refused()) + ": the preview loads"
+                    + " only data: URIs (draw the Background with $backgroundImage)");
             return;
         }
         send(exchange, 200, html ? "text/html; charset=utf-8" : "application/pdf",
