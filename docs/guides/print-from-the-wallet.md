@@ -430,7 +430,7 @@ VC Lab has no login. On dev, whoever reaches its host (`TRAEFIK_VCLAB_RULE`, ``H
 
 ### 9. Placing a Package
 
-VC Lab publishes nothing. A Package exported for dev's VDR address (the third field of Export Package) is placed by hand, as section 6 does locally:
+VC Lab publishes nothing. A Package is not tied to one Installation (ADR 0003): its template and credential file keep the local addresses (`http://vdr.localhost`, `http://cdn.localhost`), and the VDR address typed at export (its third field) is only a label in `manifest.json`. Template-sync rewrites the credential file's local addresses to the Installation's `VDR_BASE_URL` when it stores the file in Certify, so the Background's `http://vdr.localhost/templates/<config id>/<version>/background.png` becomes dev's. A template's addresses are rewritten nowhere: a template loads nothing by address, and draws the Background only through `$backgroundImage`. The same Package is placed on dev by hand, as section 6 does locally:
 
 - `vdr/templates/<config id>/<version>/` (the template, `background.png`, `manifest.json`) to the VDR's `/templates/<config id>/<version>/`;
 - `template.html` also to Mimoto's fixed name, `<VDR>/templates/<issuer id>-<config id>-template.html` (`AITUniversity-ait-transcript-template.html` for the transcript), until a version pointer exists;

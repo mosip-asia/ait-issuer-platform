@@ -54,7 +54,7 @@ The quick view draws it too, as the same data URI. A template draws the Backgrou
 
 ## The Package
 
-Export Package turns the set into the files the VDR and Certify take, for one credential configuration id and version and the VDR address you type (`https://vdr.example.org`; a trailing slash is dropped). It is also your save file: Load Package gives the set back.
+Export Package turns the set into the files the VDR and Certify take, for one credential configuration id and version. It is also your save file: Load Package gives the set back. A Package is not tied to one Installation (ADR 0003): its files keep the local stack's addresses, `http://vdr.localhost` and `http://cdn.localhost`, and template-sync makes the credential file the Installation's (its `VDR_BASE_URL`) when it stores it in Certify. Export also asks for the VDR address (`https://vdr.example.org`; a trailing slash is dropped), but only as a label in `manifest.json`: no file depends on it.
 
 ```
 vdr/templates/<config id>/<version>/template.html
@@ -64,11 +64,12 @@ certify/credentials/<config id>.json
 sample/<name>.json                                      <name> is the uploaded sample's name; never deployed
 ```
 
-- `http://vdr.localhost` and `http://cdn.localhost` in the template and the credential file become the VDR address, by the function template-sync uses (`certify_template_sync.sync.rewrite_local_addresses`).
+- `template.html` is the uploaded template, byte for byte. The credential file is the uploaded one, apart from `display[0].background_image.uri` (next points).
+- A template loads nothing by address. The Background comes only through `$backgroundImage`; a template's own addresses aren't rewritten anywhere (template-sync rewrites the credential file only), and anything a template loads by address answers 422 in VC Lab.
 - The config id must be the credential file's `credential_config_key_id` (template-sync stores the file under that key); export answers 400 naming both when they differ. Choosing a credential file fills the config id field from its key.
-- With a Background, the credential file's `display[0].background_image.uri` is `<VDR>/templates/<config id>/<version>/background.png`. Without one, no `background.png` is written and the address is left as it was (rewritten like any other).
+- With a Background, the credential file's `display[0].background_image.uri` is `http://vdr.localhost/templates/<config id>/<version>/background.png`. Without one, no `background.png` is written and the address is left as it was.
 - `manifest.json` holds `format` (`vc-lab-package`), `formatVersion`, `credentialConfigId`, `version`, `vdrAddress` and `components`: one `{role, path, deploy}` for each of `template`, `background`, `credential` and `sample`. The sample has `deploy: false`.
-- Load Package accepts exactly this layout and turns the manifest's VDR address back into `http://vdr.localhost` in the template and the credential file. The set previews the same as the one exported; it is not byte-identical (`cdn.localhost` is `vdr.localhost` again, and `background_image.uri` stays set).
+- Load Package accepts exactly this layout and gives the files back as they are, so the set previews the same as the one exported.
 - Placing the files stays by hand. Mimoto reads the template under a fixed name, `<issuer>-<config id>-template.html`, so copy `template.html` to that name until a version pointer exists.
 
 Placing a Package on the local stack, printing it from the Wallet and comparing the print with VC Lab's PDF is section 6 of [Print from the Wallet](../../docs/guides/print-from-the-wallet.md): the credential file goes in through template-sync, and Certify serves it once recreated. Placing one on dev is that guide's "Running it on dev", item 9.

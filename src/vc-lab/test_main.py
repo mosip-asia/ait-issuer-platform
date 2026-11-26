@@ -128,7 +128,6 @@ def _zip_files(zip_bytes: bytes) -> dict[str, bytes]:
 
 
 # What the dashboard asks Export Package for, with the VDR address as a person types it (trailing slash and all).
-LOCAL_VDR = "http://vdr.localhost"
 EXPORT = {"config_id": "example-record", "version": "v1", "vdr_address": "https://vdr.example.org/"}
 PACKAGE_DIR = "vdr/templates/example-record/v1"
 
@@ -341,18 +340,13 @@ def test_export_package_lays_the_files_out_as_the_vdr_and_certify_take_them() ->
                                      "sample/adapter-response.json"])
     assert zipped[f"{PACKAGE_DIR}/background.png"] == paper
 
-    template = zipped[f"{PACKAGE_DIR}/template.html"].decode()
-    assert "https://vdr.example.org/logo.png" in template and "https://vdr.example.org/fonts/f.css" in template
-    assert "localhost" not in template, "every local address rewritten, the trailing slash removed"
-    assert template == LOCAL_TEMPLATE.replace("http://cdn.localhost", "https://vdr.example.org") \
-        .replace("http://vdr.localhost", "https://vdr.example.org")
+    assert zipped[f"{PACKAGE_DIR}/template.html"] == LOCAL_TEMPLATE.encode(), "the template, byte for byte"
 
     credential = json.loads(zipped["certify/credentials/example-record.json"])
-    assert "localhost" not in json.dumps(credential)
-    assert credential["display"][0]["logo"] == {"url": "https://vdr.example.org/logo.png"}
+    assert credential["display"][0]["logo"] == {"url": "http://cdn.localhost/logo.png"}, "local addresses stay"
     assert credential["display"][0]["background_image"]["uri"] == \
-        "https://vdr.example.org/templates/example-record/v1/background.png"
-    assert credential["vc_template"] == CREDENTIAL["vc_template"], "only the addresses and the Background's change"
+        "http://vdr.localhost/templates/example-record/v1/background.png"
+    assert credential["vc_template"] == CREDENTIAL["vc_template"], "only the Background's address changes"
 
     assert json.loads(zipped["sample/adapter-response.json"]) == SAMPLE, "the sample goes as it is"
 
@@ -375,8 +369,8 @@ def test_export_without_a_background_writes_none_and_leaves_the_credential_files
     zipped = _zip_files(_export(files).content)
     assert f"{PACKAGE_DIR}/background.png" not in zipped
     credential = json.loads(zipped["certify/credentials/example-record.json"])
-    assert credential["display"][0]["background_image"]["uri"] == "https://vdr.example.org/old/background.png", \
-        "as it was, with only the local address rewritten"
+    assert credential["display"][0]["background_image"]["uri"] == "http://vdr.localhost/old/background.png", \
+        "as it was"
     manifest = json.loads(zipped[f"{PACKAGE_DIR}/manifest.json"])
     assert [c["role"] for c in manifest["components"]] == ["template", "credential", "sample"]
     bare = json.loads(_zip_files(_export(_set()).content)["certify/credentials/example-record.json"])
@@ -391,10 +385,10 @@ def test_the_backgrounds_address_goes_into_the_credential_file_and_a_templates_a
     files = _set(template=("record.html", template.encode()), background=("background.png", _png()))
     zipped = _zip_files(_export(files, version="v2").content)
     exported = zipped["vdr/templates/example-record/v2/template.html"].decode()
-    assert exported == template.replace(LOCAL_VDR, "https://vdr.example.org"), "only the local host, rewritten"
+    assert exported == template, "as uploaded"
     credential = json.loads(zipped["certify/credentials/example-record.json"])
     assert credential["display"][0]["background_image"]["uri"] == \
-        "https://vdr.example.org/templates/example-record/v2/background.png"
+        "http://vdr.localhost/templates/example-record/v2/background.png"
 
 
 def test_the_config_id_must_be_the_credential_files_key() -> None:
@@ -419,7 +413,7 @@ def test_a_background_image_that_is_not_an_object_is_replaced_by_the_address() -
         assert res.status_code == 200, (value, res.text)
         written = json.loads(_zip_files(res.content)["certify/credentials/example-record.json"])
         assert written["display"][0]["background_image"] == {
-            "uri": "https://vdr.example.org/templates/example-record/v1/background.png"}, value
+            "uri": "http://vdr.localhost/templates/example-record/v1/background.png"}, value
 
 
 def test_export_asks_for_a_config_id_a_version_and_an_address() -> None:
@@ -431,7 +425,7 @@ def test_export_asks_for_a_config_id_a_version_and_an_address() -> None:
     assert res.status_code == 400, "version and address are asked for"
 
 
-def test_a_package_reads_back_as_the_set_with_the_vdr_address_turned_back_to_local() -> None:
+def test_a_package_reads_back_as_the_set_it_holds() -> None:
     paper = _png()
     files = _set(template=("record.html", LOCAL_TEMPLATE.encode()), credential=("record.json", _json(LOCAL_CREDENTIAL)),
                  background=("background.png", paper))
@@ -444,13 +438,13 @@ def test_a_package_reads_back_as_the_set_with_the_vdr_address_turned_back_to_loc
     assert sorted(got) == ["background", "credential", "sample", "template"]
     assert got["background"] == ("background.png", paper)
     assert got["sample"] == ("adapter-response.json", _json(SAMPLE))
-    assert got["template"] == ("template.html", LOCAL_TEMPLATE.replace("http://cdn.localhost", LOCAL_VDR).encode()), \
-        "local addresses again; cdn.localhost stays the VDR's"
+    assert got["template"] == ("template.html", LOCAL_TEMPLATE.encode()), "as exported, with no replacement"
+    zipped = _zip_files(package)
+    assert got["credential"] == ("example-record.json", zipped["certify/credentials/example-record.json"])
     credential = json.loads(got["credential"][1])
-    assert got["credential"][0] == "example-record.json"
-    assert credential["display"][0]["logo"] == {"url": "http://vdr.localhost/logo.png"}
+    assert credential["display"][0]["logo"] == {"url": "http://cdn.localhost/logo.png"}
     assert credential["display"][0]["background_image"]["uri"] == \
-        "http://vdr.localhost/templates/example-record/v1/background.png", "stays set, local"
+        "http://vdr.localhost/templates/example-record/v1/background.png"
     assert credential["vc_template"] == CREDENTIAL["vc_template"]
     # What was read exports to the same Package: the round trip is stable.
     again = _export(got, config_id="example-record", version="v1", vdr_address="https://vdr.example.org").content
@@ -665,22 +659,24 @@ def test_a_background_that_is_not_a_pdf_png_or_jpeg_answers_400_with_the_reason(
     assert client.post("/api/background", files={}).status_code == 400
 
 
-def test_export_with_a_vdr_address_under_the_local_one_writes_it_once_in_the_template_and_the_credential() -> None:
-    vdr = "http://vdr.localhost:8088"
-    template = LOCAL_TEMPLATE.replace("</body>", '<img src="http://vdr.localhost/templates/old/v0/background.png"/></body>')
-    files = _set(template=("record.html", template.encode()), credential=("record.json", _json(LOCAL_CREDENTIAL)),
-                 background=("background.png", _png()))
-    res = _export(files, vdr_address=vdr)
-    assert res.status_code == 200, res.text
-    zipped = _zip_files(res.content)
-    template = zipped[f"{PACKAGE_DIR}/template.html"].decode()
-    credential = zipped["certify/credentials/example-record.json"].decode()
-    assert f"{vdr}:8088" not in template + credential, "the VDR address written twice"
-    assert f'src="{vdr}/templates/old/v0/background.png"' in template
-    address = f"{vdr}/templates/example-record/v1/background.png"
-    assert json.loads(credential)["display"][0]["background_image"]["uri"] == address
-    assert f"{vdr}/logo.png" in template and f"{vdr}/fonts/f.css" in template
-    assert json.loads(credential)["display"][0]["logo"] == {"url": f"{vdr}/logo.png"}
+def test_a_package_keeps_local_addresses_whatever_the_vdr_address() -> None:
+    """A Package is Installation-neutral (ADR 0003): its template and credential file keep http://vdr.localhost and
+    http://cdn.localhost, the VDR address is a label in the manifest only, and a read-back gives the same files."""
+    files = _set(template=("record.html", LOCAL_TEMPLATE.encode()), credential=("record.json", _json(LOCAL_CREDENTIAL)))
+    for vdr in ("https://vdr.example.org", "http://vdr.localhost:8088", "http://vdr"):
+        res = _export(files, vdr_address=vdr)
+        assert res.status_code == 200, (vdr, res.text)
+        zipped = _zip_files(res.content)
+        template = zipped[f"{PACKAGE_DIR}/template.html"]
+        credential = zipped["certify/credentials/example-record.json"]
+        assert template == LOCAL_TEMPLATE.encode(), vdr
+        assert b"http://cdn.localhost/logo.png" in template and b"http://vdr.localhost/fonts/f.css" in template
+        display = json.loads(credential)["display"][0]
+        assert display["logo"] == {"url": "http://cdn.localhost/logo.png"}, vdr
+        assert display["background_image"] == {"uri": "http://vdr.localhost/old/background.png"}, vdr
+        assert json.loads(zipped[f"{PACKAGE_DIR}/manifest.json"])["vdrAddress"] == vdr
+        back = _read_set(res.content)
+        assert back["template"][1] == template and back["credential"][1] == credential, (vdr, "no replacement on Load")
 
 
 def test_the_quick_view_is_the_renderers_html_as_it_is() -> None:
@@ -730,28 +726,6 @@ def test_a_png_or_jpeg_whose_metadata_mentions_a_pdf_is_still_an_image() -> None
     Image.new("RGB", (40, 60), (200, 30, 30)).save(out, "JPEG", comment=b"made from %PDF-1.4 scan")
     jpeg = _background("paper.jpg", out.getvalue())
     assert jpeg.status_code == 200 and _image(jpeg.content).size == (40, 60), jpeg.text
-
-
-def test_export_and_read_back_with_a_vdr_address_that_starts_a_local_one() -> None:
-    vdr = "http://vdr"  # the VDR's Compose service name, the start of http://vdr.localhost
-    template = TEMPLATE.replace("</body>", '<img src="http://vdr.localhost/templates/x/background.png"/>'
-                                '<img src="http://vdr.localhost/assets/logo.png"/><img src="http://cdn.localhost/l.png"/></body>')
-    credential = {**CREDENTIAL, "display": [{**CREDENTIAL["display"][0], "logo": {"url": "http://vdr.localhost/assets/logo.png"}}]}
-    files = _set(template=("record.html", template.encode()), credential=("record.json", _json(credential)),
-                 background=("background.png", _png()))
-    res = _export(files, vdr_address=vdr)
-    assert res.status_code == 200, res.text
-    zipped = _zip_files(res.content)
-    exported = zipped[f"{PACKAGE_DIR}/template.html"].decode()
-    exported_credential = zipped["certify/credentials/example-record.json"].decode()
-    assert "localhost" not in exported + exported_credential, "every local address is the VDR address"
-    for address in ("http://vdr/templates/x/background.png", "http://vdr/assets/logo.png", "http://vdr/l.png"):
-        assert f'src="{address}"' in exported, address
-    back = _read_set(res.content)
-    read_template, read_credential = back["template"][1].decode(), back["credential"][1].decode()
-    assert "localhost.localhost" not in read_template + read_credential
-    assert 'src="http://vdr.localhost/assets/logo.png"' in read_template
-    assert json.loads(read_credential)["display"][0]["logo"] == {"url": "http://vdr.localhost/assets/logo.png"}
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -1036,7 +1010,8 @@ def test_a_template_that_loads_the_background_by_its_vdr_address_answers_422_nam
 def test_a_loaded_package_previews_the_same_as_the_original() -> bool:
     if _skip_without_renderer("test_a_loaded_package_previews_the_same_as_the_original"):
         return False
-    original = _set(template=("record.html", DRAWS_BACKGROUND), background=("background.png", _png(40, 60)))
+    original = _set(template=("record.html", DRAWS_BACKGROUND), credential=("record.json", _json(LOCAL_CREDENTIAL)),
+                    background=("background.png", _png(40, 60)))
     loaded = _read_set(_export(original).content)
     for path in ("/preview", "/preview.pdf"):
         assert _post(path, loaded).status_code == 200, path
@@ -1074,7 +1049,7 @@ def main() -> None:
         test_a_sample_named_manifest_json_still_reads_back,
         test_a_background_image_that_is_not_an_object_is_replaced_by_the_address,
         test_export_asks_for_a_config_id_a_version_and_an_address,
-        test_a_package_reads_back_as_the_set_with_the_vdr_address_turned_back_to_local,
+        test_a_package_reads_back_as_the_set_it_holds,
         test_a_package_without_a_background_reads_back_without_one,
         test_read_package_accepts_only_the_exported_layout,
         test_rejects_wrong_files,
@@ -1089,11 +1064,10 @@ def main() -> None:
         test_a_pdf_background_draws_its_signature_field,
         test_a_cmyk_jpeg_background_is_converted_through_its_profile_and_carries_none,
         test_a_background_that_is_not_a_pdf_png_or_jpeg_answers_400_with_the_reason,
-        test_export_with_a_vdr_address_under_the_local_one_writes_it_once_in_the_template_and_the_credential,
+        test_a_package_keeps_local_addresses_whatever_the_vdr_address,
         test_the_quick_view_is_the_renderers_html_as_it_is,
         test_a_pdf_background_with_bytes_before_the_header_is_still_a_pdf,
         test_a_png_or_jpeg_whose_metadata_mentions_a_pdf_is_still_an_image,
-        test_export_and_read_back_with_a_vdr_address_that_starts_a_local_one,
         test_grid_from_credential_subject_in_the_pdf_and_the_quick_view,
         test_two_visitors_each_preview_their_own_set,
         test_velocity_and_mapping_errors_answer_422_with_the_engines_message,

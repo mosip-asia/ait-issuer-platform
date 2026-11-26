@@ -83,7 +83,8 @@ def find_seed_sql_path():
 
 def rewrite_local_addresses(text, vdr_base):
     """The local stack's VDR and CDN addresses in `text`, as the VDR address (without its trailing slash).
-    template-sync and VC Lab's Export Package both use it, so a file means the same on either path.
+    template-sync is the one place that uses it: a credential file, a VC Lab Package's included, keeps the local
+    addresses until template-sync stores it in Certify (docs/adr/0003-a-package-is-installation-neutral.md).
     A local address is the whole host: http://vdr.localhost.example.org is not one. Where `vdr_base` and a local address
     both start at one place, the longer is the one there, so an address already written as `vdr_base` stays as it is
     (`vdr_base` may itself start with http://vdr.localhost) and a base that starts one (http://vdr, the VDR's Compose

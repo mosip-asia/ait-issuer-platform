@@ -1,7 +1,9 @@
 """The Package: a set laid out as it goes onto the VDR and into Certify, and read back as a set.
 
-Part of the vc-lab module. Export Package writes, for one credential configuration id and version and the VDR address
-the staff member gives:
+Part of the vc-lab module. Export Package writes, for one credential configuration id and version, the files as
+uploaded, keeping their local addresses (http://vdr.localhost, http://cdn.localhost); template-sync makes the
+credential file the Installation's when it stores it (ADR 0003). The VDR address the staff member gives is a label in
+the manifest only. The layout:
 
     vdr/templates/<config id>/<version>/template.html
     vdr/templates/<config id>/<version>/background.png      (when a Background is loaded)
@@ -14,12 +16,13 @@ manifest.json names the config id, the version, the VDR address and each compone
     {"format": "vc-lab-package", "formatVersion": 1, "credentialConfigId": ..., "version": ..., "vdrAddress": ...,
      "components": [{"role": "template" | "background" | "credential" | "sample", "path": ..., "deploy": true|false}]}
 
-read() accepts exactly that layout and turns the VDR address back into http://vdr.localhost, so the set it gives
-previews as the exported one did. Nothing here touches the disk.
+read() accepts exactly that layout and gives the files back as they are, so the set previews as the exported one did.
+Nothing here touches the disk.
 """
 
 from __future__ import annotations
 
+import copy
 import io
 import json
 import posixpath
@@ -28,10 +31,9 @@ import zipfile
 from typing import Any
 from urllib.parse import urlparse
 
-from certify_template_sync.sync import rewrite_local_addresses
 from labset import MAX_UPLOAD, LabSet, safe_filename
 
-LOCAL_VDR = "http://vdr.localhost"
+LOCAL_VDR = "http://vdr.localhost"  # the Background's fixed path is under the local VDR
 FORMAT = "vc-lab-package"
 ROLES = ("template", "background", "credential", "sample")
 _MANIFEST_PATH = re.compile(r"vdr/templates/[^/]+/[^/]+/manifest\.json")
@@ -53,25 +55,27 @@ def export(lab: LabSet, config_id: str, version: str, vdr_address: str) -> bytes
                          "must be the same")
 
     base = f"vdr/templates/{config_id}/{version}"
-    background_address = f"{vdr}/templates/{config_id}/{version}/background.png"
     paths = {
         "template": f"{base}/template.html",
         "background": f"{base}/background.png",
         "credential": f"certify/credentials/{config_id}.json",
         "sample": f"sample/{_sample_name(lab.sample.filename)}.json",
     }
-    credential = json.loads(rewrite_local_addresses(json.dumps(lab.credential.value, ensure_ascii=False), vdr))
+    # The files keep the local addresses; template-sync makes the credential file the Installation's (ADR 0003).
+    credential = copy.deepcopy(lab.credential.value)
     if lab.background:
         if not credential.get("display"):
             credential["display"] = [{}]
         first = credential["display"][0]
         old = first.get("background_image")
-        first["background_image"] = {**(old if isinstance(old, dict) else {}), "uri": background_address}
+        first["background_image"] = {**(old if isinstance(old, dict) else {}),
+                                     "uri": f"{LOCAL_VDR}/templates/{config_id}/{version}/background.png"}
     # A template draws the Background as $backgroundImage, which the Wallet fills from display[0].background_image.uri.
     contents = {
-        "template": rewrite_local_addresses(lab.template.value, vdr).encode("utf-8"),
+        "template": lab.template.data,
         "background": lab.background.data if lab.background else None,
-        "credential": json.dumps(credential, indent=2, ensure_ascii=False).encode("utf-8"),
+        "credential": lab.credential.data if credential == lab.credential.value
+        else json.dumps(credential, indent=2, ensure_ascii=False).encode("utf-8"),
         "sample": lab.sample.data,
     }
     present = [role for role in ROLES if contents[role] is not None]
@@ -127,15 +131,9 @@ def read(package: bytes) -> tuple[dict[str, tuple[str, bytes]], dict[str, str]]:
         if absent := sorted(set(listed.values()) - set(names)):
             raise ValueError(f"the manifest lists {absent[0]!r}, which the package does not hold")
 
-        vdr = manifest["vdrAddress"]
-        files: dict[str, tuple[str, bytes]] = {}
-        for role, path in listed.items():
-            data = z.read(path)
-            if role in ("template", "credential"):
-                data = data.decode("utf-8").replace(vdr, LOCAL_VDR).encode("utf-8")
-            files[role] = (posixpath.basename(path), data)
+        files = {role: (posixpath.basename(path), z.read(path)) for role, path in listed.items()}
     LabSet.from_files(files)
-    return files, {"configId": config_id, "version": version, "vdrAddress": vdr}
+    return files, {"configId": config_id, "version": version, "vdrAddress": manifest["vdrAddress"]}
 
 
 def _manifest(data: bytes) -> dict[str, Any]:
