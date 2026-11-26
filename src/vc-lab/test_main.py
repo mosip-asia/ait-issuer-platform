@@ -826,6 +826,20 @@ def test_an_unbalanced_template_answers_422_with_velocitys_message() -> bool:
     return True
 
 
+def test_a_vc_template_nested_too_deep_answers_422() -> bool:
+    if _skip_without_renderer("test_a_vc_template_nested_too_deep_answers_422"):
+        return False
+    deep = "#if(true)" * 20000 + "x" + "#end" * 20000
+    mapping = {**CREDENTIAL["vc_template"], "credentialSubject": {
+        **CREDENTIAL["vc_template"]["credentialSubject"], "thesisTitle": deep}}
+    files = _set(credential=("deep.json", _json({**CREDENTIAL, "vc_template": mapping})))
+    for path in ("/preview", "/preview.pdf"):
+        res = _post(path, files)
+        assert res.status_code == 422, (path, res.status_code, res.text[:200])
+        assert "too deep" in res.json()["detail"], (path, res.json())
+    return True
+
+
 def test_a_record_certify_refuses_answers_422_with_the_plugins_reason() -> bool:
     if _skip_without_renderer("test_a_record_certify_refuses_answers_422_with_the_plugins_reason"):
         return False
@@ -1079,6 +1093,7 @@ def main() -> None:
         test_two_visitors_each_preview_their_own_set,
         test_velocity_and_mapping_errors_answer_422_with_the_engines_message,
         test_an_unbalanced_template_answers_422_with_velocitys_message,
+        test_a_vc_template_nested_too_deep_answers_422,
         test_a_record_certify_refuses_answers_422_with_the_plugins_reason,
         test_a_template_named_in_any_script_previews,
         test_sample_without_credential_subject,
