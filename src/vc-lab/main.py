@@ -157,8 +157,7 @@ def _render(lab: LabSet, output: Literal["html", "pdf"]) -> bytes:
         raise HTTPException(status_code=503, detail="VC Lab has no renderer: set RENDERER_URL (Compose sets it)")
     request = {
         "template": lab.template.value,
-        # The Adapter's answer as uploaded, so the renderer reads it as the plugin does (strict JSON). An answer with
-        # a credentialSubject object is read as that object.
+        # The Adapter's answer as uploaded, so the renderer reads it as the plugin does (strict JSON, the flat record).
         "record": lab.sample.data.decode("utf-8-sig"),
         # The vc_template through template-sync's own transform: the text Certify stores and evaluates.
         "vcTemplate": base64.b64decode(build_vc_template_base64(lab.credential.value["vc_template"])).decode("utf-8"),

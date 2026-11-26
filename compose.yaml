@@ -31,20 +31,8 @@ services:
     image: ghcr.io/mosip-asia/ait-vc:${IMAGE_TAG}
     command: ["python", "src/vc-lab/main.py"]
     container_name: vc-lab
-    environment:
-      - INSTALLATION=${INSTALLATION}
+    environment:  # VC Lab reads nothing of an Installation: its set comes with each call
       - RENDERER_URL=http://renderer:8080
-      - CREDENTIALS_DIR=/app/credentials
-      - CONTEXTS_DIR=/app/vdr/contexts
-      - ASSETS_DIR=/app/vdr/assets
-      - TEMPLATES_DIR=/app/vdr/templates
-      - BASE_TEMPLATES_DIR=/app/base_templates
-    volumes:
-      - ./deploy/${INSTALLATION}/certify/credentials:/app/credentials:ro
-      - ./deploy/${INSTALLATION}/vdr/contexts:/app/vdr/contexts:ro
-      - ./deploy/${INSTALLATION}/vdr/assets:/app/vdr/assets:ro
-      - ./deploy/${INSTALLATION}/vdr/templates:/app/vdr/templates:ro
-      - ./deploy/base/vdr/templates:/app/base_templates:ro
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.vclab.rule=${TRAEFIK_VCLAB_RULE}"

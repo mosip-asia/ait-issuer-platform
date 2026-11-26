@@ -10,7 +10,7 @@ What each file is, and how a value travels from SIS to the page, is in [the temp
 |---|---|---|
 | `template` | the HTML (Velocity) render template | the whole file |
 | `credential` | Certify's whole credential configuration file | its `vc_template` (the mapping) and `display`, as Certify and the Wallet read them |
-| `sample` | the Adapter's response, exactly as the Adapter sends it | its `credentialSubject`, or the whole file when it has none |
+| `sample` | the Adapter's response, exactly as the Adapter sends it: the flat record | the whole file; one with a `credentialSubject` is a credential, refused with 422 as the plugin refuses it |
 | `background` (optional) | the organisation's pre-printed paper, as the PNG the Wallet draws (`background.png`) | the whole picture, as the template's `$backgroundImage` |
 
 Choosing a file replaces that slot only; loading a Package replaces the whole set. Each file is checked on every call: the background must be a PNG, the credential file JSON with a `vc_template` object (holding a `credentialSubject` object), the sample a JSON object, and the template UTF-8 text. VC Lab checks nothing inside a template: Velocity does, in the renderer (an unbalanced `#if` answers 422 with its line and column). One request may carry at most 20 MB.
@@ -19,7 +19,7 @@ Choosing a file replaces that slot only; loading a Package replaces the whole se
 
 VC Lab renders nothing itself. It sends the set to the renderer (`src/renderer`, at `RENDERER_URL`; ADR 0002), VC Lab's own copy of `ait-mimoto`'s print code and Certify's claim mapping:
 
-1. The record is the sample's `credentialSubject`, or the whole sample.
+1. The record is the whole sample, as the Adapter sends it.
 2. The credential file's `vc_template` goes through template-sync's own transform (`build_vc_template_base64`, which unquotes `"courses": ${courses}`), so the renderer evaluates the text Certify stores.
 3. The renderer maps the record to claims as Certify does, then evaluates the template with the variables `ait-mimoto` gives (`$credentialSubject`, `$rowProperties`, `$titleName`, `$qrCodeImage`, ...), and hands back that HTML (the quick view) or the PDF iText prints from it (what the Wallet prints). Both come from the same evaluation. The renderer's README lists the variables and where it differs from Certify and `ait-mimoto`.
 
@@ -54,28 +54,29 @@ The quick view draws it too, as the same data URI. A template draws the Backgrou
 
 ## The Package
 
-Export Package turns the set into the files the VDR and Certify take, for one credential configuration id and version and the VDR address you type (`https://vdr.example.org`; a trailing slash is dropped). It is also your save file: Load Package gives the set back.
+Export Package turns the set into the files the VDR and Certify take, for one credential configuration id and version. It is also your save file: Load Package gives the set back. A Package is not tied to one Installation (ADR 0003): its files keep the local stack's addresses, `http://vdr.localhost` and `http://cdn.localhost`, and template-sync makes the credential file the Installation's (its `VDR_BASE_URL`) when it stores it in Certify. Export also asks for the VDR address (`https://vdr.example.org`; a trailing slash is dropped), but only as a label in `manifest.json`: no file depends on it.
 
 ```
 vdr/templates/<config id>/<version>/template.html
 vdr/templates/<config id>/<version>/background.png      only when a Background is loaded
 vdr/templates/<config id>/<version>/manifest.json
 certify/credentials/<config id>.json
-sample/<name>.json                                      <name> is the uploaded sample's name; never deployed
+sample/sample.json                                      whatever the uploaded sample is called; never deployed
 ```
 
-- `http://vdr.localhost` and `http://cdn.localhost` in the template and the credential file become the VDR address, by the function template-sync uses (`certify_template_sync.sync.rewrite_local_addresses`).
+- `template.html` is the uploaded template, byte for byte. The credential file is the uploaded one, apart from `display[0].background_image.uri` (next points).
+- A template loads nothing by address. The Background comes only through `$backgroundImage`; a template's own addresses aren't rewritten anywhere (template-sync rewrites the credential file only), and anything a template loads by address answers 422 in VC Lab.
 - The config id must be the credential file's `credential_config_key_id` (template-sync stores the file under that key); export answers 400 naming both when they differ. Choosing a credential file fills the config id field from its key.
-- With a Background, the credential file's `display[0].background_image.uri` is `<VDR>/templates/<config id>/<version>/background.png`. Without one, no `background.png` is written and the address is left as it was (rewritten like any other).
+- With a Background, the credential file's `display[0].background_image.uri` is the fixed path, `http://vdr.localhost/templates/<config id>/<version>/background.png` (other keys of `background_image` stay). Without one, no `background.png` is written, and a `uri` on that fixed path for this config id (any version: a Background since removed) is dropped, with `background_image` if nothing else is left in it. Any other `uri`, such as the hackathon files' card image `http://vdr.localhost/assets/AIT_globe.png`, stays as it was.
 - `manifest.json` holds `format` (`vc-lab-package`), `formatVersion`, `credentialConfigId`, `version`, `vdrAddress` and `components`: one `{role, path, deploy}` for each of `template`, `background`, `credential` and `sample`. The sample has `deploy: false`.
-- Load Package accepts exactly this layout and turns the manifest's VDR address back into `http://vdr.localhost` in the template and the credential file. The set previews the same as the one exported; it is not byte-identical (`cdn.localhost` is `vdr.localhost` again, and `background_image.uri` stays set).
+- Load Package accepts exactly this layout and gives the files back as they are, so the set previews the same as the one exported.
 - Placing the files stays by hand. Mimoto reads the template under a fixed name, `<issuer>-<config id>-template.html`, so copy `template.html` to that name until a version pointer exists.
 
 Placing a Package on the local stack, printing it from the Wallet and comparing the print with VC Lab's PDF is section 6 of [Print from the Wallet](../../docs/guides/print-from-the-wallet.md): the credential file goes in through template-sync, and Certify serves it once recreated. Placing one on dev is that guide's "Running it on dev", item 9.
 
 ## Templates the preview refuses
 
-The renderer loads only `data:` URIs, so a template that loads anything by address, a font from the VDR included (`@font-face` with `http://vdr.localhost/templates/fonts/...`), answers 422 naming it, though the Wallet would print it. Use the 14 built-in fonts in a template you preview here. A template that calls a method on Java's reflection or system classes prints the call as written, in the preview and in the Wallet alike (both run Velocity with `SecureUberspector`). That holds for the template only: a credential file's `vc_template` that does it previews the call as written, while Certify, which runs no `SecureUberspector`, evaluates it (`src/renderer/README.md`, "Where it differs from Certify").
+The renderer loads only `data:` URIs, so a template that loads anything by address, a font from the VDR included (`@font-face` with `http://vdr.localhost/templates/fonts/...`), answers 422 naming it, though the Wallet would print it. Use the 14 built-in fonts in a template you preview here. A template that calls a method on Java's reflection or system classes gets null for the call, in the preview and in the Wallet alike (both run Velocity with `SecureUberspector`): printed, the call shows as written, and inside `#if` or `#foreach` the template takes the other branch. That holds for the template only: a credential file's `vc_template` that does it previews with 200 but differently from what Certify, which runs no `SecureUberspector`, signs (`src/renderer/README.md`, "Where it differs from Certify").
 
 ## Running
 

@@ -102,6 +102,9 @@ final class CertifyMapping {
             engine.evaluate(new VelocityContext(params), out, TEMPLATE_NAME, vcTemplate);
         } catch (VelocityException e) {
             throw new Refused("Certify can't evaluate the credential file's vc_template: " + e.getMessage());
+        } catch (StackOverflowError e) {
+            // Velocity parses and renders nested blocks recursively, as in the print step.
+            throw new Refused("the credential file's vc_template nests its blocks too deep to evaluate");
         }
         JSONObject credential;
         try {
