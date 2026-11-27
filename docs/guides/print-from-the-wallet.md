@@ -375,6 +375,8 @@ The VDR's `/templates/` block carries `charset utf-8;` in `deploy/base/vdr-nginx
 
 A proxy or CDN between Mimoto and the VDR may honour the VDR's 7-day `Cache-Control` and serve an old template. Mimoto also caches Certify's metadata, 60 minutes by default (`cache.credential-issuer.wellknown.expiry-time-in-min`), so a Background address published into Certify may not show until then. The local Mimoto sets it to 0.
 
+On dev, serve `/templates/` with no cache (`Cache-Control: no-cache`), or a few minutes at most, and set Mimoto's Certify metadata cache (`cache.credential-issuer.wellknown.expiry-time-in-min`) to 0. Dev is for seeing a template change at the next print, and only a few people use it.
+
 ### Where Mimoto looks for the template and the Background
 
 How a deployment places these is its own choice. Mimoto looks here:
