@@ -36,7 +36,7 @@ The dashboard (`/`) has a file input per slot plus Load Package, the list of loa
 | `POST /api/package/read` | multipart with one `package` (a zip from Export Package); answers `{set: {slot: {filename, data}}, export: {configId, version, vdrAddress}}`, `data` in base64, for the dashboard to hold. 400 for anything but the exported layout |
 | `GET /health` | liveness |
 
-Rendering needs the template, the credential file and the sample; without them both previews answer 409, naming what is missing. A wrong file answers 400 with the reason. A template Velocity can't evaluate, or a sample or mapping Certify would refuse, answers 422 with the renderer's message (a Velocity error names its line and column). Without `RENDERER_URL` the previews answer 503.
+Rendering needs the template, the credential file and the sample; without them both previews answer 409, naming what is missing. A wrong file answers 400 with the reason. A template Velocity can't evaluate, a sample or mapping Certify would refuse, or a mapping that names a reference the sample lacks (stricter than Certify), answers 422 with the renderer's message (a Velocity error names its line and column). Without `RENDERER_URL` the previews answer 503.
 
 ## The Background (`background.py`)
 
@@ -76,7 +76,7 @@ Placing a Package on the local stack, printing it from the Wallet and comparing 
 
 ## Templates the preview refuses
 
-The renderer loads only `data:` URIs, so a template that loads anything by address, a font from the VDR included (`@font-face` with `http://vdr.localhost/templates/fonts/...`), answers 422 naming it, though the Wallet would print it. Use the 14 built-in fonts in a template you preview here. A template that calls a method on Java's reflection or system classes gets null for the call, in the preview and in the Wallet alike (both run Velocity with `SecureUberspector`): printed, the call shows as written, and inside `#if` or `#foreach` the template takes the other branch. That holds for the template only: a credential file's `vc_template` that does it previews with 200 but differently from what Certify, which runs no `SecureUberspector`, signs (`src/renderer/README.md`, "Where it differs from Certify").
+The renderer loads only `data:` URIs, so a template that loads anything by address, a font from the VDR included (`@font-face` with `http://vdr.localhost/templates/fonts/...`), answers 422 naming it, though the Wallet would print it. Use the 14 built-in fonts in a template you preview here. A template that calls a method on Java's reflection or system classes, or names a reference Velocity can't resolve (a typo such as `$credentialSubject.nmae`), answers 422 with Velocity's message, and the Wallet's print fails on it alike (both run Velocity with `SecureUberspector` and strict references, `src/mimoto/README.md`). A credential file's `vc_template` that does it answers 422 too, though Certify, which runs neither setting, signs it: the preview is stricter than Certify there (`src/renderer/README.md`, "Where it differs from Certify").
 
 ## Running
 

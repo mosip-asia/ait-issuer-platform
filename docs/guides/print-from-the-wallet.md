@@ -15,7 +15,7 @@ Everything here is local. The Mimoto overlay (`compose.mimoto.yaml`) is never us
 
 ## What `ait-mimoto` is
 
-Upstream Mimoto turns every claim into one string before the template sees it, and every list of objects becomes `""`. So a template can't loop over `courses`. `ait-mimoto` is upstream `injistack/mimoto:0.21.0` with two changes (`src/mimoto/`). First, the template also gets the claims as Mimoto received them, as `$credentialSubject`. `$rowProperties` and every other variable are unchanged, so a template written for upstream Mimoto prints the same. Second, the print step runs Velocity with `SecureUberspector`, so a template that reaches for Java internals (for example `$x.getClass().forName("java.lang.Runtime")`) prints its reference unevaluated instead of running it. VC Lab previews with the same setting (ADR 0002).
+Upstream Mimoto turns every claim into one string before the template sees it, and every list of objects becomes `""`. So a template can't loop over `courses`. `ait-mimoto` is upstream `injistack/mimoto:0.21.0` with two changes (`src/mimoto/`). First, the template also gets the claims as Mimoto received them, as `$credentialSubject`. `$rowProperties` and every other variable are unchanged, so a template written for upstream Mimoto prints the same. Second, the print step runs Velocity with `SecureUberspector` and strict references, so a template that reaches for Java internals (for example `$x.getClass().forName("java.lang.Runtime")`) fails to print instead of running it, and so does a template with a reference Velocity can't resolve, such as a typo. VC Lab previews with the same settings (ADR 0002).
 
 That lets a template loop over `courses`; it doesn't change what any template prints by itself. The grid prints only once the template on the VDR uses the convention in "Template conventions". The committed demo template (`deploy/ait/vdr/templates/AITUniversity-ait-transcript-template.html`) has no `$credentialSubject` branch: it prints `courseList` on either image. The print check swaps in a test template that does, and puts the committed one back.
 
@@ -277,7 +277,7 @@ What Mimoto does to a credential decides how a template is written (Velocity 1.7
   #end
   ```
 
-  **Use quiet references (`$!c.grade`, not `$c.grade`) for every field.** A missing or null value then prints an empty cell. A plain reference prints its own name, `$c.grade`, in the cell. `$credentialSubject` is the claims as received, so a template that prints from it decides what shows: `ait-mimoto` doesn't mask SD-JWT disclosures or drop the face there as it does for `$rowProperties`.
+  **Use quiet references (`$!c.grade`, not `$c.grade`) for every field.** A missing or null value then prints an empty cell. A plain reference to it fails the whole print on `ait-mimoto` (strict references, `src/mimoto/README.md`), and prints its own name, `$c.grade`, in the cell on upstream Mimoto. `$!` silences only a missing or null value: a variable that was never set (`$!nope`) fails the print still. `#if($x)` is fine on either. `$credentialSubject` is the claims as received, so a template that prints from it decides what shows: `ait-mimoto` doesn't mask SD-JWT disclosures or drop the face there as it does for `$rowProperties`.
 - **Every claim reaches the template** as `$rowProperties` (claim to display name to text), whether or not it has a display name, ordered by the credential file's `display_order` first. A list of text is joined with `", "`. Claims `display_order` leaves out come in Certify's internal (HashMap) order, so name every claim a template loops over in `display_order`. A list of objects is `""` there, which is why the grid reads `$credentialSubject`.
 - **A full-bleed Background needs two things.** Set `@page { margin: 0 }` and `body { margin: 0 }`, or iText's 36 pt page margin moves the image in from the edge. And wrap the layout in a page-sized `position: relative` box, with the image absolutely placed inside it. An `<img src="$backgroundImage">` placed straight in `<body>` is drawn above the page and is lost:
 
@@ -293,7 +293,7 @@ What Mimoto does to a credential decides how a template is written (Velocity 1.7
     <!-- layout -->
   </div>
   ```
-- **`#set` with a missing claim keeps the old value.** Velocity 1.7 leaves a variable as it was when `#set` is given null, so `#set($v = $rowProperties.get("department"))` for a claim the credential lacks leaves `$v` holding the previous claim's text: the box prints the wrong value. Set the variable to `""` first, as the `#set($courseList = "")` above does, and test `#if($v && $v.size() > 0)` after.
+- **`#set` with a missing claim keeps the old value on upstream Mimoto.** Velocity 1.7 leaves a variable as it was when `#set` is given null, so `#set($v = $rowProperties.get("department"))` for a claim the credential lacks leaves `$v` holding the previous claim's text: the box prints the wrong value. On `ait-mimoto` (strict references) `$v` becomes null instead, and printing it fails the print. Either way, set the variable to `""` first, as the `#set($courseList = "")` above does, and test `#if($v && $v.size() > 0)` after.
 - **Place a table through a `<div>`.** iText honours `position: absolute` with `left` and `top` on a `<div>` but not on a `<table>`, which lands at the page's top left. Put the table in an absolutely placed `<div>` and leave the table static.
 - **Images and fonts use absolute addresses.** Mimoto sets no base URL.
 - **Fonts:** only the 14 standard PDF fonts are built in, so Arial and Arial Narrow fall back. Any other font, Thai included, comes through `@font-face` with an absolute URL, see "Fonts" above for where the file goes, why git ignores it, and why VC Lab can't preview such a template.
@@ -311,7 +311,7 @@ Thas proves the Wallet's print here; Jo sets it up on dev and decides how. These
 
 Run `ghcr.io/mosip-asia/ait-mimoto` where a plain Mimoto would run `injistack/mimoto:0.21.0`, with the same configuration, files and ports. It pulls without a login. A release publishes `ait-mimoto:<tag>`, since `scripts/build.sh` builds it beside `ait-certify`: CI (`.github/workflows/ci.yml`) builds and pushes the images on a `v*` tag, or on a manual dispatch, tagged with the tag or branch name.
 
-**No published image has both changes yet.** `:latest` is published from commit `454e95e`, which has the first change only, not `SecureUberspector` (item 6). The first release cut after this work reaches `dev` publishes `ait-mimoto:<that tag>` with both, beside `ait-renderer:<that tag>` (item 7). Cutting that release is Thas's action; dev runs that tag.
+**No published image has both changes yet.** `:latest` is published from commit `454e95e`, which has the first change only, not `SecureUberspector` or strict references (item 6). The first release cut after this work reaches `dev` publishes `ait-mimoto:<that tag>` with both, beside `ait-renderer:<that tag>` (item 7). Cutting that release is Thas's action; dev runs that tag.
 
 **Why:** Mimoto 0.21 hands every list of objects to the template as `""`, so a template can't draw the course grid by term. `ait-mimoto` also hands the template the claims as received, as `$credentialSubject`, so a template can loop over `$credentialSubject.courses` (see "Template conventions"). The SIS Adapter sends nothing new: `courses` is already in contract 0.5.0.
 
@@ -386,27 +386,26 @@ How a deployment places these is its own choice. Mimoto looks here:
 
 CD's `git checkout -f` puts back any tracked file replaced in the checkout, so a template copied over the committed one lasts only until the next deploy.
 
-### 6. `ait-mimoto` runs templates with `SecureUberspector`
+### 6. `ait-mimoto` runs templates with `SecureUberspector` and strict references
 
-`ait-mimoto`'s second change: its print step runs Velocity with `SecureUberspector` (`src/mimoto/README.md`). Nothing to configure: it is in the image, once an image with it is published (item 1).
+`ait-mimoto`'s second change: its print step runs Velocity with `SecureUberspector` and `runtime.references.strict` (`src/mimoto/README.md`). Nothing to configure: it is in the image, once an image with it is published (item 1).
 
-**Why:** Mimoto runs whatever template the VDR holds, inside the container that holds the Wallet's client key and its database password. `SecureUberspector` refuses method calls on Java's reflection and system classes, so `$x.getClass().forName("java.lang.Runtime")` prints as written. VC Lab's renderer runs the same setting for the print template, so a print template that reaches for them shows the same in the preview as in the print. That holds for the print template only: the credential file's `vc_template` runs in Certify, whose Velocity has no `SecureUberspector`, while the renderer maps it with one (`src/renderer/README.md`, "Where it differs from Certify"), so a `vc_template` that calls such a method previews differently from what Certify signs, with a 200: the call as written where a claim prints it, the other branch inside `#if` or `#foreach`, while Certify runs it. `SecureUberspector` is a second layer only: Velocity 1.7 has a known bypass (CVE-2020-13936), see item 10.
+**Why:** Mimoto runs whatever template the VDR holds, inside the container that holds the Wallet's client key and its database password. `SecureUberspector` refuses method calls on Java's reflection and system classes, and strict references make the refusal an error, so a template with `$x.getClass().forName("java.lang.Runtime")` fails to print. Strict references also fail a print on a reference Velocity can't resolve, such as a typo (`$credentialSubject.nmae`), where upstream Mimoto prints the reference's text: better no PDF than a wrong one. VC Lab's renderer runs the same settings for the print template, so such a template answers 422 in the preview as it fails in the Wallet. The renderer maps the credential file's `vc_template` with them too, while Certify, which runs it at issuance, has neither: a `vc_template` that calls such a method, or names a key the record lacks, answers 422 in the preview while Certify signs it (`src/renderer/README.md`, "Where it differs from Certify"). `SecureUberspector` is a second layer only: Velocity 1.7 has a known bypass (CVE-2020-13936), see item 10.
 
-**Where to see it working:** put a template that uses reflection under Mimoto's fixed name and run the check. Its first print, `original.pdf`, shows the call as written, and `#if` on it takes the other branch:
+**Where to see it working:** put a template with a typo, or one that uses reflection, under Mimoto's fixed name and run the check. Its first print fails with `FAIL PDF content`, naming the reference:
 
 ```bash
 cat > deploy/ait/vdr/templates/AITUniversity-ait-transcript-template.html <<'EOF'
 <html><body>
 #foreach($e in $rowProperties.get("fullName").entrySet())<p>$e.value</p>#end
-<p>REFLECT: $credentialSubject.getClass().forName("java.lang.Runtime")</p>
-#if($credentialSubject.getClass().forName("java.lang.Runtime"))<p>reached</p>#else<p>not reached</p>#end
+<p>TYPO: $credentialSubject.nmae</p>
 </body></html>
 EOF
 ./scripts/print-check.sh
 git checkout -- deploy/ait/vdr/templates/AITUniversity-ait-transcript-template.html
 ```
 
-**Proven on the local stack (2026-11-25):** this block gave `print check: PASS`, and `original.pdf` reads `REFLECT: $credentialSubject.getClass().forName("java.lang.Runtime")` and `not reached`. The same two lines, in a longer reflection template, printed the same way in VC Lab's quick view, VC Lab's PDF and `ait-mimoto`'s print, all three answering 200.
+**Proven on the local stack (2026-11-27):** this block ended with `FAIL PDF content: Mimoto answered 500 application/json`, error `RESIDENT-APP-028`, `Reference $credentialSubject.nmae evaluated to null when attempting to render at Credential Template[line 3, column 10]`. With `<p>REFLECT: $credentialSubject.getClass().forName("java.lang.Runtime")</p>` as line 3 instead, it ended the same way with `Object 'java.lang.Class' does not contain method forName(java.lang.String) at Credential Template[line 3, column 43]`. On the same stack the committed transcript template gave `print check: PASS` before and after, and `ait-student-id` printed through the fallback template (`credential-template.html`).
 
 ### 7. VC Lab's renderer
 
@@ -470,7 +469,8 @@ Only the organisation's admins may write either. On this platform both are the d
 | `FAIL token exchange ... invalid_request` | The local Keycloak doesn't trust Mimoto's key: run `./scripts/mimoto-up.sh`. |
 | `FAIL PDF content: ... grid holds 0 term headings` and the PDF has `COURSE-LINE` lines | Mimoto is upstream's `injistack/mimoto:0.21.0`, not `ait-mimoto`: run `./scripts/mimoto-up.sh`, which recreates it from the built image. |
 | The PDF shows Thai as garbage | The VDR doesn't send `charset=utf-8` ("Running it on dev", item 3). |
-| A grid cell prints `$c.grade` (or another field's name) | The template uses a plain reference: write `$!c.grade`. |
+| `FAIL PDF content: Mimoto answered 500 ... RESIDENT-APP-028` with `evaluated to null`, `has not been set` or `does not contain method` | The template has a reference Velocity can't resolve (a typo, a field that is null, a variable never set) or a call `SecureUberspector` refuses; the message names its line and column. Fix the reference, or write `$!c.grade` for a field that may be missing ("Template conventions", item 6). |
+| A grid cell prints `$c.grade` (or another field's name) | Mimoto is upstream's, without strict references, and the template uses a plain reference: write `$!c.grade`. |
 | A hand-published credential file is gone | A print check ended and put the committed files back: publish it again. |
 | A change to `mimoto-*.properties` has no effect | Mimoto keeps its settings until it is recreated (section 2). |
 | A swapped template prints with an old macro body | Mimoto registers a `#macro` once; rename it or recreate Mimoto (section 4). |
