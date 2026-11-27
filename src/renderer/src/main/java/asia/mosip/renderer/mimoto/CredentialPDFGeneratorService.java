@@ -181,7 +181,9 @@ public class CredentialPDFGeneratorService {
         props.setProperty("class.resource.loader.class", "org.apache.velocity.runtime.resource.loader.ClasspathResourceLoader");
         // ait-mimoto's second change: a template can't call methods on Java's reflection and system classes. A
         // second layer only, as Velocity 1.7's list has a known bypass (CVE-2020-13936); the container is the boundary.
+        // Strict references: an undefined reference, or a call SecureUberspector refuses, fails the print.
         props.setProperty("runtime.introspector.uberspect", SecureUberspector.class.getName());
+        props.setProperty("runtime.references.strict", "true");
         // Changed: a new engine per print, with the properties Mimoto passes to the Velocity singleton. A macro a
         // template defines stays in the singleton for good, so each preview would otherwise depend on the ones
         // before it; this gives every preview Mimoto's first print after a restart.

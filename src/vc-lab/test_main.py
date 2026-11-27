@@ -937,17 +937,42 @@ def test_reflection_fails_in_the_print_template_and_the_vc_template() -> bool:
     reach = ".getClass().forName('java.lang.Runtime')"
     mapping = {**CREDENTIAL["vc_template"], "credentialSubject": {
         **CREDENTIAL["vc_template"]["credentialSubject"], "thesisTitle": "MAPPED $name" + reach}}
-    files = _set(template=("reflect.html", _with_body(f"<p>PRINTED $titleName{reach}</p>")),
-                 credential=("reflect.json", _json({**CREDENTIAL, "vc_template": mapping})))
-    page = _post("/preview", files)
-    assert page.status_code == 200, page.text
-    printed = _pages(files)[0].extract_text()
-    for shown, where in ((html.unescape(page.text), "quick view"), (printed, "PDF")):
-        for engine in ("PRINTED", "MAPPED"):  # the print template's, the vc_template's
-            assert engine in shown, (where, engine, "evaluated")
-            assert f"{engine} class java.lang.Runtime" not in shown, (where, engine, "reached java.lang.Runtime")
+    cases = {  # SecureUberspector refuses the call; strict references make the refusal fail the call
+        "the print template": _set(template=("reflect.html", _with_body(f"<p>PRINTED $titleName{reach}</p>"))),
+        "the vc_template": _set(credential=("reflect.json", _json({**CREDENTIAL, "vc_template": mapping}))),
+    }
+    for case, files in cases.items():
+        for path in ("/preview", "/preview.pdf"):
+            res = _post(path, files)
+            assert res.status_code == 422, (case, path, res.status_code, res.text[:200])
+            assert "forName" in res.json()["detail"], (case, path, res.json())
     return True
 
+
+def test_an_undefined_reference_in_the_print_template_answers_422_with_velocitys_message() -> bool:
+    if _skip_without_renderer("test_an_undefined_reference_in_the_print_template_answers_422_with_velocitys_message"):
+        return False
+    files = _set(template=("typo.html", _with_body("<p>$credentialSubject.nmae</p>")))
+    for path in ("/preview", "/preview.pdf"):
+        res = _post(path, files)
+        assert res.status_code == 422, (path, res.status_code, res.text[:200])
+        detail = res.json()["detail"]
+        assert "$credentialSubject.nmae" in detail and "line" in detail, (path, "Velocity's own message", detail)
+    return True
+
+
+def test_a_vc_template_naming_a_key_the_sample_lacks_answers_422() -> bool:
+    """Certify signs the text ${thesis} as it stands; the preview refuses it, naming the reference."""
+    if _skip_without_renderer("test_a_vc_template_naming_a_key_the_sample_lacks_answers_422"):
+        return False
+    mapping = {**CREDENTIAL["vc_template"], "credentialSubject": {
+        **CREDENTIAL["vc_template"]["credentialSubject"], "thesisTitle": "${thesis}"}}
+    files = _set(credential=("missing.json", _json({**CREDENTIAL, "vc_template": mapping})))
+    for path in ("/preview", "/preview.pdf"):
+        res = _post(path, files)
+        assert res.status_code == 422, (path, res.status_code, res.text[:200])
+        assert "$thesis" in res.json()["detail"], (path, res.json())
+    return True
 
 
 
@@ -1115,6 +1140,8 @@ def main() -> None:
         test_a_template_reaching_for_an_address_answers_422_naming_it,
         test_a_template_that_draws_logo_url_previews_without_a_logo,
         test_reflection_fails_in_the_print_template_and_the_vc_template,
+        test_an_undefined_reference_in_the_print_template_answers_422_with_velocitys_message,
+        test_a_vc_template_naming_a_key_the_sample_lacks_answers_422,
         test_a_template_that_draws_the_background_shows_it_in_the_pdf_and_the_quick_view,
         test_a_pdf_background_prints_upright_under_the_record,
         test_after_remove_background_the_template_previews_on_plain_paper,

@@ -96,12 +96,15 @@ final class CertifyMapping {
         // Not Certify's: a vc_template can't call methods on Java's reflection and system classes. A second layer
         // only, as Velocity 1.7's list has a known bypass (CVE-2020-13936); the container is the boundary.
         engine.setProperty("runtime.introspector.uberspect", SecureUberspector.class.getName());
+        // Not Certify's either: a reference the record lacks, or a refused call, fails the preview, where Certify
+        // signs the reference's text as it stands. Stricter than Certify on purpose.
+        engine.setProperty("runtime.references.strict", "true");
         engine.init();
         StringWriter out = new StringWriter();
         try {
             engine.evaluate(new VelocityContext(params), out, TEMPLATE_NAME, vcTemplate);
         } catch (VelocityException e) {
-            throw new Refused("Certify can't evaluate the credential file's vc_template: " + e.getMessage());
+            throw new Refused("Velocity can't evaluate the credential file's vc_template: " + e.getMessage());
         } catch (StackOverflowError e) {
             // Velocity parses and renders nested blocks recursively, as in the print step.
             throw new Refused("the credential file's vc_template nests its blocks too deep to evaluate");

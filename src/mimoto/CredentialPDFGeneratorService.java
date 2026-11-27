@@ -275,6 +275,7 @@ public class CredentialPDFGeneratorService {
         props.setProperty("resource.loader", "class");
         props.setProperty("class.resource.loader.class", "org.apache.velocity.runtime.resource.loader.ClasspathResourceLoader");
         props.setProperty("runtime.introspector.uberspect", "org.apache.velocity.util.introspection.SecureUberspector");  // ait-mimoto (change 2 of 2): templates can't reach Java internals (getClass, Class.forName)
+        props.setProperty("runtime.references.strict", "true");  // ait-mimoto (change 2 of 2): an undefined reference, or a refused call, fails the print
         Velocity.init(props);
         VelocityContext velocityContext = new VelocityContext(data);
 
