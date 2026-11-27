@@ -113,7 +113,7 @@ public class CredentialPDFGeneratorService {
 
             Map<String, Object> data = getPdfResourceFromVcProperties(displayProperties, credentialsSupportedResponse,
                     vcCredentialResponse, issuerDTO, dataShareUrl, credentialValidity);
-            // ait-mimoto: the only change to upstream v0.21.0. Templates also get the claims as received, unflattened.
+            // ait-mimoto (change 1 of 2, see src/mimoto/README.md): templates also get the claims as received, unflattened.
             data.put("credentialSubject", credentialProperties);
 
             return renderVCInCredentialTemplate(data, issuerDTO.getIssuer_id(), credentialConfigurationId);
@@ -274,6 +274,8 @@ public class CredentialPDFGeneratorService {
         Properties props = new Properties();
         props.setProperty("resource.loader", "class");
         props.setProperty("class.resource.loader.class", "org.apache.velocity.runtime.resource.loader.ClasspathResourceLoader");
+        props.setProperty("runtime.introspector.uberspect", "org.apache.velocity.util.introspection.SecureUberspector");  // ait-mimoto (change 2 of 2): templates can't reach Java internals (getClass, Class.forName)
+        props.setProperty("runtime.references.strict", "true");  // ait-mimoto (change 2 of 2): an undefined reference, or a refused call, fails the print
         Velocity.init(props);
         VelocityContext velocityContext = new VelocityContext(data);
 

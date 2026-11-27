@@ -249,7 +249,10 @@ alias_image() {
 alias_image "ait-vc-lab"
 alias_image "ait-certify-template-sync"
 
-# 4. Mimoto with one class changed, the Wallet's printer (watched: src/mimoto and Dockerfile.mimoto). Last, because
+# 4. The renderer: VC Lab's own copy of ait-mimoto's print code (watched: src/renderer and Dockerfile.renderer)
+build_or_retag_image "ait-renderer" "docker/Dockerfile.renderer" "." "src/renderer" "docker/Dockerfile.renderer"
+
+# 5. Mimoto with one class changed, the Wallet's printer (watched: src/mimoto and Dockerfile.mimoto). Last, because
 # its build pulls injistack/mimoto:0.21.0 from Docker Hub: a failed pull stops the release (set -e), after every
 # other image is built and, in CI, pushed.
 build_or_retag_image "ait-mimoto" "docker/Dockerfile.mimoto" "." "src/mimoto" "docker/Dockerfile.mimoto"

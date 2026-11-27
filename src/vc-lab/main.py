@@ -1,36 +1,39 @@
-"""VC Lab: render a credential template from uploaded files, and export its hard copy as a PDF.
+"""VC Lab: preview a credential template as the PDF the Wallet prints, from uploaded files.
 
 VC Lab knows nothing about any organisation and reads nothing from the repo. The user uploads one set (the
-template, Certify's credential file, the Adapter's sample response and an optional background PDF); VC Lab
-holds it in memory only and forgets it on restart. See README.md.
+template, Certify's credential file, the Adapter's sample response and an optional Background PNG); the dashboard
+holds it in the browser and sends it with every call, so the server keeps nothing. The renderer (src/renderer, at RENDERER_URL) maps the sample
+as Certify does and prints it as ait-mimoto does. See README.md.
 
-Usage:
-    python3 src/vc-lab/main.py
+Usage (src/ on PYTHONPATH, as the image has it, for template-sync's vc_template transform):
+    PYTHONPATH=src RENDERER_URL=http://localhost:8080 python3 src/vc-lab/main.py
 """
 
 from __future__ import annotations
 
-import dataclasses
+import base64
 import os
 from pathlib import Path
 from typing import Any, AsyncGenerator, Literal
+from urllib.parse import quote
 
-from fastapi import FastAPI, HTTPException, Query, Request
+import httpx
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
+from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 from starlette.formparsers import MultiPartException, MultiPartParser
 
-import hardcopy
+import background
 import labset
-import template_engine
+import package
+from certify_template_sync.sync import build_vc_template_base64
 from labset import MAX_UPLOAD, LabSet
 
-app = FastAPI(title="VC Lab", description="Render a credential template from uploaded files", version="0.2.0")
+app = FastAPI(title="VC Lab", description="Render a credential template from uploaded files", version="0.3.0")
 
-# The one set, replaced whole on every change. Memory only, on purpose: see the README's note on backgrounds.
-_lab = LabSet()
-
-View = Literal["lab", "wallet"]
+# The renderer, VC Lab's own copy of ait-mimoto's print code and Certify's mapping (src/renderer). Compose sets it.
+RENDERER_URL = os.environ.get("RENDERER_URL", "").rstrip("/")
 
 
 class _InMemoryParser(MultiPartParser):
@@ -45,81 +48,146 @@ def health() -> dict[str, str]:
     return {"status": "UP", "service": "vc-lab"}
 
 
-@app.post("/api/set")
-async def upload(request: Request) -> dict[str, Any]:
-    """Multipart: any of template, credential, sample, background (each replaces its slot), or one bundle (a zip
-    from /download, which replaces the whole set)."""
-    global _lab
-    files = await _read_files(request)
-    try:
-        if "bundle" in files:
-            if len(files) > 1:
-                raise ValueError("send a bundle on its own, without other files")
-            new = labset.from_zip(files["bundle"][1])
-        else:
-            new = _lab.replace(files)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    _lab = new
-    return _status()
+# The body is read on the event loop; everything after it (parsing, the renderer call, the PDF and zip work) blocks,
+# so it runs in the threadpool, and one visitor's slow render never holds up another's request.
 
 
-@app.get("/api/set")
-def get_set() -> dict[str, Any]:
-    return _status()
+@app.post("/preview", response_class=HTMLResponse)
+async def preview(request: Request) -> HTMLResponse:
+    """The quick view: the HTML the renderer hands iText, the Background in it as $backgroundImage's data URI."""
+    files = await _read_files(request, labset.SLOTS)
+    return await run_in_threadpool(_preview, files)
 
 
-@app.delete("/api/set")
-def clear_set() -> dict[str, Any]:
-    global _lab
-    _lab = LabSet()
-    return _status()
+def _preview(files: dict[str, tuple[str, bytes]]) -> HTMLResponse:
+    return HTMLResponse(_render(_parse_set(files), "html").decode("utf-8"))
 
 
-@app.delete("/api/set/background")
-def remove_background() -> dict[str, Any]:
-    global _lab
-    _lab = dataclasses.replace(_lab, background=None)
-    return _status()
+def _data_uri(png: bytes) -> str:
+    return "data:image/png;base64," + base64.b64encode(png).decode("ascii")
 
 
-@app.get("/preview", response_class=HTMLResponse)
-def preview(view: View = Query("lab")) -> HTMLResponse:
-    """The rendered template as HTML. Never with the background: the PDF is where the background shows."""
-    return HTMLResponse(_render(_lab, view))
+@app.post("/preview.pdf")
+async def preview_pdf(request: Request) -> Response:
+    """What the Wallet prints: the renderer's PDF."""
+    files = await _read_files(request, labset.SLOTS)
+    return await run_in_threadpool(_preview_pdf, files)
 
 
-@app.get("/export.pdf")
-def export_pdf(view: View = Query("lab")) -> Response:
-    """The rendered template as a PDF, with the background under page 1 when one is loaded."""
-    lab = _lab  # one set for the whole request, even if an upload replaces it meanwhile
-    html = _render(lab, view)
-    pdf = hardcopy.render_pdf(html, lab.background.value if lab.background else None)
-    name = f"{Path(lab.template.filename).stem}-{view}.pdf"
-    return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{name}"'})
+def _preview_pdf(files: dict[str, tuple[str, bytes]]) -> Response:
+    lab = _parse_set(files)
+    pdf = _render(lab, "pdf")
+    # RFC 6266: filename* carries a name in any script (a Thai template name); filename is its ASCII stand-in.
+    name = f"{Path(lab.template.filename).stem}.pdf"
+    ascii_name = name.encode("ascii", "replace").decode("ascii").replace("?", "_")
+    disposition = f"inline; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(name)}"
+    return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": disposition})
 
 
-@app.get("/download")
-def download() -> Response:
-    """The set as a zip (template/, credential/, sample/, background/), each file as uploaded."""
-    headers = {"Content-Disposition": 'attachment; filename="vc-lab-set.zip"'}
-    return Response(labset.to_zip(_lab), media_type="application/zip", headers=headers)
+@app.post("/api/package/export")
+async def export_package(request: Request) -> Response:
+    """Export Package: the set (as for a preview) plus config_id, version and vdr_address; answers the Package zip."""
+    files, params = await _read_form(request, labset.SLOTS, PACKAGE_PARAMS)
+    return await run_in_threadpool(_export_package, files, params)
 
 
-def _status() -> dict[str, Any]:
-    return {"loaded": _lab.loaded(), "missing": _lab.missing()}
+PACKAGE_PARAMS = ("config_id", "version", "vdr_address")
 
 
-def _render(lab: LabSet, view: View) -> str:
+def _export_package(files: dict[str, tuple[str, bytes]], params: dict[str, str]) -> Response:
+    lab = _parse_set(files)
     if missing := lab.missing():
         raise HTTPException(status_code=409, detail=f"upload these first: {', '.join(missing)}")
-    return template_engine.render_credential(
-        lab.template.value, lab.credential.value, lab.sample.value, wallet=view == "wallet"
-    )
+    try:
+        zipped = package.export(lab, *(params.get(name, "") for name in PACKAGE_PARAMS))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    name = f"{params['config_id'].strip()}-{params['version'].strip()}-package.zip"
+    ascii_name = name.encode("ascii", "replace").decode("ascii").replace("?", "_").replace('"', "")
+    disposition = f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(name)}"
+    return Response(zipped, media_type="application/zip", headers={"Content-Disposition": disposition})
 
 
-async def _read_files(request: Request) -> dict[str, tuple[str, bytes]]:
+@app.post("/api/background")
+async def make_background(request: Request) -> Response:
+    """An uploaded PDF, PNG or JPEG in (as the background field), the Background PNG out: what the dashboard holds."""
+    files = await _read_files(request, ("background",))
+    return await run_in_threadpool(_make_background, files)
+
+
+def _make_background(files: dict[str, tuple[str, bytes]]) -> Response:
+    name, data = files["background"]
+    try:
+        return Response(background.to_png(labset.safe_filename(name, "background"), data), media_type="image/png")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/package/read")
+async def read_package(request: Request) -> dict[str, Any]:
+    """A Package zip in (as the package field); the set it holds out ({set: {slot: {filename, data}}}, data in
+    base64, for the dashboard to hold) with the export it was made for ({export: {configId, version, vdrAddress}})."""
+    files, _ = await _read_form(request, ("package",))
+    return await run_in_threadpool(_read_package, files)
+
+
+def _read_package(files: dict[str, tuple[str, bytes]]) -> dict[str, Any]:
+    try:
+        unpacked, export = package.read(files["package"][1])
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"set": {slot: {"filename": name, "data": base64.b64encode(data).decode("ascii")}
+                    for slot, (name, data) in unpacked.items()},
+            "export": export}
+
+
+def _parse_set(files: dict[str, tuple[str, bytes]]) -> LabSet:
+    """The set a request carries, each file checked. The server keeps nothing of it."""
+    try:
+        return LabSet.from_files(files)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+def _render(lab: LabSet, output: Literal["html", "pdf"]) -> bytes:
+    """The renderer's one evaluation of the set: the HTML it hands iText, or the PDF iText makes of it.
+    Its 400 (a request it can't read) and 422 (a template or mapping that fails) reach the caller with its message."""
+    if missing := lab.missing():
+        raise HTTPException(status_code=409, detail=f"upload these first: {', '.join(missing)}")
+    if not RENDERER_URL:
+        raise HTTPException(status_code=503, detail="VC Lab has no renderer: set RENDERER_URL (Compose sets it)")
+    request = {
+        "template": lab.template.value,
+        # The Adapter's answer as uploaded, so the renderer reads it as the plugin does (strict JSON, the flat record).
+        "record": lab.sample.data.decode("utf-8-sig"),
+        # The vc_template through template-sync's own transform: the text Certify stores and evaluates.
+        "vcTemplate": base64.b64decode(build_vc_template_base64(lab.credential.value["vc_template"])).decode("utf-8"),
+        "credentialFile": lab.credential.value,
+        # $backgroundImage is the Background as a data URI, and empty without one. Never null: the renderer would fall
+        # back to the credential file's background_image address, which it refuses to load.
+        "backgroundImage": _data_uri(lab.background.value) if lab.background else "",
+        "locale": "en",
+        "output": output,
+    }
+    try:
+        res = httpx.post(f"{RENDERER_URL}/render", json=request, timeout=120)
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"the renderer at {RENDERER_URL} can't be reached: {e}")
+    if res.status_code in (400, 422):
+        raise HTTPException(status_code=res.status_code, detail=res.json()["error"])
+    if res.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"the renderer answered {res.status_code}: {res.text}")
+    return res.content
+
+
+async def _read_files(request: Request, fields: tuple[str, ...]) -> dict[str, tuple[str, bytes]]:
     """The request's files as {field: (filename, data)}, read into memory and capped at MAX_UPLOAD."""
+    return (await _read_form(request, fields))[0]
+
+
+async def _read_form(request: Request, fields: tuple[str, ...], params: tuple[str, ...] = ()
+                     ) -> tuple[dict[str, tuple[str, bytes]], dict[str, str]]:
+    """The request's files as {field: (filename, data)} and its text fields named in params, read into memory and
+    capped at MAX_UPLOAD."""
     body = bytearray()
     async for chunk in request.stream():
         body += chunk
@@ -134,16 +202,20 @@ async def _read_files(request: Request) -> dict[str, tuple[str, bytes]]:
     except (MultiPartException, KeyError) as e:
         raise HTTPException(status_code=400, detail=f"expected a multipart file upload: {e}")
     files: dict[str, tuple[str, bytes]] = {}
+    values: dict[str, str] = {}
     for field, value in form.multi_items():
-        if field not in (*labset.SLOTS, "bundle") or not isinstance(value, UploadFile):
-            fields = ", ".join((*labset.SLOTS, "bundle"))
-            raise HTTPException(status_code=400, detail=f"unexpected field {field!r}; send files as {fields}")
-        if field in files:
+        if field in params and not isinstance(value, UploadFile):
+            values[field] = value
+        elif field not in fields or not isinstance(value, UploadFile):
+            raise HTTPException(status_code=400,
+                                detail=f"unexpected field {field!r}; send files as {', '.join(fields)}")
+        elif field in files:
             raise HTTPException(status_code=400, detail=f"more than one {field} file")
-        files[field] = (value.filename or field, await value.read())
+        else:
+            files[field] = (value.filename or field, await value.read())
     if not files:
         raise HTTPException(status_code=400, detail="no file uploaded")
-    return files
+    return files, values
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -171,11 +243,14 @@ _DASHBOARD = """<!DOCTYPE html>
     .pick { display: flex; align-items: center; gap: 10px; font-size: 13px; }
     .pick label { padding: 5px 10px; border: 1px solid var(--border); border-radius: 6px; background: #f1f5f9; cursor: pointer; white-space: nowrap; }
     .pick label:hover { background: #e2e8f0; }
+    .pick label:has(input:disabled) { opacity: .45; cursor: default; }
     .file { word-break: break-all; }
     .file.none { color: var(--muted); font-style: italic; }
     .file.set { color: #047857; font-weight: 600; }
     .note { font-size: 13px; color: #1e3a8a; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; }
     .note.strong { color: #92400e; background: #fffbeb; border-color: #fde68a; font-weight: 600; }
+    .exportform { display: grid; gap: 6px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+    .exportform input { width: 100%; box-sizing: border-box; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; }
     .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
     button { flex: 1; padding: 8px 10px; border: 0; border-radius: 6px; background: var(--primary); color: #fff; font-weight: 600; cursor: pointer; }
     button.quiet { background: var(--muted); }
@@ -196,8 +271,8 @@ _DASHBOARD = """<!DOCTYPE html>
         <h2>The set</h2>
         <div class="slot">
           <b>Template</b> <span class="ext">.html (A4)</span>
-          <div class="hint">The layout: HTML where the data is placed. Each <code>#claimValue("name")</code> is filled with
-            that claim.</div>
+          <div class="hint">The layout: HTML with Velocity, given what <code>ait-mimoto</code> gives it
+            (<code>$rowProperties</code>, <code>$credentialSubject</code>, <code>$titleName</code>, ...).</div>
           <div class="pick"><label>Choose file<input type="file" hidden data-field="template" accept=".html,.htm,.vm,text/html"></label>
             <span class="file" data-slot="template"></span></div>
         </div>
@@ -215,23 +290,34 @@ _DASHBOARD = """<!DOCTYPE html>
             <span class="file" data-slot="sample"></span></div>
         </div>
         <div class="slot">
-          <b>Background</b> <span class="ext">.pdf (A4)</span>
-          <div class="hint">The pre-printed paper (watermark, seal, signature, image); page 1 is used. It shows only in
-            Export PDF.</div>
-          <div class="pick"><label>Choose file<input type="file" hidden data-field="background" accept=".pdf,application/pdf"></label>
+          <b>Background</b> <span class="ext">.pdf, .png or .jpg</span>
+          <div class="hint">The pre-printed paper (watermark, seal, signature, logo) as the Wallet draws it: one
+            picture, kept here as a PNG for the template's <code>$backgroundImage</code>. A PDF's page 1 is drawn at
+            its own size, 150 dpi.</div>
+          <div class="pick"><label>Choose file<input type="file" hidden data-field="background" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"></label>
             <span class="file" data-slot="background"></span></div>
         </div>
-        <div class="warn">A background may be confidential. VC Lab has no login: upload one only on your own machine.
-          It is kept in memory and forgotten on restart.</div>
+        <div class="warn">A background may be confidential. Your files stay in this page and go to the server only with
+          each call, which keeps nothing; another visitor can't get them back. VC Lab has no login and is reached over
+          whatever network its address crosses, so send a confidential one only to a VC Lab you trust. Reloading the
+          page forgets your files.</div>
         <div class="slot">
-          <b>Or a whole set</b> <span class="ext">.zip</span>
-          <div class="hint">A zip from Download. It replaces all four files.</div>
-          <div class="pick"><label>Choose file<input type="file" hidden data-field="bundle" accept=".zip,application/zip"></label></div>
+          <b>Package</b> <span class="ext">.zip</span>
+          <div class="hint">The files as they go onto the VDR and into Certify. Load one to get its set back
+            (it replaces all four files); export one when the set is ready. The sample goes in it, marked as not for
+            deployment.</div>
+          <div class="pick"><label>Load Package<input type="file" hidden data-field="package" accept=".zip,application/zip"></label></div>
+          <div class="exportform">
+            <label>Credential configuration id <input id="configId" placeholder="ait-transcript"></label>
+            <label>Version <input id="version" placeholder="v1"></label>
+            <label>VDR address <input id="vdrAddress" placeholder="https://vdr.example.org"></label>
+          </div>
         </div>
+        <div class="hint" id="busy"></div>
         <div id="error"></div>
         <div class="row">
-          <button id="exportPdf">Export PDF</button>
-          <button id="download">Download</button>
+          <button id="exportPdf">Open PDF</button>
+          <button id="exportPackage">Export Package</button>
         </div>
         <div class="row">
           <button class="quiet" id="removeBackground">Remove background</button>
@@ -243,8 +329,8 @@ _DASHBOARD = """<!DOCTYPE html>
       <div class="viewer-head">
         <h2 style="margin:0">Preview</h2>
         <div class="views">
-          <label><input type="radio" name="view" value="lab" checked> Lab</label>
-          <label><input type="radio" name="view" value="wallet"> Wallet (as Mimoto prints it)</label>
+          <label><input type="radio" name="output" value="/preview.pdf" checked> PDF: what the Wallet prints</label>
+          <label><input type="radio" name="output" value="/preview"> HTML: quick view</label>
         </div>
       </div>
       <div class="note" id="backgroundNote"></div>
@@ -254,62 +340,149 @@ _DASHBOARD = """<!DOCTYPE html>
     </div>
   </main>
   <script>
-    const view = () => document.querySelector('input[name=view]:checked').value;
+    // The set lives here, in this page's memory: {slot: File}. Every call carries all of it; the server keeps none.
+    // A reload loses it, so leaving asks first while any file is loaded.
+    let set = {};
+    let seen = 0;        // the latest preview asked for; an older answer that arrives late is dropped
+    // While a Background converts or a Package loads, nothing else may change the set: every file input, Remove
+    // Background and Clear are disabled until the answer lands, so two answers never overlap. Previews stay on.
+    let busy = false;
+    let shownUrl = null; // the blob the preview frame shows
+    const output = () => document.querySelector('input[name=output]:checked').value;
     const showError = (text) => { document.getElementById('error').textContent = text || ''; };
+    const missing = () => ['template', 'credential', 'sample'].filter(slot => !set[slot]);
+    const form = () => { const f = new FormData(); for (const [slot, file] of Object.entries(set)) f.append(slot, file, file.name); return f; };
 
-    const VIEW_HINTS = {
-      lab: 'Lab: lists are drawn.',
-      wallet: 'Wallet: as Mimoto prints it. Lists come through empty, so loops show their #else.',
+    const OUTPUT_HINTS = {
+      '/preview.pdf': 'The PDF the Wallet prints: the sample mapped as Certify maps it, printed as ait-mimoto prints it.',
+      '/preview': 'A quick view: the same HTML the PDF is printed from, laid out by your browser. Trust the PDF.',
     };
     const NAMES = {template: 'template', credential: 'credential file', sample: 'data'};
 
-    async function show(status) {
-      for (const el of document.querySelectorAll('[data-slot]')) {
-        const name = status.loaded[el.dataset.slot];
-        el.textContent = name ? '\\u2713 ' + name : 'not loaded';
-        el.className = 'file ' + (name ? 'set' : 'none');
-      }
-      const background = status.loaded.background;
-      const note = document.getElementById('backgroundNote');
-      note.className = 'note' + (background ? ' strong' : '');
-      note.textContent = background
-        ? 'Background loaded (' + background + '). It shows only in Export PDF, not here.'
-        : 'This preview never shows the background. Export PDF does.';
-      document.getElementById('viewHint').textContent = VIEW_HINTS[view()];
-      const ready = status.missing.length === 0;
-      document.getElementById('exportPdf').disabled = !ready;
-      document.getElementById('removeBackground').disabled = !status.loaded.background;
-      document.getElementById('empty').textContent = ready ? '' : 'Upload these to see the preview: ' + status.missing.map(s => NAMES[s]).join(', ') + '.';
-      const frame = document.getElementById('preview');
-      frame.hidden = !ready;
-      if (ready) frame.src = '/preview?view=' + view() + '&t=' + Date.now();
+    window.addEventListener('beforeunload', (event) => {
+      if (Object.keys(set).length) { event.preventDefault(); event.returnValue = ''; }
+    });
+
+    function setBusy(text) {
+      busy = Boolean(text);
+      for (const input of document.querySelectorAll('input[type=file]')) input.disabled = busy;
+      document.getElementById('clear').disabled = busy;
+      document.getElementById('removeBackground').disabled = busy || !set.background;
+      document.getElementById('busy').textContent = text || '';
     }
 
-    async function call(method, url, body) {
-      const res = await fetch(url, {method, body});
-      const data = await res.json();
-      if (!res.ok) { showError(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)); return; }
-      showError('');
-      await show(data);
+    async function post(url) {
+      const res = await fetch(url, {method: 'POST', body: form()});
+      if (res.ok) return res;
+      const data = await res.json().catch(() => ({}));
+      throw new Error(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail || res.statusText));
+    }
+
+    async function show() {
+      for (const el of document.querySelectorAll('[data-slot]')) {
+        const file = set[el.dataset.slot];
+        el.textContent = file ? '✓ ' + file.name : 'not loaded';
+        el.className = 'file ' + (file ? 'set' : 'none');
+      }
+      const note = document.getElementById('backgroundNote');
+      note.className = 'note' + (set.background ? ' strong' : '');
+      note.textContent = set.background
+        ? 'Background loaded (' + set.background.name + '). A template that draws it shows it in the PDF and the quick view.'
+        : 'No Background: the template previews on plain paper.';
+      document.getElementById('viewHint').textContent = OUTPUT_HINTS[output()];
+      const need = missing();
+      document.getElementById('exportPdf').disabled = need.length > 0;
+      document.getElementById('exportPackage').disabled = need.length > 0;
+      document.getElementById('removeBackground').disabled = busy || !set.background;
+      document.getElementById('empty').textContent = need.length ? 'Upload these to see the preview: ' + need.map(s => NAMES[s]).join(', ') + '.' : '';
+      const frame = document.getElementById('preview');
+      frame.hidden = need.length > 0;
+      const mine = ++seen; // even when incomplete, so a preview still in flight is dropped when it lands
+      if (need.length) return;
+      try {
+        const blob = await (await post(output())).blob();
+        if (mine !== seen) return;
+        showError('');
+        if (shownUrl) URL.revokeObjectURL(shownUrl);
+        shownUrl = URL.createObjectURL(blob);
+        frame.src = shownUrl;
+      } catch (e) {
+        if (mine !== seen) return;
+        showError(e.message);
+        frame.hidden = true; // never leave the previous set's preview under the error
+        frame.removeAttribute('src');
+        if (shownUrl) URL.revokeObjectURL(shownUrl);
+        shownUrl = null;
+      }
     }
 
     for (const input of document.querySelectorAll('input[type=file]')) {
       input.addEventListener('change', async () => {
-        if (!input.files[0]) return;
-        const form = new FormData();
-        form.append(input.dataset.field, input.files[0]);
-        await call('POST', '/api/set', form);
+        const file = input.files[0];
         input.value = '';
+        if (!file) return;
+        if (input.dataset.field === 'package') {
+          setBusy('loading…');
+          try {
+            const res = await fetch('/api/package/read', {method: 'POST', body: (() => { const f = new FormData(); f.append('package', file); return f; })()});
+            const data = await res.json();
+            if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail));
+            set = {};
+            document.getElementById('configId').value = data.export.configId;
+            document.getElementById('version').value = data.export.version;
+            document.getElementById('vdrAddress').value = data.export.vdrAddress;
+            for (const [slot, f] of Object.entries(data.set)) {
+              const bytes = Uint8Array.from(atob(f.data), c => c.charCodeAt(0));
+              set[slot] = new File([bytes], f.filename);
+            }
+          } catch (e) { showError(e.message); return; } finally { setBusy(''); }
+        } else if (input.dataset.field === 'background') {
+          setBusy('converting…');
+          try { // the server makes the PNG; this page keeps only that
+            const f = new FormData(); f.append('background', file, file.name);
+            const res = await fetch('/api/background', {method: 'POST', body: f});
+            if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(typeof data.detail === 'string' ? data.detail : res.statusText); }
+            const png = await res.blob();
+            set.background = new File([png], 'background.png', {type: 'image/png'});
+          } catch (e) { showError(e.message); return; } finally { setBusy(''); }
+        } else {
+          set[input.dataset.field] = file;
+          if (input.dataset.field === 'credential') { // the configuration id is the credential file's key
+            try {
+              const key = JSON.parse(await file.text()).credential_config_key_id;
+              if (typeof key === 'string' && key) document.getElementById('configId').value = key;
+            } catch (e) { /* the server names what is wrong with the file */ }
+          }
+        }
+        showError('');
+        await show();
       });
     }
-    for (const radio of document.querySelectorAll('input[name=view]')) {
-      radio.addEventListener('change', () => call('GET', '/api/set'));
-    }
-    document.getElementById('exportPdf').onclick = () => window.open('/export.pdf?view=' + view(), '_blank');
-    document.getElementById('download').onclick = () => { window.location = '/download'; };
-    document.getElementById('removeBackground').onclick = () => call('DELETE', '/api/set/background');
-    document.getElementById('clear').onclick = () => call('DELETE', '/api/set');
-    call('GET', '/api/set');
+    for (const radio of document.querySelectorAll('input[name=output]')) radio.addEventListener('change', show);
+    document.getElementById('exportPdf').onclick = async () => {
+      const tab = window.open('', '_blank'); // opened now, while the click still counts, filled when the PDF is back
+      try {
+        const blob = await (await post('/preview.pdf')).blob();
+        tab.location = URL.createObjectURL(blob);
+      } catch (e) { tab.close(); showError(e.message); }
+    };
+    document.getElementById('exportPackage').onclick = async () => {
+      try {
+        const f = form();
+        for (const [name, id] of [['config_id', 'configId'], ['version', 'version'], ['vdr_address', 'vdrAddress']])
+          f.append(name, document.getElementById(id).value);
+        const res = await fetch('/api/package/export', {method: 'POST', body: f});
+        if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(typeof data.detail === 'string' ? data.detail : res.statusText); }
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(await res.blob());
+        link.download = document.getElementById('configId').value.trim() + '-' + document.getElementById('version').value.trim() + '-package.zip';
+        link.click();
+        URL.revokeObjectURL(link.href);
+      } catch (e) { showError(e.message); }
+    };
+    document.getElementById('removeBackground').onclick = () => { delete set.background; show(); };
+    document.getElementById('clear').onclick = () => { set = {}; showError(''); show(); };
+    show();
   </script>
 </body>
 </html>"""

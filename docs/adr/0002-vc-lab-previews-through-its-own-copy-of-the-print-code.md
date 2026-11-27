@@ -1,0 +1,7 @@
+# VC Lab previews through its own copy of Mimoto's print code
+
+VC Lab previews a template through the renderer, `src/renderer/`, VC Lab's own copy of `ait-mimoto`'s print code (Mimoto 0.21's `CredentialPDFGeneratorService` plus `$credentialSubject`) and of Certify's claim mapping. It never calls the Wallet's `ait-mimoto`. VC Lab is public with no login and runs whatever template is uploaded, and Velocity 1.7's `SecureUberspector` has a known bypass (CVE-2020-13936), so the container is the boundary: a network shared only with VC Lab, no secrets, no database, and iText fetching nothing but what VC Lab sends. `SecureUberspector` stays on, in both renderers, as a second layer. Sharing `ait-mimoto` would put the Wallet's secrets one template away from the public.
+
+The cost is drift between the two copies, which this ADR accepts. Both copies live in git, and nothing makes them match: parity with a real issuance through `ait-mimoto` was checked once, by hand, when the renderer was built. Re-check by hand after changing either copy.
+
+Considered: one shared `ait-mimoto` with a render-only endpoint (rejected: public untrusted templates beside Wallet secrets); VC Lab's Python Velocity emulation (rejected: it is the drift this replaces); a full issuance per preview (rejected: needs the whole stack wherever VC Lab runs). The parked PR B, `feat/vc-lab-wallet-renderer`, was dropped for the same two-copies cost, and this choice takes that cost on purpose.

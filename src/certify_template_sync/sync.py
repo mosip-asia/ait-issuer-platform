@@ -24,6 +24,7 @@ import argparse
 import base64
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -80,6 +81,20 @@ def find_seed_sql_path():
     return repo_root / "deploy" / installation / "certify" / "certify_seed.sql"
 
 
+def rewrite_local_addresses(text, vdr_base):
+    """The local stack's VDR and CDN addresses in `text`, as the VDR address (without its trailing slash).
+    template-sync is the one place that uses it: a credential file, a VC Lab Package's included, keeps the local
+    addresses until template-sync stores it in Certify (docs/adr/0003-a-package-is-installation-neutral.md).
+    A local address is the whole host: http://vdr.localhost.example.org is not one. Where `vdr_base` and a local address
+    both start at one place, the longer is the one there, so an address already written as `vdr_base` stays as it is
+    (`vdr_base` may itself start with http://vdr.localhost) and a base that starts one (http://vdr, the VDR's Compose
+    service name) still replaces it. A second pass changes nothing."""
+    vdr_base = vdr_base.rstrip("/")
+    local, base = r"http://(?:vdr|cdn)\.localhost(?![\w.-])", re.escape(vdr_base)
+    longer_first = (base, local) if len(vdr_base) >= len("http://vdr.localhost") else (local, base)
+    return re.sub("|".join(longer_first), lambda m: vdr_base, text)
+
+
 def load_credential_configs(creds_dir):
     configs = []
     if not creds_dir.exists():
@@ -127,8 +142,7 @@ def load_credential_configs(creds_dir):
             content = f.read()
             for var_name, var_val in substitutions.items():
                 content = content.replace(f"${{{var_name}}}", var_val)
-            content = content.replace("http://vdr.localhost", substitutions["VDR_BASE_URL"])
-            content = content.replace("http://cdn.localhost", substitutions["VDR_BASE_URL"])
+            content = rewrite_local_addresses(content, substitutions["VDR_BASE_URL"])
             try:
                 data = json.loads(content)
                 configs.append((p.name, data))

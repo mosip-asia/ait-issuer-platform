@@ -50,6 +50,11 @@ The **Institutional Verifiable Credential Platform** is built on pinned upstream
    - Built and packaged via `scripts/build.sh` (or `docker compose -f compose.certify-build.yaml run --rm plugin-builder` to `src/issuer/target/issuer-data-provider-plugin.jar`).
    - Baked into the pre-built `ghcr.io/mosip-asia/ait-certify` container image into `/home/inji/additional_jars/issuer-data-provider-plugin.jar` (or mounted as a single file via `compose.override.yaml` for rapid local iteration). Never mount a directory over `additional_jars/`.
 
+9. **Correct Configuration Is a Promise, Not a Guess:**
+   - Whoever deploys a component configures it correctly. Code trusts its configuration and adds no fallbacks, defaults or lenient parsing for a wrong one.
+   - A missing or invalid required value fails at startup and names the value.
+   - Credentials are sensitive: better to fail than to issue or print something wrong.
+
 ---
 
 ## 3. Standard Verification & Test Commands
@@ -84,7 +89,7 @@ bash scripts/check-data-guard.sh
 - `compose.verify.yaml`: Inji Verify UI and verification backend.
 - `compose.trust.yaml`: VDR schema context registry and VCGA issuer catalog.
 - `compose.traefik.yaml`: Ingress router for local/dev domain routing.
-- `compose.mimoto.yaml`: Local only, never CD: `ait-mimoto` (the Wallet's printer: Mimoto 0.21 with one change, `src/mimoto/README.md`) beside the local stack. Start it with `scripts/mimoto-up.sh`; check a print with `scripts/print-check.sh`.
+- `compose.mimoto.yaml`: Local only, never CD: `ait-mimoto` (the Wallet's printer: Mimoto 0.21 with two changes, `src/mimoto/README.md`) beside the local stack. Start it with `scripts/mimoto-up.sh`; check a print with `scripts/print-check.sh`.
 
 ### Day-0 Deployment Guides:
 - **Roadmap**: [`docs/guides/day-0-deployment.md`](docs/guides/day-0-deployment.md)

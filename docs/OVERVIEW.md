@@ -30,13 +30,15 @@ This repository houses the **Institutional Verifiable Credential Platform (Issue
 ## 2. Deep Dives & Architectural Decisions
 
 - [ADR 0001: Approval gate sits beside the data path](./adr/0001-approval-gate-beside-the-data-path.md): Why the plugin reads records directly and the Gateway is optional.
+- [ADR 0002: VC Lab previews through its own copy of Mimoto's print code](./adr/0002-vc-lab-previews-through-its-own-copy-of-the-print-code.md): Why VC Lab has its own renderer service and never calls the Wallet's `ait-mimoto`.
+- [ADR 0003: A Package is Installation-neutral](./adr/0003-a-package-is-installation-neutral.md): Why a Package keeps local addresses and template-sync makes them an Installation's.
 - [Deviations from the proposal](./project/issuer-v0.1/deviations.md): Documented differences between proposal and current implementation.
 - [SIS Adapter handover](./project/issuer-v0.1/sis-adapter-handover.md): Field mapping and expectations for the real SIS Adapter.
 - [Transcript JSON-LD context](./concepts/transcript-context.md): Signing rules, `@json` course representations, and context hashing.
 - [Transcript credential](./concepts/transcript-credential.md): Schema structure, subject claims, and gotchas.
 - [How to add a Verifiable Credential](./guides/how-to-add-vc.md): Step-by-step developer tutorial for adding new credentials to Certify.
-- [Credential templates in VC Lab](./guides/vc-lab-templates.md): How a SIS field reaches the printed page (mapping, `#claimValue`), the four files VC Lab takes, and the Lab and Wallet views.
-- [Print from the Wallet on the local stack](./guides/print-from-the-wallet.md): Start `ait-mimoto` beside the local stack, run the print check (course grid from `courses`), swap a template, place a Background, and see what running it on dev takes.
+- [Credential templates in VC Lab](./guides/vc-lab-templates.md): How a SIS field reaches the printed page (mapping, `#claimValue`), the four files VC Lab takes, and its PDF and quick view.
+- [Print from the Wallet on the local stack](./guides/print-from-the-wallet.md): Start `ait-mimoto` beside the local stack, run the print check (course grid from `courses`), swap a template, place a Background, print a VC Lab Package and compare it with VC Lab's preview, and see what running it on dev takes (VC Lab and its renderer included).
 - [VC revocation](./concepts/vc-revocation.md): Bitstring Status List v1.0, revocation batches, and status verification.
 - [Wallet developer URLs](./guides/wallet-developer-urls.md) & [Non-Inji OpenID4VCI wallets](./guides/other-openid4vci-wallets.md): Guidelines for external wallet integration.
 - [Schemas](./schemas/): Master JSON schemas and sample credential payloads.

@@ -49,7 +49,7 @@ The stock Inji Verify deployed with the Issuer platform as the reference way to 
 _Avoid_: web verifier, universal verifier, Cloud Run verifier
 
 **VC Lab**:
-The Issuer platform's template authoring and publishing: the files and the publish step that change how a credential is shaped, printed and displayed.
+The Issuer platform's template workshop: it previews a credential's template, credential file and Background as a Wallet prints them, and exports them as a Package. It publishes nothing: an organisation places the Package by hand.
 _Avoid_: Card Display Lab, presentation template designer
 
 **Adapter**:
@@ -71,6 +71,10 @@ _Avoid_: walletless PDF, printed credential, paper transcript (when the PDF is m
 **Background**:
 The picture of an organisation's pre-printed paper (watermark, seal, signature) that a printout lays under the template. The Issuer platform ships none: an organisation that wants one publishes it on its own VDR, which makes it public, and that choice is the organisation's.
 _Avoid_: watermark (only one part of it), letterhead, template (the template is the layout drawn over it)
+
+**Package**:
+The files VC Lab exports for one credential type (template, credential file, Background, and a sample record that is not deployed), laid out as they go onto the VDR and into Certify. An organisation places them by hand. VC Lab reads a Package back.
+_Avoid_: download, bundle, zip, set (the set is what VC Lab holds while you edit)
 
 **Pilot**:
 The first issuance to real people: a small group of students chosen by the registrar's office, given a wallet claim and a hard copy from real records. Pilot credentials carry no compatibility promise and may be revoked.
