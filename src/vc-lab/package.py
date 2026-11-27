@@ -9,7 +9,7 @@ the manifest only. The layout:
     vdr/templates/<config id>/<version>/background.png      (when a Background is loaded)
     vdr/templates/<config id>/<version>/manifest.json
     certify/credentials/<config id>.json
-    sample/sample.json                                      (not deployed; whatever the sample's uploaded name)
+    sample/sample.json                                      (not deployed; a fixed name, whatever the upload was called)
 
 manifest.json names the config id, the version, the VDR address and each component with its role:
 
@@ -36,7 +36,7 @@ from labset import MAX_UPLOAD, LabSet
 LOCAL_VDR = "http://vdr.localhost"  # the Background's fixed path is under the local VDR
 FORMAT = "vc-lab-package"
 ROLES = ("template", "background", "credential", "sample")
-SAMPLE_PATH = "sample/sample.json"  # whatever the uploaded sample is called
+SAMPLE_PATH = "sample/sample.json"  # a fixed name, whatever the uploaded sample was called
 _MANIFEST_PATH = re.compile(r"vdr/templates/[^/]+/[^/]+/manifest\.json")
 
 
